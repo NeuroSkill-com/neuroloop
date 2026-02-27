@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@mariozechner/pi-coding-agent": [
+        "../pi-mono/packages/coding-agent/src/index.ts"
+      ],
+      "@mariozechner/pi-ai": [
+        "../pi-mono/packages/ai/src/index.ts"
+      ],
+      "@sinclair/typebox": [
+        "../pi-mono/node_modules/@sinclair/typebox/build/cjs/index.d.ts"
+      ]
+    }
+  }
+}

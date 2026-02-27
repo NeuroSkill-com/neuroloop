@@ -1,0 +1,48 @@
+{
+  "name": "neuroloop",
+  "version": "0.0.1",
+  "author": "NeuroSkill team (https://neuroskill.com)",
+  "contributors": [
+    "Nataliya Kosmyna <nkosmyna@mit.edu>",
+    "Eugene Hauptmann <eugenehp@mit.edu>"
+  ],
+  "repository": "https://github.com/NeuroSkill-com/neuroloop",
+  "homepage": "https://neurloop.com",
+  "license": "GPL-3.0-only",
+  "description": "EEG-aware coding agent — run `npx neuroloop` to start",
+  "type": "module",
+  "bin": {
+    "neuroloop": "dist/neuroloop.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "pi-pkg",
+    "METRICS.md",
+    "NEUROLOOP.md"
+  ],
+  "piConfig": {
+    "name": "neuroloop",
+    "configDir": ".neuroloop"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "build:watch": "node build.mjs --watch",
+    "start": "PI_PACKAGE_DIR=$(pwd)/pi-pkg npx tsx src/main.ts",
+    "prepublishOnly": "node build.mjs"
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.55.1",
+    "@mariozechner/pi-tui": "^0.55.1",
+    "@sinclair/typebox": "^0.34.48"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@types/node": "^25.3.3",
+    "esbuild": "^0.27.3",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

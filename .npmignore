@@ -1,0 +1,10 @@
+# Source — the bundle in dist/ is what gets published
+src/
+node_modules/
+build.mjs
+tsconfig*.json
+*.tgz
+
+# Dev files
+.env
+.env.*

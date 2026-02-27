@@ -1,0 +1,9 @@
+{
+  "name": "neuroloop",
+  "version": "0.55.1",
+  "type": "module",
+  "piConfig": {
+    "name": "neuroloop",
+    "configDir": ".neuroskill"
+  }
+}
