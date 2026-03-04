@@ -6,6 +6,8 @@ NeuroLoop runs on top of the [pi coding agent](https://github.com/mariozechner/p
 
 [Paper](https://arxiv.org/abs/2603.03212)
 
+![demo](docs/demo.png)
+
 ---
 
 ## Features

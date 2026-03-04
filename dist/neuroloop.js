@@ -3,7 +3,7 @@
 // src/main.ts
 import { existsSync as existsSync4, readdirSync, readFileSync as readFileSync4 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
-import { dirname as dirname4, join as join4, relative } from "node:path";
+import { basename, dirname as dirname4, join as join4, relative } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 import {
   AuthStorage,
@@ -1872,7 +1872,7 @@ Available commands and typical args:
       },
       render(width) {
         const lines = [];
-        const logo = theme.fg("accent", "\u25C6") + " " + theme.bold("neuroloop") + theme.fg("dim", ` v${"0.0.4"}`);
+        const logo = theme.fg("accent", "\u25C6") + " " + theme.bold("neuroloop") + theme.fg("dim", ` v${"0.0.5"}`);
         lines.push(truncateToWidth(logo, width));
         const hintStr = hints.map(([k, a]) => theme.fg("dim", "[") + theme.fg("muted", k) + theme.fg("dim", "] ") + theme.fg("dim", a)).join(theme.fg("dim", "  "));
         lines.push(truncateToWidth(" " + hintStr, width));
@@ -2249,10 +2249,9 @@ var loader = new DefaultResourceLoader({
         extra.push({
           name: nameMatch[1].trim(),
           description: descMatch[1].trim(),
-          // Use a cwd-relative path so [Skills] shows short readable names.
-          // The read tool resolves relative paths from cwd, so the LLM can
-          // still load the file when it invokes this skill.
-          filePath: relative(process.cwd(), skillFile),
+          // Package-relative path: "neuroloop/skills/…/SKILL.md"
+          // Consistent regardless of cwd or where npm installed the package.
+          filePath: `${basename(NEUROLOOP_DIR2)}/${relative(NEUROLOOP_DIR2, skillFile)}`,
           baseDir: join4(SKILLS_DIR, entry.name),
           source: "path",
           disableModelInvocation: false
@@ -2263,7 +2262,7 @@ var loader = new DefaultResourceLoader({
       extra.push({
         name: "neuroskill-metrics",
         description: "NeuroSkill EXG metrics reference \u2014 all indices, band powers, scores, and their scientific basis.",
-        filePath: relative(process.cwd(), METRICS_MD_PATH),
+        filePath: `${basename(NEUROLOOP_DIR2)}/${relative(NEUROLOOP_DIR2, METRICS_MD_PATH)}`,
         baseDir: NEUROLOOP_DIR2,
         source: "path",
         disableModelInvocation: false
@@ -2287,7 +2286,7 @@ var loader = new DefaultResourceLoader({
     return {
       agentsFiles: [
         ...base.agentsFiles,
-        { path: relative(process.cwd(), join4(NEUROLOOP_DIR2, "NEUROLOOP.md")), content: note }
+        { path: `${basename(NEUROLOOP_DIR2)}/NEUROLOOP.md`, content: note }
       ]
     };
   },

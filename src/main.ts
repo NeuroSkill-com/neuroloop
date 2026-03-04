@@ -21,7 +21,7 @@ process.env.PI_SKIP_VERSION_CHECK = "1";
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -158,10 +158,9 @@ const loader = new DefaultResourceLoader({
 				extra.push({
 					name: nameMatch[1].trim(),
 					description: descMatch[1].trim(),
-					// Use a cwd-relative path so [Skills] shows short readable names.
-					// The read tool resolves relative paths from cwd, so the LLM can
-					// still load the file when it invokes this skill.
-					filePath: relative(process.cwd(), skillFile),
+						// Package-relative path: "neuroloop/skills/…/SKILL.md"
+					// Consistent regardless of cwd or where npm installed the package.
+					filePath: `${basename(NEUROLOOP_DIR)}/${relative(NEUROLOOP_DIR, skillFile)}`,
 					baseDir: join(SKILLS_DIR, entry.name),
 					source: "path",
 					disableModelInvocation: false,
@@ -174,7 +173,7 @@ const loader = new DefaultResourceLoader({
 			extra.push({
 				name: "neuroskill-metrics",
 				description: "NeuroSkill EXG metrics reference — all indices, band powers, scores, and their scientific basis.",
-				filePath: relative(process.cwd(), METRICS_MD_PATH),
+				filePath: `${basename(NEUROLOOP_DIR)}/${relative(NEUROLOOP_DIR, METRICS_MD_PATH)}`,
 				baseDir: NEUROLOOP_DIR,
 				source: "path",
 				disableModelInvocation: false,
@@ -201,7 +200,7 @@ const loader = new DefaultResourceLoader({
 		return {
 			agentsFiles: [
 				...base.agentsFiles,
-				{ path: relative(process.cwd(), join(NEUROLOOP_DIR, "NEUROLOOP.md")), content: note },
+				{ path: `${basename(NEUROLOOP_DIR)}/NEUROLOOP.md`, content: note },
 			],
 		};
 	},
