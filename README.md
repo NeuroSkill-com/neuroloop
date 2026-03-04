@@ -1,8 +1,8 @@
 # NeuroLoop
 
-**NeuroLoop** is an EXG-aware AI coding and life companion powered by a real-time consumer EXG device (Muse 2 / Muse S). It reads brainwaves and physiology continuously and uses that live biometric data to inform every response — adapting its tone, offering guided protocols, and labelling meaningful mental states as they happen.
+**NeuroLoop** is an BCI-aware AI coding and life companion powered by a real-time consumer BCI device. It reads brainwaves and physiology continuously and uses that live biometric data to inform every response — adapting its tone, offering guided protocols, and labelling meaningful mental states as they happen.
 
-NeuroLoop runs on top of the [pi coding agent](https://github.com/mariozechner/pi-coding-agent) framework and communicates with the [NeuroSkill](https://neuroskill.com) EXG analysis server, which exposes a local WebSocket API for real-time neural data.
+NeuroLoop™ runs on top of the [pi coding agent](https://github.com/mariozechner/pi-coding-agent) framework and communicates with the [NeuroSkill™](https://neuroskill.com) State of Mind BCI server, which exposes a local WebSocket API for real-time neural data.
 
 [Paper](https://arxiv.org/abs/2603.03212)
 
@@ -13,12 +13,15 @@ NeuroLoop runs on top of the [pi coding agent](https://github.com/mariozechner/p
 ## Features
 
 - 🧠 **Live EXG context** — injects a real-time snapshot of brain state (focus, relaxation, engagement, drowsiness, HRV, sleep stage, consciousness indices, etc.) into every LLM turn
-- 🎯 **Contextual skill loading** — automatically selects and injects relevant skill files based on the user's message domain
-- 🏃 **Guided protocols** — 70+ mind-body practices (breathing, meditation, somatic work, sleep, music, exercise) triggered and timed from within the agent
-- 🏷️ **Auto-labelling** — silently annotates notable mental, emotional, and philosophical moments as EXG timestamps
-- 💾 **Persistent memory** — reads and writes a long-term memory file across sessions
+- 📡 **Live TUI panel** — real-time scores and EEG band bars stream directly into the terminal footer via WebSocket; no polling delay
+- 🎯 **Contextual skill loading** — detects domain signals in each user message (stress, sleep, focus, grief, awe, philosophy, HRV, etc.) and runs the matching NeuroSkill™ commands in parallel before the LLM responds
+- 🏃 **Guided protocols** — 100+ mind-body practices (breathing, meditation, somatic work, sleep, music, social-media, dietary, gym, eye exercises, etc.) proposed intelligently and executed step-by-step with OS notifications and EXG labelling
+- 🏷️ **Auto-labelling** — silently annotates notable mental, emotional, and philosophical moments as timestamped EXG events; the label text and context are written by the LLM
+- 💾 **Persistent memory** — reads and writes a long-term memory file (`~/.neuroskill/memory.md`) across sessions
+- 🔍 **Prewarm cache** — kicks off expensive `neuroskill compare` runs proactively in the background so results are ready when needed
 - 🌐 **Web tools** — `web_fetch` and `web_search` available to the agent
-- 📡 **Prewarm cache** — kicks off expensive `neuroskill compare` runs proactively in the background
+- 📅 **Daily calibration nudge** — reminds the user to run a calibration sequence at most once every 24 hours
+- 🤖 **Multi-provider model support** — Anthropic, OpenAI, Gemini, and all Ollama models (including `gpt-oss:20b` as the default local model)
 
 ---
 
@@ -28,7 +31,7 @@ NeuroLoop runs on top of the [pi coding agent](https://github.com/mariozechner/p
 npx neuroloop
 ```
 
-Requires Node.js ≥ 20. The NeuroSkill EXG server must be running and a Muse device connected for live biometric features.
+Requires Node.js ≥ 20. The NeuroSkill™ EXG server must be running and a Muse device connected for live biometric features.
 
 ---
 
@@ -36,11 +39,75 @@ Requires Node.js ≥ 20. The NeuroSkill EXG server must be running and a Muse de
 
 On every user message the harness:
 
-1. Runs `neuroskill status` and injects the live EXG snapshot into the system prompt and a visible chat bubble
-2. Detects domain signals in the user's prompt (stress, sleep, focus, protocols, etc.)
-3. Runs the relevant NeuroSkill commands in parallel (indices, session trends, label search, etc.)
-4. If protocol intent is detected, injects the full protocol repertoire (`skills/neuroskill-protocols/SKILL.md`)
-5. Injects the capability index (`NEUROLOOP.md`) so the LLM always knows what tools are available
+1. Runs `neuroskill status` via WebSocket and injects the live EXG snapshot into a visible chat bubble and the LLM system prompt
+2. Detects domain signals in the user's prompt (30+ categories: stress, sleep, focus, grief, awe, morals, symbiosis, HRV, somatic, consciousness, identity, etc.)
+3. Runs the matching NeuroSkill™ commands in parallel — session metrics, label searches, sleep staging, compare cache — and appends results to the system context
+4. If protocol intent is detected, injects the full protocol repertoire (`skills/neuroskill-protocols/SKILL.md`) on demand
+5. Injects the capability index (`NEUROLOOP.md`) and any persistent agent memory so the LLM always has full context
+
+The LLM receives the live EXG data, behavioural guidance, and domain-specific history. The user sees only the EXG snapshot bubble.
+
+---
+
+## TUI
+
+NeuroLoop extends the pi TUI with:
+
+- **Custom header** — brand logo (`◆ neuroloop vX.Y.Z`) and keybinding hints
+- **Live footer metrics** — real-time scores row (`focus`, `cog.load`, `relax`, `engage`, `drowsy`, `mood`, `♥ bpm`) and EEG band bars (`δ θ α β γ`) updated via WebSocket; the most recent EXG label and its timestamp are shown right-aligned
+- **Status bar** — EXG connection dot (`◉` / `◌`), "last updated" age, context usage, and current model
+
+### Slash Commands
+
+| Command | Description |
+|---|---|
+| `/exg` | Show a full EXG snapshot in the chat |
+| `/exg on` | Re-enable the live EXG panel and reconnect WebSocket |
+| `/exg off` | Disable the live EXG panel and disconnect WebSocket |
+| `/exg <seconds>` | Change the status poll interval (e.g. `/exg 0.5`) |
+| `/exg port <n>` | Connect to the NeuroSkill™ server on a different port |
+| `/neuro <cmd> [args…]` | Run any neuroskill subcommand directly (output shown in chat) |
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `ctrl+shift+e` | Show live EXG snapshot in chat |
+
+---
+
+## Tools
+
+| Tool | Description |
+|---|---|
+| `neuroskill_run` | Run any neuroskill subcommand (`status`, `session`, `sessions`, `sleep`, `search-labels`, `interactive`, `label`, `search`, `compare`, `umap`, `listen`, `notify`, `calibrate`, `raw`, …) |
+| `neuroskill_label` | Create a timestamped EXG annotation for a notable mental/emotional/somatic moment |
+| `run_protocol` | Execute a multi-step guided protocol with OS notifications, step timing, and per-step EXG labelling |
+| `prewarm` | Kick off a background `neuroskill compare` run so the result is ready when needed |
+| `memory_read` | Read the agent's persistent memory file (`~/.neuroskill/memory.md`) |
+| `memory_write` | Write or append to the persistent memory file |
+| `web_fetch` | Fetch the content of a URL |
+| `web_search` | Search the web |
+
+---
+
+## Skills
+
+The following skill files are loaded from `skills/` and made available to the LLM for contextual injection:
+
+| Skill | Description |
+|---|---|
+| `neuroskill-status` | `status` command — full device/session/scores snapshot |
+| `neuroskill-sessions` | `session` and `sessions` commands — per-session metrics and session history |
+| `neuroskill-sleep` | `sleep` and `umap` commands — sleep staging and UMAP visualisation |
+| `neuroskill-labels` | `label`, `search-labels`, `interactive` commands — EXG annotations and semantic search |
+| `neuroskill-search` | `search` and `compare` commands — ANN similarity search and session comparison |
+| `neuroskill-streaming` | `listen`, `notify`, `calibrate`, `timer`, `raw` — real-time events and notifications |
+| `neuroskill-transport` | WebSocket and HTTP transport, port discovery, output modes, global flags |
+| `neuroskill-protocols` | 100+ guided protocols organised by EXG signal — loaded on-demand |
+| `neuroskill-data-reference` | All metric fields, value ranges, and their meaning |
+| `neuroskill-recipes` | Shell and scripting recipes for automation and pipelines |
+| `neuroskill-metrics` | Full scientific reference for all EXG indices (`METRICS.md`) |
 
 ---
 
@@ -48,13 +115,14 @@ On every user message the harness:
 
 NeuroLoop exposes 40+ neuroscientific metrics derived from the Muse headset, including:
 
-- EXG band powers (δ, θ, α, β, γ) at TP9, AF7, AF8, TP10
+- EEG band powers (δ, θ, α, β, γ) at TP9, AF7, AF8, TP10
 - Ratios and indices: TAR, BAR, TBR, DTR, PSE, APF, BPS, SNR, Coherence, PAC, FAA
 - Complexity measures: Permutation Entropy, Higuchi FD, DFA Exponent, Sample Entropy
 - Composite scores: Focus, Relaxation, Engagement, Meditation, Cognitive Load, Drowsiness
 - Consciousness metrics: LZC, Wakefulness, Information Integration
 - PPG / HRV: Heart Rate, RMSSD, SDNN, pNN50, LF/HF Ratio, SpO₂, Baevsky Stress Index
 - Sleep staging: Wake / N1 / N2 / N3 / REM
+- Extended indices: Depression, Anxiety, Bipolar, ADHD, Headache, Migraine, Narcolepsy, Insomnia, Epilepsy risk, Mu Suppression
 
 > ⚠️ **Research Use Only.** All metrics are experimental outputs from consumer-grade EXG hardware. They are not validated clinical measurements, not FDA/CE-cleared, and must not be used for diagnosis or treatment.
 
@@ -67,40 +135,68 @@ See [`METRICS.md`](METRICS.md) for the full scientific reference for every metri
 ```
 neuroloop/
 ├── src/
-│   ├── main.ts          # Entry point
-│   ├── neuroloop.ts     # Extension factory (tools, hooks, renderers)
-│   └── memory.ts        # Persistent memory helpers
-├── skills/              # Domain skill files injected into the system prompt
-├── NEUROLOOP.md         # Capability index (skill routing table)
-├── METRICS.md           # Full neuroscientific reference for all EXG metrics
-├── pi-pkg/              # pi package manifest
-└── dist/                # Compiled output (neuroloop.js)
+│   ├── main.ts               # Entry point — session setup, skill loading, model registry
+│   ├── neuroloop.ts          # ExtensionFactory — tools, hooks, renderers, TUI, WebSocket
+│   ├── memory.ts             # Persistent memory helpers (~/.neuroskill/memory.md)
+│   ├── neuroskill/
+│   │   ├── index.ts          # Public barrel
+│   │   ├── run.ts            # runNeuroSkill() — WebSocket command runner
+│   │   ├── signals.ts        # detectSignals() — prompt domain detection
+│   │   └── context.ts        # selectContextualData() — parallel data fetching + compare cache
+│   └── tools/
+│       ├── web-fetch.ts      # web_fetch tool
+│       ├── web-search.ts     # web_search tool
+│       └── protocol.ts       # run_protocol tool — step-by-step guided protocols
+├── skills/                   # Domain skill files (one subdirectory per skill)
+├── NEUROLOOP.md              # Capability index injected every turn
+├── METRICS.md                # Full neuroscientific reference for all EXG metrics
+└── dist/                     # Compiled output (neuroloop.js)
 ```
+
+Agent data is stored under `~/.neuroloop/` (sessions, auth, settings, models).
+
+---
+
+## Configuration
+
+### Models
+
+NeuroLoop supports all pi-compatible providers (Anthropic, OpenAI, Gemini) as well as any locally running Ollama models. `gpt-oss:20b` is always registered as the default Ollama model even when Ollama is unreachable.
+
+Model selection order:
+1. Model saved in the current session
+2. Default from `~/.neuroloop/settings.json`
+3. First built-in provider with a valid API key or OAuth token
+4. First available Ollama model (`gpt-oss:20b` when none are listed first)
+
+### NeuroSkill™ Server Port
+
+The agent auto-discovers the NeuroSkill™ server port via `lsof` and falls back to `8375`. You can override the port at runtime with `/exg port <n>`.
 
 ---
 
 ## How to Cite
 
-If you use NeuroLoop in academic work, please cite it as:
+If you use NeuroLoop™ in academic work, please cite it as:
 
 ```bibtex
 @software{neuroloop2026,
   author       = {Nataliya Kosmyna and Eugene Hauptmann},
-  title        = {{NeuroLoop: An EXG-Aware AI Companion Powered by Real-Time Brainwave Analysis}},
+  title        = {{NeuroLoop™: An EXG-Aware AI Companion Powered by Real-Time Brainwave Analysis}},
   year         = {2026},
-  version      = {0.0.1},
+  version      = {0.0.7},
   url          = {https://github.com/NeuroSkill-com/neuroloop}
 }
 ```
 
 ### Related Work
 
-NeuroLoop builds on the following neuroscientific foundations. If you use specific metrics, please also cite the primary literature listed in [`METRICS.md`](METRICS.md). Key upstream works include:
+NeuroLoop™ builds on the following neuroscientific foundations. If you use specific metrics, please also cite the primary literature listed in [`METRICS.md`](METRICS.md). Key upstream works include:
 
 ```bibtex
 @article{krigolson2017choosing,
   author  = {Krigolson, Olav E. and Williams, Chad C. and Norton, Angela and Hassall, Cameron D. and Colino, Francisco L.},
-  title   = {Choosing {MUSE}: Validation of a Low-Cost, Portable {EXG} System for {ERP} Research},
+  title   = {Choosing {MUSE}: Validation of a Low-Cost, Portable {EEG} System for {ERP} Research},
   journal = {Frontiers in Neuroscience},
   volume  = {11},
   pages   = {109},
@@ -110,7 +206,7 @@ NeuroLoop builds on the following neuroscientific foundations. If you use specif
 
 @inproceedings{cannard2021validating,
   author    = {Cannard, Christian and Wahbeh, Helané and Delorme, Arnaud},
-  title     = {Validating the Wearable {MUSE} Headset for {EXG} Spectral Analysis and Frontal Alpha Asymmetry},
+  title     = {Validating the Wearable {MUSE} Headset for {EEG} Spectral Analysis and Frontal Alpha Asymmetry},
   booktitle = {2021 IEEE International Conference on Bioinformatics and Biomedicine (BIBM)},
   year      = {2021},
   doi       = {10.1109/bibm52615.2021.9669778}
@@ -118,7 +214,7 @@ NeuroLoop builds on the following neuroscientific foundations. If you use specif
 
 @article{coan2004frontal,
   author  = {Coan, James A. and Allen, John J. B.},
-  title   = {Frontal {EXG} Asymmetry as a Moderator and Mediator of Emotion},
+  title   = {Frontal {EEG} Asymmetry as a Moderator and Mediator of Emotion},
   journal = {Biological Psychology},
   volume  = {67},
   number  = {1--2},
@@ -138,9 +234,9 @@ NeuroLoop builds on the following neuroscientific foundations. If you use specif
   doi     = {10.1126/scitranslmed.3006294}
 }
 
-@article{klimesch1999EXG,
+@article{klimesch1999eeg,
   author  = {Klimesch, Wolfgang},
-  title   = {{EXG} Alpha and Theta Oscillations Reflect Cognitive and Memory Performance: A Review and Analysis},
+  title   = {{EEG} Alpha and Theta Oscillations Reflect Cognitive and Memory Performance: A Review and Analysis},
   journal = {Brain Research Reviews},
   volume  = {29},
   number  = {2--3},
