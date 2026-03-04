@@ -4,6 +4,8 @@
 
 NeuroLoop runs on top of the [pi coding agent](https://github.com/mariozechner/pi-coding-agent) framework and communicates with the [NeuroSkill](https://neuroskill.com) EEG analysis server, which exposes a local WebSocket API for real-time neural data.
 
+[Paper](https://arxiv.org/abs/2603.03212)
+
 ---
 
 ## Features
