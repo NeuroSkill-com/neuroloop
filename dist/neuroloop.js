@@ -1872,7 +1872,7 @@ Available commands and typical args:
       },
       render(width) {
         const lines = [];
-        const logo = theme.fg("accent", "\u25C6") + " " + theme.bold("neuroloop") + theme.fg("dim", ` v${"0.0.5"}`);
+        const logo = theme.fg("accent", "\u25C6") + " " + theme.bold("neuroloop") + theme.fg("dim", ` v${"0.0.6"}`);
         lines.push(truncateToWidth(logo, width));
         const hintStr = hints.map(([k, a]) => theme.fg("dim", "[") + theme.fg("muted", k) + theme.fg("dim", "] ") + theme.fg("dim", a)).join(theme.fg("dim", "  "));
         lines.push(truncateToWidth(" " + hintStr, width));

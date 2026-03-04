@@ -1,6 +1,6 @@
 {
   "name": "neuroloop",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "author": "NeuroSkill team (https://neuroskill.com)",
   "contributors": [
     "Nataliya Kosmyna <nkosmyna@mit.edu>",
@@ -18,7 +18,8 @@
     "dist",
     "skills",
     "METRICS.md",
-    "NEUROLOOP.md"
+    "NEUROLOOP.md",
+    "README.md"
   ],
   "piConfig": {
     "name": "neuroloop",
