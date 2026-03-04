@@ -1,13 +1,13 @@
 {
   "name": "neuroloop",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "author": "NeuroSkill team (https://neuroskill.com)",
   "contributors": [
     "Nataliya Kosmyna <nkosmyna@mit.edu>",
     "Eugene Hauptmann <eugenehp@mit.edu>"
   ],
   "repository": "https://github.com/NeuroSkill-com/neuroloop",
-  "homepage": "https://neurloop.com",
+  "homepage": "https://neurloop.io",
   "license": "GPL-3.0-only",
   "description": "EEG-aware coding agent — run `npx neuroloop` to start",
   "type": "module",
