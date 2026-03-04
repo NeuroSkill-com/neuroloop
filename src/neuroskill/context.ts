@@ -1,5 +1,5 @@
 /**
- * neuroskill/context.ts — contextual EEG data selection.
+ * neuroskill/context.ts — contextual EXG data selection.
  *
  * Reads domain signals from the user's prompt and decides which neuroskill
  * commands to run. All tasks fire in parallel; failures are silently skipped.

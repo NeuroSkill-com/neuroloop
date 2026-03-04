@@ -1,6 +1,6 @@
 ---
 name: neuroskill-sleep
-description: NeuroSkill `sleep` and `umap` commands — EEG-based sleep stage classification (Wake/N1/N2/N3/REM) with efficiency and bout analysis, and 3D UMAP projection of session embeddings for spatial comparison. Use when analysing sleep quality or visualising neural state separation between sessions.
+description: NeuroSkill `sleep` and `umap` commands — EXG-based sleep stage classification (Wake/N1/N2/N3/REM) with efficiency and bout analysis, and 3D UMAP projection of session embeddings for spatial comparison. Use when analysing sleep quality or visualising neural state separation between sessions.
 ---
 
 # NeuroSkill `sleep` and `umap` Commands
@@ -9,7 +9,7 @@ description: NeuroSkill `sleep` and `umap` commands — EEG-based sleep stage cl
 
 ## `sleep` — Sleep Stage Classification
 
-Classify EEG epochs into sleep stages (Wake / N1 / N2 / N3 / REM) using
+Classify EXG epochs into sleep stages (Wake / N1 / N2 / N3 / REM) using
 relative band-power ratios and simplified AASM heuristics.
 
 Auto-range: all sessions from the last 24 hours.
@@ -93,7 +93,7 @@ npx neuroskill sleep --json | jq '[.epochs[] | {utc: .utc, stage: .stage}]'    #
 
 ## `umap` — 3D UMAP Projection
 
-Compute a 3D UMAP projection of EEG embedding vectors from two sessions.
+Compute a 3D UMAP projection of EXG embedding vectors from two sessions.
 Runs GPU-accelerated UMAP; the CLI polls for progress and prints a live bar.
 Results are cached so re-running the same ranges is instant.
 

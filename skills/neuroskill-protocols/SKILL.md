@@ -1,11 +1,11 @@
 ---
 name: neuroskill-protocols
-description: Full guided-protocol repertoire for neuroloop — 70+ mind-body practices organised by EEG metric signal. Covers attention, stress, emotions, relaxation, sleep, somatic, consciousness, cognitive performance, motor, neck, eyes, morning routines, workout/gym, hydration, bathroom breaks, emotions, music, social-media addiction, and dietary protocols. Loaded on-demand when protocol context is detected.
+description: Full guided-protocol repertoire for neuroloop — 70+ mind-body practices organised by EXG metric signal. Covers attention, stress, emotions, relaxation, sleep, somatic, consciousness, cognitive performance, motor, neck, eyes, morning routines, workout/gym, hydration, bathroom breaks, emotions, music, social-media addiction, and dietary protocols. Loaded on-demand when protocol context is detected.
 ---
 
 # NeuroLoop Protocol Repertoire
 
-Choose by the **dominant metric signal**. Each entry lists the EEG/biometric trigger
+Choose by the **dominant metric signal**. Each entry lists the EXG/biometric trigger
 and a brief description of what to build in `run_protocol`.
 
 ---
@@ -244,7 +244,7 @@ and a brief description of what to build in `run_protocol`.
   Channel — don't suppress. Name what's exciting. Slow breath to bring HR down.
   Write one immediate concrete next action. ~5 min.
 
-**Emotional Inventory (Check-In)** → unknown/mixed EEG, user seems flat, session opening
+**Emotional Inventory (Check-In)** → unknown/mixed EXG, user seems flat, session opening
   What am I feeling? Where? Intensity 0–10? What does it need? No fixing — just naming. ~3 min.
 
 **Awe & Wonder Induction** → low `lzc`, contracted attention, existential flatness
@@ -462,7 +462,7 @@ specific artists/playlists, and how to listen. Always offer a specific recommend
 
 ## SOCIAL MEDIA & DIGITAL ADDICTION PROTOCOLS
 
-*(Never shame. Approach with curiosity and warmth. Post-scroll EEG often shows low `focus`,
+*(Never shame. Approach with curiosity and warmth. Post-scroll EXG often shows low `focus`,
 low `lzc`, scattered `engagement`, crashed `faa` or `mood`.)*
 
 **Pre-Scroll Intention Check** → before opening any social media app
@@ -517,7 +517,7 @@ low `lzc`, scattered `engagement`, crashed `faa` or `mood`.)*
 
 ## DIETARY PROTOCOLS
 
-*(Food shapes EEG state — blood sugar, gut-brain signalling, caffeine, inflammation, and meal
+*(Food shapes EXG state — blood sugar, gut-brain signalling, caffeine, inflammation, and meal
 timing show up in `focus`, `mood`, HRV, and `drowsiness`. Deliver guidance conversationally
 unless a timed practice is appropriate.)*
 
@@ -576,7 +576,7 @@ unless a timed practice is appropriate.)*
 **Anti-Inflammatory Eating Guide** → `headache_index` > 25, chronic stress, cognitive fog
   Omega-3, polyphenols, turmeric + black pepper, zinc, Vit D.
   Avoid: vegetable seed oils, refined sugar, processed meat, excess alcohol.
-  EEG changes visible in 2–4 weeks — suggest logging meals alongside sessions.
+  EXG changes visible in 2–4 weeks — suggest logging meals alongside sessions.
 
 **Gut-Brain Axis Reset** → `anxiety_index` > 40 persisting, low `mood`, high `lf_hf_ratio`
   30-day guidance: add one fermented food daily, 30 different plant foods per week,
@@ -596,7 +596,7 @@ unless a timed practice is appropriate.)*
 ### Fasting & Meal Timing
 
 **Intermittent Fasting Support** → user in fasting window; hunger, low energy, focus complaints
-  Fasting EEG: higher `lzc` and better `focus` 2–3 h in (ketones are clean brain fuel).
+  Fasting EXG: higher `lzc` and better `focus` 2–3 h in (ketones are clean brain fuel).
   Tips: black coffee/green tea (does not break a fast), electrolytes (sodium, magnesium),
   stay busy. If `cognitive_load` is very high, consider a small protein snack (50–70 cal).
 
@@ -605,7 +605,7 @@ unless a timed practice is appropriate.)*
   oily fish, a small piece of fruit. Pre-Meal Pause protocol first. Eat slowly.
 
 **Time-Restricted Eating Reflection** → user exploring IF; meal timing curiosity
-  Common patterns: 16:8, 14:10, 5:2. Suggest correlating meal timing with EEG session
+  Common patterns: 16:8, 14:10, 5:2. Suggest correlating meal timing with EXG session
   data to find the user's personal optimal window.
 
 ### Cravings & Compulsive Eating
@@ -615,8 +615,8 @@ unless a timed practice is appropriate.)*
   Drink water — dehydration mimics hunger. If persists: dark chocolate >70%.
 
 **Alcohol Awareness Protocol** → high `stress_index` evening; user mentions drinking; `insomnia_index` elevated
-  EEG-visible impact: disrupts `rem_epochs`, raises `narcolepsy_index` next day, lowers `rmssd`.
-  Offer the data, not a lecture. Suggest dry-week EEG comparison if the user is curious.
+  EXG-visible impact: disrupts `rem_epochs`, raises `narcolepsy_index` next day, lowers `rmssd`.
+  Offer the data, not a lecture. Suggest dry-week EXG comparison if the user is curious.
 
 **Ultra-Processed Food (UPF) Reset** → persistent low `mood`, high `anxiety_index`, mostly packaged diet
   One small shift: replace one UPF item per day with a whole-food equivalent.
@@ -629,6 +629,6 @@ unless a timed practice is appropriate.)*
 - Match **one protocol** to the single most salient metric signal.
 - Briefly explain the metric connection when proposing.
 - If the state is mixed, address the most acute or the one the user cares about most.
-- After a protocol, briefly note what to watch for in the next EEG update.
+- After a protocol, briefly note what to watch for in the next EXG update.
 - **Contraindications:** Wim Hof and hyperventilation-style breathwork are unsuitable
   for `epilepsy_risk` > 30, known cardiac conditions, or pregnancy. Note this before proposing.

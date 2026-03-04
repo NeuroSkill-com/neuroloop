@@ -1,9 +1,0 @@
-{
-  "name": "neuroloop",
-  "version": "0.0.3",
-  "type": "module",
-  "piConfig": {
-    "name": "neuroloop",
-    "configDir": ".neuroloop"
-  }
-}

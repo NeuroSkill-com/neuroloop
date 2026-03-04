@@ -1,6 +1,6 @@
 ---
 name: neuroskill-search
-description: NeuroSkill `search` and `compare` commands — ANN search for neurally similar EEG moments across all history, and A/B session comparison with metric deltas, trend directions, and UMAP enqueuing. Use when finding similar past brain states or comparing two recording sessions.
+description: NeuroSkill `search` and `compare` commands — ANN search for neurally similar EXG moments across all history, and A/B session comparison with metric deltas, trend directions, and UMAP enqueuing. Use when finding similar past brain states or comparing two recording sessions.
 ---
 
 # NeuroSkill `search` and `compare` Commands
@@ -9,7 +9,7 @@ description: NeuroSkill `search` and `compare` commands — ANN search for neura
 
 ## `search` — Neural Similarity Search
 
-Find EEG moments from your entire history that are neurally similar to a query range.
+Find EXG moments from your entire history that are neurally similar to a query range.
 Uses approximate nearest-neighbor (ANN) search over the 5-second embedding HNSW index.
 
 Auto-range: when no `--start`/`--end` flags are given, the CLI automatically uses your

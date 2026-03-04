@@ -1,7 +1,7 @@
 # NeuroSkill — Metrics & Indices Reference
 
 > **⚠ Research Use Only.**  
-> All metrics are experimental outputs derived from consumer-grade EEG hardware. They are **not** validated clinical measurements, not FDA/CE-cleared, and must not be used for diagnosis, treatment decisions, or any medical purpose. Consult a qualified healthcare professional for any medical concerns.
+> All metrics are experimental outputs derived from consumer-grade EXG hardware. They are **not** validated clinical measurements, not FDA/CE-cleared, and must not be used for diagnosis, treatment decisions, or any medical purpose. Consult a qualified healthcare professional for any medical concerns.
 
 ---
 
@@ -9,8 +9,8 @@
 
 1. [Hardware — Muse Headset & Electrode Positions](#1-hardware--muse-headset--electrode-positions)
 2. [Signal Acquisition & Preprocessing](#2-signal-acquisition--preprocessing)
-3. [EEG Frequency Bands](#3-eeg-frequency-bands)
-4. [EEG Indices](#4-eeg-indices)
+3. [EXG Frequency Bands](#3-EXG-frequency-bands)
+4. [EXG Indices](#4-EXG-indices)
    - 4.1 [TAR — Theta/Alpha Ratio](#41-tar--thetaalpha-ratio)
    - 4.2 [BAR — Beta/Alpha Ratio](#42-bar--betaalpha-ratio)
    - 4.3 [DTR — Delta/Theta Ratio](#43-dtr--deltatheta-ratio)
@@ -66,7 +66,7 @@
 
 ## 1. Hardware — Muse Headset & Electrode Positions
 
-NeuroSkill is designed and validated exclusively for the **Muse 2** and **Muse S** consumer EEG headbands (InteraXon). The headset uses dry Ag/AgCl-coated electrodes and streams at **256 samples/second** via Bluetooth Low Energy.
+NeuroSkill is designed and validated exclusively for the **Muse 2** and **Muse S** consumer EXG headbands (InteraXon). The headset uses dry Ag/AgCl-coated electrodes and streams at **256 samples/second** via Bluetooth Low Energy.
 
 ### The Four Muse Electrodes
 
@@ -84,7 +84,7 @@ The electrode placement follows the **international 10-20 system** — a standar
 ### Why These Four Sites?
 
 - **AF7 / AF8 (prefrontal)** — ideal for monitoring cognitive and emotional states. Alpha asymmetry between these two sites is the canonical FAA index. They are sensitive to frontal theta during memory tasks and beta during cognitive effort.
-- **TP9 / TP10 (temporal-mastoid)** — provide a reference-like signal for differential recordings and bilateral temporal coverage. Their distance from the prefrontal electrodes makes them useful for left–right laterality and coherence calculations. The mastoid location is also the standard reference in clinical EEG.
+- **TP9 / TP10 (temporal-mastoid)** — provide a reference-like signal for differential recordings and bilateral temporal coverage. Their distance from the prefrontal electrodes makes them useful for left–right laterality and coherence calculations. The mastoid location is also the standard reference in clinical EXG.
 
 **Validated in:** Krigolson et al. (2017) [doi:10.3389/fnins.2017.00109](https://doi.org/10.3389/fnins.2017.00109); Ratti et al. (2017) [doi:10.3389/fnhum.2017.00398](https://doi.org/10.3389/fnhum.2017.00398); Cannard et al. (2021) [doi:10.1109/bibm52615.2021.9669778](https://doi.org/10.1109/bibm52615.2021.9669778).
 
@@ -129,9 +129,9 @@ Spectral analysis framework follows:
 
 ---
 
-## 3. EEG Frequency Bands
+## 3. EXG Frequency Bands
 
-Standard EEG frequency bands, computed from the Welch PSD for each of the four channels. Updated at ~4 Hz.
+Standard EXG frequency bands, computed from the Welch PSD for each of the four channels. Updated at ~4 Hz.
 
 | Band | Symbol | Range | Associated Cognitive/Neural States |
 |------|--------|-------|------------------------------------|
@@ -143,15 +143,15 @@ Standard EEG frequency bands, computed from the Welch PSD for each of the four c
 
 **Scientific basis:**
 
-> Nunez, P. L. & Srinivasan, R. (2006). *Electric Fields of the Brain: The Neurophysics of EEG* (2nd ed.). Oxford University Press. [doi:10.1093/acprof:oso/9780195050387.001.0001](https://doi.org/10.1093/acprof:oso/9780195050387.001.0001)
+> Nunez, P. L. & Srinivasan, R. (2006). *Electric Fields of the Brain: The Neurophysics of EXG* (2nd ed.). Oxford University Press. [doi:10.1093/acprof:oso/9780195050387.001.0001](https://doi.org/10.1093/acprof:oso/9780195050387.001.0001)
 
-> Klimesch, W. (1999). EEG alpha and theta oscillations reflect cognitive and memory performance: a review and analysis. *Brain Research Reviews*, 29(2–3), 169–195. [doi:10.1016/s0165-0173(98)00056-3](https://doi.org/10.1016/s0165-0173(98)00056-3)
+> Klimesch, W. (1999). EXG alpha and theta oscillations reflect cognitive and memory performance: a review and analysis. *Brain Research Reviews*, 29(2–3), 169–195. [doi:10.1016/s0165-0173(98)00056-3](https://doi.org/10.1016/s0165-0173(98)00056-3)
 
-> Knyazev, G. G. (2012). EEG delta oscillations as a correlate of basic homeostatic and motivational processes. *Neuroscience & Biobehavioral Reviews*, 36(1), 677–695. [doi:10.1016/j.neubiorev.2011.10.002](https://doi.org/10.1016/j.neubiorev.2011.10.002)
+> Knyazev, G. G. (2012). EXG delta oscillations as a correlate of basic homeostatic and motivational processes. *Neuroscience & Biobehavioral Reviews*, 36(1), 677–695. [doi:10.1016/j.neubiorev.2011.10.002](https://doi.org/10.1016/j.neubiorev.2011.10.002)
 
 ---
 
-## 4. EEG Indices
+## 4. EXG Indices
 
 All band-power values are computed as the mean power spectral density (µV²/Hz) within each band frequency range, averaged across a sliding 512-sample (≈2 s) Hann-windowed FFT epoch.
 
@@ -173,7 +173,7 @@ where `P_θ` = mean theta-band power (4–8 Hz) and `P_α` = mean alpha-band pow
 
 **Reference:**
 
-> Putman, P., van Peer, J. & Maimari, I. (2010). EEG theta/beta ratio in relation to fear-modulated response-inhibition, attentional control, and affective traits. *Biological Psychology*, 83(2), 73–78. [doi:10.1016/j.biopsycho.2009.10.008](https://doi.org/10.1016/j.biopsycho.2009.10.008)
+> Putman, P., van Peer, J. & Maimari, I. (2010). EXG theta/beta ratio in relation to fear-modulated response-inhibition, attentional control, and affective traits. *Biological Psychology*, 83(2), 73–78. [doi:10.1016/j.biopsycho.2009.10.008](https://doi.org/10.1016/j.biopsycho.2009.10.008)
 
 ---
 
@@ -193,7 +193,7 @@ where `P_β` = mean beta-band power (13–30 Hz) and `P_α` = mean alpha-band po
 
 **Reference:**
 
-> Angelidis, A., van der Does, W., Schakel, L. & Putman, P. (2016). Frontal EEG theta/beta ratio as an electrophysiological marker for attentional control and its test-retest reliability. *Biological Psychology*, 121, 49–52. [doi:10.1016/j.biopsycho.2016.09.008](https://doi.org/10.1016/j.biopsycho.2016.09.008)
+> Angelidis, A., van der Does, W., Schakel, L. & Putman, P. (2016). Frontal EXG theta/beta ratio as an electrophysiological marker for attentional control and its test-retest reliability. *Biological Psychology*, 121, 49–52. [doi:10.1016/j.biopsycho.2016.09.008](https://doi.org/10.1016/j.biopsycho.2016.09.008)
 
 ---
 
@@ -213,7 +213,7 @@ where `P_δ` = delta-band power (1–4 Hz) and `P_θ` = theta-band power (4–8 
 
 **Reference:**
 
-> Knyazev, G. G. (2012). EEG delta oscillations as a correlate of basic homeostatic and motivational processes. *Neuroscience & Biobehavioral Reviews*, 36(1), 677–695. [doi:10.1016/j.neubiorev.2011.10.002](https://doi.org/10.1016/j.neubiorev.2011.10.002)
+> Knyazev, G. G. (2012). EXG delta oscillations as a correlate of basic homeostatic and motivational processes. *Neuroscience & Biobehavioral Reviews*, 36(1), 677–695. [doi:10.1016/j.neubiorev.2011.10.002](https://doi.org/10.1016/j.neubiorev.2011.10.002)
 
 ---
 
@@ -227,7 +227,7 @@ TBR = P_θ / P_β
 
 where `P_θ` = theta-band power (4–8 Hz) and `P_β` = beta-band power (13–30 Hz), both from **AF7 + AF8**.
 
-**What it means:** TBR is the most replicated EEG biomarker for ADHD and reduced executive control in the research literature. Values above 3 are considered elevated in clinical EEG research. High TBR reflects excess slow-wave (theta) activity relative to fast (beta) activity, associated with reduced cortical inhibition and attention dysregulation.
+**What it means:** TBR is the most replicated EXG biomarker for ADHD and reduced executive control in the research literature. Values above 3 are considered elevated in clinical EXG research. High TBR reflects excess slow-wave (theta) activity relative to fast (beta) activity, associated with reduced cortical inhibition and attention dysregulation.
 
 **Electrode sites:** AF7, AF8. In clinical research, Fz and Cz are also commonly used — the Muse AF7/AF8 frontal electrodes provide the closest available approximation.
 
@@ -255,7 +255,7 @@ where `p_i = PSD(f_i) / Σ PSD(f_j)` — the normalized power at frequency bin `
 
 **Reference:**
 
-> Inouye, T., Shinosaki, K., Sakamoto, H. et al. (1991). Quantification of EEG irregularity by use of the entropy of the power spectrum. *Electroencephalography and Clinical Neurophysiology*, 79(3), 204–210. [doi:10.1016/0013-4694(91)90138-t](https://doi.org/10.1016/0013-4694(91)90138-t)
+> Inouye, T., Shinosaki, K., Sakamoto, H. et al. (1991). Quantification of EXG irregularity by use of the entropy of the power spectrum. *Electroencephalography and Clinical Neurophysiology*, 79(3), 204–210. [doi:10.1016/0013-4694(91)90138-t](https://doi.org/10.1016/0013-4694(91)90138-t)
 
 ---
 
@@ -275,7 +275,7 @@ The frequency within the extended alpha band at which the PSD has its maximum va
 
 **Reference:**
 
-> Klimesch, W. (1999). EEG alpha and theta oscillations reflect cognitive and memory performance. *Brain Research Reviews*, 29(2–3), 169–195. [doi:10.1016/s0165-0173(98)00056-3](https://doi.org/10.1016/s0165-0173(98)00056-3)
+> Klimesch, W. (1999). EXG alpha and theta oscillations reflect cognitive and memory performance. *Brain Research Reviews*, 29(2–3), 169–195. [doi:10.1016/s0165-0173(98)00056-3](https://doi.org/10.1016/s0165-0173(98)00056-3)
 
 > Cohen, M. X. (2014). *Analyzing Neural Time Series Data: Theory and Practice*. MIT Press. [doi:10.7551/mitpress/9609.001.0001](https://doi.org/10.7551/mitpress/9609.001.0001)
 
@@ -313,7 +313,7 @@ SNR (dB) = 10 · log₁₀( P_signal / P_noise )
 `P_noise` = mean power in [45–50 Hz] high-frequency band (assumed dominated by noise/EMG).  
 Computed from all channels; the minimum across channels is used as the conservative SNR.
 
-**What it means:** SNR quantifies the cleanliness of the EEG signal relative to high-frequency noise (EMG muscle artifact, electronic noise). Values above 10 dB indicate a clean signal suitable for further analysis. Below 3 dB the signal is likely dominated by noise and artefact, and computed indices should be interpreted with caution. SNR is also used to drive the per-channel quality indicator (green / amber / red dots).
+**What it means:** SNR quantifies the cleanliness of the EXG signal relative to high-frequency noise (EMG muscle artifact, electronic noise). Values above 10 dB indicate a clean signal suitable for further analysis. Below 3 dB the signal is likely dominated by noise and artefact, and computed indices should be interpreted with caution. SNR is also used to drive the per-channel quality indicator (green / amber / red dots).
 
 **Reference:**
 
@@ -351,13 +351,13 @@ Mu_ratio = P_mu(current) / P_mu(baseline)
 
 where `P_mu` is the mean power in the **mu rhythm band** [8–13 Hz] at the **TP9** and **TP10** temporal-mastoid channels (the closest available to standard central sites C3/C4 in the Muse layout). The baseline is the mean alpha power computed over the first 10 seconds of the session. Values < 0.8 indicate suppression (desynchronization).
 
-**What it means:** The mu rhythm is the sensorimotor analog of the occipital alpha rhythm. It is typically suppressed (event-related desynchronization, ERD) when observing or performing a motor action, mental motor imagery, or during processing of action-related stimuli — the "mirror neuron" signature in scalp EEG. Mu suppression at temporal sites (TP9/TP10) is an imperfect proxy for the canonical C3/C4 measure, as the Muse does not include central electrodes.
+**What it means:** The mu rhythm is the sensorimotor analog of the occipital alpha rhythm. It is typically suppressed (event-related desynchronization, ERD) when observing or performing a motor action, mental motor imagery, or during processing of action-related stimuli — the "mirror neuron" signature in scalp EXG. Mu suppression at temporal sites (TP9/TP10) is an imperfect proxy for the canonical C3/C4 measure, as the Muse does not include central electrodes.
 
 **Electrode sites:** TP9, TP10 (temporal-mastoid, approximating central reference).
 
 **Reference:**
 
-> Pfurtscheller, G. & Lopes da Silva, F. H. (1999). Event-related EEG/MEG synchronization and desynchronization: basic principles. *Clinical Neurophysiology*, 110(11), 1842–1857. [doi:10.1016/s1388-2457(99)00141-8](https://doi.org/10.1016/s1388-2457(99)00141-8)
+> Pfurtscheller, G. & Lopes da Silva, F. H. (1999). Event-related EXG/MEG synchronization and desynchronization: basic principles. *Clinical Neurophysiology*, 110(11), 1842–1857. [doi:10.1016/s1388-2457(99)00141-8](https://doi.org/10.1016/s1388-2457(99)00141-8)
 
 ---
 
@@ -371,7 +371,7 @@ SEF95 = min f  such that  ∫₁ᶠ PSD(f') df' ≥ 0.95 · ∫₁⁵⁰ PSD(f')
 
 The frequency below which 95 % of total spectral power (1–50 Hz) lies, computed on the globally averaged PSD.
 
-**What it means:** SEF95 is a concise single-number summary of the "speed" of the EEG. It was originally introduced as a correlate of anesthetic depth: as sedation deepens, the EEG slows and SEF95 decreases (may drop to 8–12 Hz under general anesthesia vs. ~25–30 Hz in an awake adult). In the context of waking monitoring, decreasing SEF95 tracks increasing drowsiness or relaxation, while increasing SEF95 reflects heightened arousal or cognitive load.
+**What it means:** SEF95 is a concise single-number summary of the "speed" of the EXG. It was originally introduced as a correlate of anesthetic depth: as sedation deepens, the EXG slows and SEF95 decreases (may drop to 8–12 Hz under general anesthesia vs. ~25–30 Hz in an awake adult). In the context of waking monitoring, decreasing SEF95 tracks increasing drowsiness or relaxation, while increasing SEF95 reflects heightened arousal or cognitive load.
 
 **Electrode sites:** TP9, AF7, AF8, TP10 (global average).
 
@@ -393,7 +393,7 @@ SC = Σ f_i · PSD(f_i) / Σ PSD(f_i)   for f ∈ [1, 50] Hz
 
 The power-weighted mean frequency of the spectrum — the "center of mass" of the PSD. Computed from the globally averaged PSD across all four channels.
 
-**What it means:** Spectral centroid shifts upward with increasing alertness and cognitive activity (more beta/gamma power) and downward with drowsiness or relaxation (more delta/theta power). It is a fast, single-value proxy for the overall "speed" of the EEG, complementing SEF95.
+**What it means:** Spectral centroid shifts upward with increasing alertness and cognitive activity (more beta/gamma power) and downward with drowsiness or relaxation (more delta/theta power). It is a fast, single-value proxy for the overall "speed" of the EXG, complementing SEF95.
 
 **Reference:**
 
@@ -403,11 +403,11 @@ The power-weighted mean frequency of the spectrum — the "center of mass" of th
 
 ### 4.13 Hjorth Parameters (Activity, Mobility, Complexity)
 
-B. Hjorth (1970) introduced three time-domain descriptors that can be computed very efficiently from successive derivatives of the signal, without requiring a Fourier transform. They are computed on the raw (filtered) EEG time series for each channel and then averaged.
+B. Hjorth (1970) introduced three time-domain descriptors that can be computed very efficiently from successive derivatives of the signal, without requiring a Fourier transform. They are computed on the raw (filtered) EXG time series for each channel and then averaged.
 
 **Formulae:**
 
-Let `x(t)` = filtered EEG signal, `x'(t)` = first derivative, `x''(t)` = second derivative.
+Let `x(t)` = filtered EXG signal, `x'(t)` = first derivative, `x''(t)` = second derivative.
 
 ```
 Activity   H_A = Var(x)                        [µV² — signal variance / surface power]
@@ -419,15 +419,15 @@ Complexity H_C = Mobility(x') / Mobility(x)    [dimensionless — bandwidth / si
 
 | Parameter | Meaning | Typical changes |
 |-----------|---------|-----------------|
-| **Activity** | Variance of the raw EEG — proportional to total signal power | High in delta-dominant (sleep, drowsiness); reduced in quiet alpha states |
+| **Activity** | Variance of the raw EXG — proportional to total signal power | High in delta-dominant (sleep, drowsiness); reduced in quiet alpha states |
 | **Mobility** | Ratio of std-dev of the first derivative to the signal — approximates mean frequency | Increases with alertness; decreases with delta-dominant drowsy/sleep states |
-| **Complexity** | Ratio of mobility of the first derivative to mobility of the original — measures how much the signal resembles a pure sinusoid | Increases with irregular, broadband EEG; decreases for clean rhythmic oscillations |
+| **Complexity** | Ratio of mobility of the first derivative to mobility of the original — measures how much the signal resembles a pure sinusoid | Increases with irregular, broadband EXG; decreases for clean rhythmic oscillations |
 
 **Electrode sites:** Computed per channel (TP9, AF7, AF8, TP10); averaged for display.
 
 **Reference:**
 
-> Hjorth, B. (1970). EEG analysis based on time domain properties. *Electroencephalography and Clinical Neurophysiology*, 29(3), 306–310. [doi:10.1016/0013-4694(70)90143-4](https://doi.org/10.1016/0013-4694(70)90143-4)
+> Hjorth, B. (1970). EXG analysis based on time domain properties. *Electroencephalography and Clinical Neurophysiology*, 29(3), 306–310. [doi:10.1016/0013-4694(70)90143-4](https://doi.org/10.1016/0013-4694(70)90143-4)
 
 ---
 
@@ -445,7 +445,7 @@ For each embedding dimension `m` (typically m = 5) and time delay `τ` (typicall
 3. Computes the histogram of permutation frequencies `p(π)` over all `m! = 120` possible patterns.
 4. Computes Shannon entropy of this distribution.
 
-**What it means:** Permutation Entropy (PE) measures the complexity of ordinal patterns in the EEG time series. High PE (near 1.0) means all ordering patterns appear with roughly equal probability — a sign of maximal temporal complexity and irregularity. Low PE means a few specific ordinal patterns dominate — typical of highly rhythmic (e.g., strong alpha) or severely pathological (e.g., burst-suppression) signals. PE is used as a consciousness marker and an anesthesia depth monitor. It is fast, robust to noise, and captures nonlinear signal structure.
+**What it means:** Permutation Entropy (PE) measures the complexity of ordinal patterns in the EXG time series. High PE (near 1.0) means all ordering patterns appear with roughly equal probability — a sign of maximal temporal complexity and irregularity. Low PE means a few specific ordinal patterns dominate — typical of highly rhythmic (e.g., strong alpha) or severely pathological (e.g., burst-suppression) signals. PE is used as a consciousness marker and an anesthesia depth monitor. It is fast, robust to noise, and captures nonlinear signal structure.
 
 **Electrode sites:** AF7 (primary; frontal complexity). Also computed on TP9, AF8, TP10 and averaged.
 
@@ -472,9 +472,9 @@ Higuchi's algorithm estimates the fractal dimension D of a time series x(1), x(2
    HFD = slope of  log(L(m)) vs. log(1/m)
    ```
 
-Typical values for EEG: 1.3–1.8 (flat noise ≈ 1.5; rhythmic signal < 1.3; complex broadband > 1.7).
+Typical values for EXG: 1.3–1.8 (flat noise ≈ 1.5; rhythmic signal < 1.3; complex broadband > 1.7).
 
-**What it means:** HFD quantifies the self-similar (fractal) complexity of the EEG waveform in the time domain. Higher HFD indicates more complex, irregular signals (as seen in wakeful, cognitively active states and conscious brain states). Lower HFD reflects simpler, more regular oscillations (sleep, anesthesia, strong rhythmic states). HFD is used as a real-time consciousness monitor and an anesthesia depth index.
+**What it means:** HFD quantifies the self-similar (fractal) complexity of the EXG waveform in the time domain. Higher HFD indicates more complex, irregular signals (as seen in wakeful, cognitively active states and conscious brain states). Lower HFD reflects simpler, more regular oscillations (sleep, anesthesia, strong rhythmic states). HFD is used as a real-time consciousness monitor and an anesthesia depth index.
 
 **Electrode sites:** Computed per channel; the AF7 and AF8 frontal channels are the primary display channels.
 
@@ -488,7 +488,7 @@ Typical values for EEG: 1.3–1.8 (flat noise ≈ 1.5; rhythmic signal < 1.3; co
 
 **Formula:**
 
-1. Integrate the EEG signal to produce a cumulative sum: `Y(k) = Σ_{i=1}^{k} [x(i) - x̄]`.
+1. Integrate the EXG signal to produce a cumulative sum: `Y(k) = Σ_{i=1}^{k} [x(i) - x̄]`.
 2. Divide `Y` into non-overlapping boxes of size `n`.
 3. Fit a local linear trend inside each box; subtract it to get `Y_n(k)`.
 4. Compute the root-mean-square fluctuation: `F(n) = √(1/N · Σ Y_n²)`.
@@ -496,11 +496,11 @@ Typical values for EEG: 1.3–1.8 (flat noise ≈ 1.5; rhythmic signal < 1.3; co
 
 **Interpretation of α:**
 - α ≈ 0.5 → uncorrelated (white noise)
-- 0.5 < α < 1.0 → long-range positive correlations (scale-free dynamics, as seen in healthy EEG)
+- 0.5 < α < 1.0 → long-range positive correlations (scale-free dynamics, as seen in healthy EXG)
 - α ≈ 1.0 → 1/f (pink noise, optimal complexity)
 - α > 1.0 → non-stationary or over-correlated
 
-**What it means:** The DFA exponent characterizes the long-range temporal correlations in EEG. Healthy waking EEG typically shows α ≈ 0.6–0.9 — long-range correlated but not trivially periodic. Values near 1.0 are associated with "edge of criticality" brain states optimized for information processing. Departures from this range (toward white noise or Brownian motion) can indicate sleep state transitions, pharmacological effects, or pathology.
+**What it means:** The DFA exponent characterizes the long-range temporal correlations in EXG. Healthy waking EXG typically shows α ≈ 0.6–0.9 — long-range correlated but not trivially periodic. Values near 1.0 are associated with "edge of criticality" brain states optimized for information processing. Departures from this range (toward white noise or Brownian motion) can indicate sleep state transitions, pharmacological effects, or pathology.
 
 **Electrode sites:** AF7 (frontal primary).
 
@@ -525,7 +525,7 @@ where:
 
 Sample Entropy does not count self-matches (avoiding bias), unlike Approximate Entropy.
 
-**What it means:** Sample Entropy measures the irregularity / unpredictability of the time series: how often a new pattern appears that is distinct from previous ones. Higher SampEn = more irregular and complex signal (less predictable). It is used to quantify EEG complexity in aging, anesthesia, and sleep research. Reduced SampEn is associated with unconscious states, deep sleep, and certain pathologies.
+**What it means:** Sample Entropy measures the irregularity / unpredictability of the time series: how often a new pattern appears that is distinct from previous ones. Higher SampEn = more irregular and complex signal (less predictable). It is used to quantify EXG complexity in aging, anesthesia, and sleep research. Reduced SampEn is associated with unconscious states, deep sleep, and certain pathologies.
 
 **Electrode sites:** AF7, AF8 (frontal).
 
@@ -595,7 +595,7 @@ The Mood Index is a rescaled, smoothed version of the Frontal Alpha Asymmetry (F
 
 **Reference:**
 
-> Coan, J. A. & Allen, J. J. B. (2004). Frontal EEG asymmetry as a moderator and mediator of emotion. *Biological Psychology*, 67(1–2), 7–50. [doi:10.1016/j.biopsycho.2004.03.002](https://doi.org/10.1016/j.biopsycho.2004.03.002)
+> Coan, J. A. & Allen, J. J. B. (2004). Frontal EXG asymmetry as a moderator and mediator of emotion. *Biological Psychology*, 67(1–2), 7–50. [doi:10.1016/j.biopsycho.2004.03.002](https://doi.org/10.1016/j.biopsycho.2004.03.002)
 
 ---
 
@@ -621,7 +621,7 @@ where all powers are from **AF7 + AF8** averaged.
 
 > Pope, A. T., Bogart, E. H. & Bartolome, D. S. (1995). Biocybernetic system evaluates indices of operator engagement in automated task. *Biological Psychology*, 40(1–2), 187–195. [doi:10.1016/0301-0511(95)05116-3](https://doi.org/10.1016/0301-0511(95)05116-3)
 
-> Kosmyna, N. & Maes, P. (2019). AttentivU: An EEG-Based Closed-Loop Biofeedback System for Real-Time Monitoring and Improvement of Engagement. *Sensors*, 19(23), 5200. [doi:10.3390/s19235200](https://doi.org/10.3390/s19235200)
+> Kosmyna, N. & Maes, P. (2019). AttentivU: An EXG-Based Closed-Loop Biofeedback System for Real-Time Monitoring and Improvement of Engagement. *Sensors*, 19(23), 5200. [doi:10.3390/s19235200](https://doi.org/10.3390/s19235200)
 
 ---
 
@@ -639,7 +639,7 @@ where all powers are from **AF7 + AF8**.
 
 **Reference:**
 
-> Klimesch, W. (1999). EEG alpha and theta oscillations reflect cognitive and memory performance. *Brain Research Reviews*, 29(2–3), 169–195. [doi:10.1016/s0165-0173(98)00056-3](https://doi.org/10.1016/s0165-0173(98)00056-3)
+> Klimesch, W. (1999). EXG alpha and theta oscillations reflect cognitive and memory performance. *Brain Research Reviews*, 29(2–3), 169–195. [doi:10.1016/s0165-0173(98)00056-3](https://doi.org/10.1016/s0165-0173(98)00056-3)
 
 ---
 
@@ -675,7 +675,7 @@ Smoothed with an exponential moving average (τ ≈ 5 s). Displayed range: appro
 
 **What it means:**
 
-FAA is one of the most studied EEG indices in affective neuroscience. Its theoretical basis is the **motivational direction model** of hemisphere asymmetry:
+FAA is one of the most studied EXG indices in affective neuroscience. Its theoretical basis is the **motivational direction model** of hemisphere asymmetry:
 - **Left hemisphere** (AF7 site) is associated with **approach motivation** and positive affect.
 - **Right hemisphere** (AF8 site) is associated with **withdrawal motivation** and negative affect.
 
@@ -684,15 +684,15 @@ Alpha power is **inversely related** to cortical activity (alpha decreases when 
 - **FAA < 0** (left alpha > right alpha → right hemisphere more active → withdrawal motivation / negative affect tendency)
 - **FAA ≈ 0** → hemispheric balance
 
-FAA is a relatively stable **trait marker** (individual differences in resting FAA predict dispositional affect), but also shows **state-level** fluctuations in response to emotional stimuli, stress, and mindfulness practice. It is stored in the `eeg.sqlite` database alongside every 5-second embedding epoch.
+FAA is a relatively stable **trait marker** (individual differences in resting FAA predict dispositional affect), but also shows **state-level** fluctuations in response to emotional stimuli, stress, and mindfulness practice. It is stored in the `EXG.sqlite` database alongside every 5-second embedding epoch.
 
 **Electrode sites:** AF7 (left frontal) ↔ AF8 (right frontal).
 
 **References:**
 
-> Coan, J. A. & Allen, J. J. B. (2004). Frontal EEG asymmetry as a moderator and mediator of emotion. *Biological Psychology*, 67(1–2), 7–50. [doi:10.1016/j.biopsycho.2004.03.002](https://doi.org/10.1016/j.biopsycho.2004.03.002)
+> Coan, J. A. & Allen, J. J. B. (2004). Frontal EXG asymmetry as a moderator and mediator of emotion. *Biological Psychology*, 67(1–2), 7–50. [doi:10.1016/j.biopsycho.2004.03.002](https://doi.org/10.1016/j.biopsycho.2004.03.002)
 
-> Cannard, C., Wahbeh, H. & Delorme, A. (2021). Validating the wearable MUSE headset for EEG spectral analysis and Frontal Alpha Asymmetry. *IEEE BIBM 2021*. [doi:10.1109/bibm52615.2021.9669778](https://doi.org/10.1109/bibm52615.2021.9669778)
+> Cannard, C., Wahbeh, H. & Delorme, A. (2021). Validating the wearable MUSE headset for EXG spectral analysis and Frontal Alpha Asymmetry. *IEEE BIBM 2021*. [doi:10.1109/bibm52615.2021.9669778](https://doi.org/10.1109/bibm52615.2021.9669778)
 
 ---
 
@@ -714,7 +714,7 @@ Specifically:
 - High alpha relative to beta and delta (alpha-dominant resting state)
 - IMU stillness (head movement suppressed)
 - HRV coherence component (high RMSSD / low LF/HF)
-- Weights are empirically derived from the EEG literature on meditation
+- Weights are empirically derived from the EXG literature on meditation
 
 **What it means:** The Meditation score reflects the convergence of several neurophysiological signatures associated with meditative states: sustained alpha elevation (especially frontal-parietal), decreased beta activity, physical stillness, and parasympathetic HRV dominance. Experienced meditators show increased frontal alpha and theta, reduced beta, and heightened inter-hemispheric coherence.
 
@@ -722,7 +722,7 @@ Specifically:
 
 **Reference:**
 
-> Lomas, T., Ivtzan, I. & Fu, C. H. Y. (2015). A systematic review of the neurophysiology of mindfulness on EEG oscillations. *Neuroscience & Biobehavioral Reviews*, 57, 401–410. [doi:10.1016/j.neubiorev.2015.09.018](https://doi.org/10.1016/j.neubiorev.2015.09.018)
+> Lomas, T., Ivtzan, I. & Fu, C. H. Y. (2015). A systematic review of the neurophysiology of mindfulness on EXG oscillations. *Neuroscience & Biobehavioral Reviews*, 57, 401–410. [doi:10.1016/j.neubiorev.2015.09.018](https://doi.org/10.1016/j.neubiorev.2015.09.018)
 
 ---
 
@@ -740,7 +740,7 @@ Specifically:
 - Combined with TBR as a secondary contributor
 - Normalized to 0–100
 
-**What it means:** Cognitive load reflects mental effort — the degree to which executive processing resources are being consumed. Frontal midline theta (4–8 Hz) increases systematically with working memory load; parietal alpha decreases as attention is engaged. The frontal-theta / parietal-alpha ratio is among the most validated EEG indices of mental workload in aviation, driving, and HCI research. NeuroSkill's Cognitive Load score correlates with increased TBR and decreased alpha in the Muse electrode configuration.
+**What it means:** Cognitive load reflects mental effort — the degree to which executive processing resources are being consumed. Frontal midline theta (4–8 Hz) increases systematically with working memory load; parietal alpha decreases as attention is engaged. The frontal-theta / parietal-alpha ratio is among the most validated EXG indices of mental workload in aviation, driving, and HCI research. NeuroSkill's Cognitive Load score correlates with increased TBR and decreased alpha in the Muse electrode configuration.
 
 **Electrode sites:** AF7, AF8 (frontal theta); TP9, TP10 (parietal-proxy alpha).
 
@@ -748,7 +748,7 @@ Specifically:
 
 > Borghini, G., Astolfi, L., Vecchiato, G., Mattia, D. & Babiloni, F. (2014). Measuring neurophysiological signals in aircraft pilots and car drivers for the assessment of mental workload, fatigue and drowsiness. *Neuroscience & Biobehavioral Reviews*, 44, 58–75. [doi:10.1016/j.neubiorev.2012.10.003](https://doi.org/10.1016/j.neubiorev.2012.10.003)
 
-> Kosmyna, N., El Adl, K. & Kim, M. (2024). Wearable Pair of EEG, EOG and fNIRS Glasses for Cognitive Workload Detection. *IEEE BSN 2024*. [doi:10.1109/bsn63547.2024.10780518](https://doi.org/10.1109/bsn63547.2024.10780518)
+> Kosmyna, N., El Adl, K. & Kim, M. (2024). Wearable Pair of EXG, EOG and fNIRS Glasses for Cognitive Workload Detection. *IEEE BSN 2024*. [doi:10.1109/bsn63547.2024.10780518](https://doi.org/10.1109/bsn63547.2024.10780518)
 
 > Kosmyna, N. et al. (2025). Your Brain on ChatGPT: Accumulation of Cognitive Debt when Using an AI Assistant. arXiv:2506.08872.
 
@@ -764,7 +764,7 @@ Drowsiness ≈ w₁ · TAR + w₂ · (P_θ / P_β) + w₃ · (1 − BAR) + w₄ 
 
 Where SC_drop is the decrease in Spectral Centroid from baseline. All terms are normalized and combined to produce a 0–100 score. Higher = more drowsy.
 
-**What it means:** Drowsiness reflects the EEG hallmarks of sleep onset and fatigue:
+**What it means:** Drowsiness reflects the EXG hallmarks of sleep onset and fatigue:
 - Rising theta/alpha ratio (TAR) — brain slowing
 - Increasing theta relative to beta (TBR component)  
 - Falling Beta/Alpha ratio (BAR) — alpha replacing beta
@@ -782,7 +782,7 @@ These signatures are well-validated in driver fatigue, pilot alertness, and slee
 
 ## 8. Consciousness Metrics
 
-Three high-level metrics derived from multiple EEG complexity measures, grounded in neuroscientific theories of consciousness. Displayed 0–100.
+Three high-level metrics derived from multiple EXG complexity measures, grounded in neuroscientific theories of consciousness. Displayed 0–100.
 
 ---
 
@@ -800,7 +800,7 @@ The true Lempel-Ziv Complexity (LZC) requires binarizing the signal and computin
 
 Both are already computed; their normalized weighted sum approximates the signal information content that LZC measures.
 
-**What it means:** LZC is a theoretically motivated measure of signal "richness" and consciousness. Casali et al. (2013) showed that LZC computed from TMS-evoked EEG responses reliably discriminates conscious from unconscious states across wakefulness, NREM sleep, anesthesia, and patients with disorders of consciousness — regardless of whether they can respond behaviorally. It is derived from Kolmogorov complexity (minimum description length) and captures the effective information in the signal without model assumptions. Higher values (> 60) indicate richer, more information-dense EEG consistent with wakefulness; lower values indicate stereotyped, less complex activity.
+**What it means:** LZC is a theoretically motivated measure of signal "richness" and consciousness. Casali et al. (2013) showed that LZC computed from TMS-evoked EXG responses reliably discriminates conscious from unconscious states across wakefulness, NREM sleep, anesthesia, and patients with disorders of consciousness — regardless of whether they can respond behaviorally. It is derived from Kolmogorov complexity (minimum description length) and captures the effective information in the signal without model assumptions. Higher values (> 60) indicate richer, more information-dense EXG consistent with wakefulness; lower values indicate stereotyped, less complex activity.
 
 **Electrode sites:** AF7, AF8, TP9, TP10 (global complexity).
 
@@ -820,11 +820,11 @@ Wakefulness = 100 − Drowsiness    [modulated by BAR and TAR]
 
 Wakefulness is derived as the complement of Drowsiness (§7.3), with additional modulation from BAR (elevated in alert states) and TAR (elevated in drowsy states). High values indicate an alert, active brain state; low values indicate sleep onset.
 
-**What it means:** Wakefulness captures the overall arousal level of the brain — the balance between alert, active processing (dominated by alpha-blocking, beta elevation) and drowsy/sleep-onset states (theta elevation, alpha slowing, spectral centroid drop). It draws on the alpha-arousal framework established by Klimesch (1999) and the EEG drowsiness literature.
+**What it means:** Wakefulness captures the overall arousal level of the brain — the balance between alert, active processing (dominated by alpha-blocking, beta elevation) and drowsy/sleep-onset states (theta elevation, alpha slowing, spectral centroid drop). It draws on the alpha-arousal framework established by Klimesch (1999) and the EXG drowsiness literature.
 
 **Reference:**
 
-> Klimesch, W. (1999). EEG alpha and theta oscillations reflect cognitive and memory performance. *Brain Research Reviews*, 29(2–3), 169–195. [doi:10.1016/s0165-0173(98)00056-3](https://doi.org/10.1016/s0165-0173(98)00056-3)
+> Klimesch, W. (1999). EXG alpha and theta oscillations reflect cognitive and memory performance. *Brain Research Reviews*, 29(2–3), 169–195. [doi:10.1016/s0165-0173(98)00056-3](https://doi.org/10.1016/s0165-0173(98)00056-3)
 
 ---
 
@@ -841,7 +841,7 @@ A composite of:
 - **Theta-gamma PAC** (§4.18) — cross-frequency coupling, a marker of coordinated multi-scale activity
 - **Power Spectral Entropy** (§4.5) — distributed (non-stereotyped) power across frequencies
 
-**What it means:** Information Integration is inspired by Tononi's **Integrated Information Theory (IIT)** of consciousness, which proposes that consciousness corresponds to the amount of information generated by a system above and beyond its parts. In EEG terms, integrated brain-wide activity — reflected in high coherence between regions, active cross-frequency coupling (theta-gamma PAC), and broad spectral distribution — is a signature of conscious, globally cooperative brain states. This proxy does not compute Φ (phi) directly (which requires whole-brain data) but captures qualitative features of the global workspace.
+**What it means:** Information Integration is inspired by Tononi's **Integrated Information Theory (IIT)** of consciousness, which proposes that consciousness corresponds to the amount of information generated by a system above and beyond its parts. In EXG terms, integrated brain-wide activity — reflected in high coherence between regions, active cross-frequency coupling (theta-gamma PAC), and broad spectral distribution — is a signature of conscious, globally cooperative brain states. This proxy does not compute Φ (phi) directly (which requires whole-brain data) but captures qualitative features of the global workspace.
 
 **Electrode sites:** AF7 ↔ AF8 (coherence, PAC); all channels (PSE).
 
@@ -1018,7 +1018,7 @@ The IBI histogram is computed in 50 ms bins over a 2–5 minute window.
 
 ### 10.1 Blink Detection
 
-**Method:** Eye blinks produce a characteristic **large-amplitude, sharp spike** in the frontal EEG channels (AF7, AF8) due to the corneoretinal potential — the electrical dipole of the eye rotating upward during a blink (electro-oculogram, EOG artifact). The blink detector uses:
+**Method:** Eye blinks produce a characteristic **large-amplitude, sharp spike** in the frontal EXG channels (AF7, AF8) due to the corneoretinal potential — the electrical dipole of the eye rotating upward during a blink (electro-oculogram, EOG artifact). The blink detector uses:
 
 1. A band-pass filter [0.5–5 Hz] applied to AF7 and AF8.
 2. Amplitude threshold detection: a peak > 4× the rolling baseline RMS triggers a blink event.
@@ -1030,7 +1030,7 @@ The IBI histogram is computed in 50 ms bins over a 2–5 minute window.
 
 **Reference:**
 
-> Maddox, M. et al. (2003). An efficient method for online detection of eye blinks in EEG data. *IEEE Signal Processing Society*. [doi:10.1109/bibm52615.2021.9669778](https://doi.org/10.1109/bibm52615.2021.9669778) (see also Cannard et al., 2021, for Muse-specific validation)
+> Maddox, M. et al. (2003). An efficient method for online detection of eye blinks in EXG data. *IEEE Signal Processing Society*. [doi:10.1109/bibm52615.2021.9669778](https://doi.org/10.1109/bibm52615.2021.9669778) (see also Cannard et al., 2021, for Muse-specific validation)
 
 ---
 
@@ -1074,13 +1074,13 @@ For sessions ≥ 30 minutes, NeuroSkill automatically generates a **hypnogram** 
 
 ### Stage Classification Rules
 
-| Stage | EEG Signature | Band-Power Criterion |
+| Stage | EXG Signature | Band-Power Criterion |
 |-------|--------------|----------------------|
 | **Wake** | Alpha-dominant, eyes-closed resting or active beta | P_α > P_θ and BAR > 0.8 |
 | **N1** (Light) | Alpha fades, theta emerges, slow eye movements | TAR > 1.0, SEF95 drops below 15 Hz |
 | **N2** (Light-Medium) | Sleep spindles (12–15 Hz) and K-complexes; theta dominant | P_θ dominant; P_δ rising; P_β low |
 | **N3** (Deep, SWS) | High-amplitude delta dominates (> 20 % of epoch) | P_δ > P_θ + P_α; DTR > 2 |
-| **REM** | Active EEG resembling wake; theta dominant; muscle atonia | P_θ high; P_δ low; BAR moderate; TBR moderate |
+| **REM** | Active EXG resembling wake; theta dominant; muscle atonia | P_θ high; P_δ low; BAR moderate; TBR moderate |
 
 > **Note:** The Muse 2/S has only 4 dry electrodes and lacks the chin EMG, EOG, and respiratory channels required by AASM clinical polysomnography. Staging is approximate and useful only for self-exploratory purposes.
 
@@ -1098,15 +1098,15 @@ For sessions ≥ 30 minutes, NeuroSkill automatically generates a **hypnogram** 
 
 ### ZUNA Neural Encoder
 
-ZUNA is a GPU-accelerated deep neural encoder that converts each 5-second EEG epoch (4 channels × 1280 samples at 256 Hz) into a **128-dimensional vector** representation. It runs entirely on the local GPU using the `burn` deep learning framework with a `wgpu` backend.
+ZUNA is a GPU-accelerated deep neural encoder that converts each 5-second EXG epoch (4 channels × 1280 samples at 256 Hz) into a **128-dimensional vector** representation. It runs entirely on the local GPU using the `burn` deep learning framework with a `wgpu` backend.
 
-The embedding captures the holistic spatiotemporal pattern of the EEG epoch — not just band-power statistics, but the full time-frequency structure including transients, cross-channel relationships, and phase information. Similar brain states produce nearby vectors in the 128-D embedding space.
+The embedding captures the holistic spatiotemporal pattern of the EXG epoch — not just band-power statistics, but the full time-frequency structure including transients, cross-channel relationships, and phase information. Similar brain states produce nearby vectors in the 128-D embedding space.
 
 **Source:** [github.com/eugenehp/zuna-rs](https://github.com/eugenehp/zuna-rs)
 
 ### HNSW Similarity Search
 
-Embeddings are indexed in a **Hierarchical Navigable Small World (HNSW)** graph (fast-hnsw library) for approximate nearest-neighbor search. HNSW enables sub-millisecond search over millions of embeddings with high recall. Each daily `eeg.sqlite` database stores the raw embeddings; the HNSW index is rebuilt from them.
+Embeddings are indexed in a **Hierarchical Navigable Small World (HNSW)** graph (fast-hnsw library) for approximate nearest-neighbor search. HNSW enables sub-millisecond search over millions of embeddings with high recall. Each daily `EXG.sqlite` database stores the raw embeddings; the HNSW index is rebuilt from them.
 
 Distances are computed as **cosine distances** (1 − cosine similarity): 0 = identical, 1 = orthogonal, 2 = antipodal. Nearby points in the HNSW graph represent similar brain states.
 
@@ -1124,30 +1124,30 @@ All DOIs below have been verified via the CrossRef API (`api.crossref.org`) and 
 
 | # | Authors | Title | Journal | Year | DOI / URL |
 |---|---------|-------|---------|------|-----------|
-| 1 | Krigolson et al. | Choosing MUSE: Validation of a Low-Cost, Portable EEG System for ERP Research | *Frontiers in Neuroscience*, 11, 109 | 2017 | [10.3389/fnins.2017.00109](https://doi.org/10.3389/fnins.2017.00109) |
-| 2 | Nunez & Srinivasan | *Electric Fields of the Brain: The Neurophysics of EEG* (2nd ed.) | Oxford University Press | 2006 | [10.1093/acprof:oso/9780195050387.001.0001](https://doi.org/10.1093/acprof:oso/9780195050387.001.0001) |
+| 1 | Krigolson et al. | Choosing MUSE: Validation of a Low-Cost, Portable EXG System for ERP Research | *Frontiers in Neuroscience*, 11, 109 | 2017 | [10.3389/fnins.2017.00109](https://doi.org/10.3389/fnins.2017.00109) |
+| 2 | Nunez & Srinivasan | *Electric Fields of the Brain: The Neurophysics of EXG* (2nd ed.) | Oxford University Press | 2006 | [10.1093/acprof:oso/9780195050387.001.0001](https://doi.org/10.1093/acprof:oso/9780195050387.001.0001) |
 | 3 | Welch, P. D. | The use of fast Fourier transform for the estimation of power spectra | *IEEE Trans. Audio Electroacoustics*, 15(2), 70–73 | 1967 | [10.1109/TAU.1967.1161901](https://doi.org/10.1109/TAU.1967.1161901) |
 | 4 | Mitra & Bokil | *Observed Brain Dynamics* | Oxford University Press | 2007 | [10.1093/acprof:oso/9780195178081.001.0001](https://doi.org/10.1093/acprof:oso/9780195178081.001.0001) |
-| 5 | Ratti et al. | Comparison of Medical and Consumer Wireless EEG Systems | *Frontiers in Human Neuroscience*, 11, 398 | 2017 | [10.3389/fnhum.2017.00398](https://doi.org/10.3389/fnhum.2017.00398) |
-| 6 | Klimesch, W. | EEG alpha and theta oscillations reflect cognitive and memory performance | *Brain Research Reviews*, 29(2–3), 169–195 | 1999 | [10.1016/s0165-0173(98)00056-3](https://doi.org/10.1016/s0165-0173(98)00056-3) |
-| 7 | Coan & Allen | Frontal EEG asymmetry as a moderator and mediator of emotion | *Biological Psychology*, 67(1–2), 7–50 | 2004 | [10.1016/j.biopsycho.2004.03.002](https://doi.org/10.1016/j.biopsycho.2004.03.002) |
-| 8 | Cannard, Wahbeh & Delorme | Validating the wearable MUSE headset for EEG spectral analysis and FAA | *IEEE BIBM 2021* | 2021 | [10.1109/bibm52615.2021.9669778](https://doi.org/10.1109/bibm52615.2021.9669778) |
+| 5 | Ratti et al. | Comparison of Medical and Consumer Wireless EXG Systems | *Frontiers in Human Neuroscience*, 11, 398 | 2017 | [10.3389/fnhum.2017.00398](https://doi.org/10.3389/fnhum.2017.00398) |
+| 6 | Klimesch, W. | EXG alpha and theta oscillations reflect cognitive and memory performance | *Brain Research Reviews*, 29(2–3), 169–195 | 1999 | [10.1016/s0165-0173(98)00056-3](https://doi.org/10.1016/s0165-0173(98)00056-3) |
+| 7 | Coan & Allen | Frontal EXG asymmetry as a moderator and mediator of emotion | *Biological Psychology*, 67(1–2), 7–50 | 2004 | [10.1016/j.biopsycho.2004.03.002](https://doi.org/10.1016/j.biopsycho.2004.03.002) |
+| 8 | Cannard, Wahbeh & Delorme | Validating the wearable MUSE headset for EXG spectral analysis and FAA | *IEEE BIBM 2021* | 2021 | [10.1109/bibm52615.2021.9669778](https://doi.org/10.1109/bibm52615.2021.9669778) |
 | 9 | Silber et al. | The Visual Scoring of Sleep in Adults | *Journal of Clinical Sleep Medicine*, 3(2), 121–131 | 2007 | [10.5664/jcsm.26814](https://doi.org/10.5664/jcsm.26814) |
 | 10 | Carskadon & Dement | Normal Human Sleep: An Overview | *Principles and Practice of Sleep Medicine* (5th ed.) | 2011 | [10.1016/b978-1-4160-6645-3.00002-5](https://doi.org/10.1016/b978-1-4160-6645-3.00002-5) |
 | 11 | Malafeev et al. | Automatic Human Sleep Stage Scoring Using Deep Neural Networks | *Frontiers in Neuroscience*, 12, 781 | 2018 | [10.3389/fnins.2018.00781](https://doi.org/10.3389/fnins.2018.00781) |
-| 12 | Putman et al. | EEG theta/beta ratio in relation to fear-modulated response-inhibition | *Biological Psychology*, 83(2), 73–78 | 2010 | [10.1016/j.biopsycho.2009.10.008](https://doi.org/10.1016/j.biopsycho.2009.10.008) |
-| 13 | Angelidis et al. | Frontal EEG theta/beta ratio as an electrophysiological marker for attentional control | *Biological Psychology*, 121, 49–52 | 2016 | [10.1016/j.biopsycho.2016.09.008](https://doi.org/10.1016/j.biopsycho.2016.09.008) |
-| 14 | Inouye et al. | Quantification of EEG irregularity by use of the entropy of the power spectrum | *EEG & Clinical Neurophysiology*, 79(3), 204–210 | 1991 | [10.1016/0013-4694(91)90138-t](https://doi.org/10.1016/0013-4694(91)90138-t) |
-| 15 | Pfurtscheller & Lopes da Silva | Event-related EEG/MEG synchronization and desynchronization | *Clinical Neurophysiology*, 110(11), 1842–1857 | 1999 | [10.1016/s1388-2457(99)00141-8](https://doi.org/10.1016/s1388-2457(99)00141-8) |
+| 12 | Putman et al. | EXG theta/beta ratio in relation to fear-modulated response-inhibition | *Biological Psychology*, 83(2), 73–78 | 2010 | [10.1016/j.biopsycho.2009.10.008](https://doi.org/10.1016/j.biopsycho.2009.10.008) |
+| 13 | Angelidis et al. | Frontal EXG theta/beta ratio as an electrophysiological marker for attentional control | *Biological Psychology*, 121, 49–52 | 2016 | [10.1016/j.biopsycho.2016.09.008](https://doi.org/10.1016/j.biopsycho.2016.09.008) |
+| 14 | Inouye et al. | Quantification of EXG irregularity by use of the entropy of the power spectrum | *EXG & Clinical Neurophysiology*, 79(3), 204–210 | 1991 | [10.1016/0013-4694(91)90138-t](https://doi.org/10.1016/0013-4694(91)90138-t) |
+| 15 | Pfurtscheller & Lopes da Silva | Event-related EXG/MEG synchronization and desynchronization | *Clinical Neurophysiology*, 110(11), 1842–1857 | 1999 | [10.1016/s1388-2457(99)00141-8](https://doi.org/10.1016/s1388-2457(99)00141-8) |
 | 16 | Task Force ESC/NASPE | Heart Rate Variability: Standards of Measurement | *Circulation*, 93(5), 1043–1065 | 1996 | [10.1161/01.CIR.93.5.1043](https://doi.org/10.1161/01.CIR.93.5.1043) |
 | 17 | Lachaux et al. | Measuring phase synchrony in brain signals | *Human Brain Mapping*, 8(4), 194–208 | 1999 | [10.1002/(sici)1097-0193(1999)8:4<194::aid-hbm4>3.0.co;2-c](https://doi.org/10.1002/(sici)1097-0193(1999)8:4<194::aid-hbm4>3.0.co;2-c) |
 | 18 | Donoghue et al. | Parameterizing neural power spectra into periodic and aperiodic components | *Nature Neuroscience*, 23, 1655–1665 | 2020 | [10.1038/s41593-020-00744-x](https://doi.org/10.1038/s41593-020-00744-x) |
 | 19 | Canolty et al. | High Gamma Power Is Phase-Locked to Theta Oscillations in Human Neocortex | *Science*, 313(5793), 1626–1628 | 2006 | [10.1126/science.1128115](https://doi.org/10.1126/science.1128115) |
-| 20 | Knyazev, G. G. | EEG delta oscillations as a correlate of basic homeostatic and motivational processes | *Neuroscience & Biobehavioral Reviews*, 36(1), 677–695 | 2012 | [10.1016/j.neubiorev.2011.10.002](https://doi.org/10.1016/j.neubiorev.2011.10.002) |
+| 20 | Knyazev, G. G. | EXG delta oscillations as a correlate of basic homeostatic and motivational processes | *Neuroscience & Biobehavioral Reviews*, 36(1), 677–695 | 2012 | [10.1016/j.neubiorev.2011.10.002](https://doi.org/10.1016/j.neubiorev.2011.10.002) |
 | 21 | Cohen, M. X. | *Analyzing Neural Time Series Data: Theory and Practice* | MIT Press | 2014 | [10.7551/mitpress/9609.001.0001](https://doi.org/10.7551/mitpress/9609.001.0001) |
 | 22 | McInnes, Healy & Melville | UMAP: Uniform Manifold Approximation and Projection | *Journal of Open Source Software*, 3(29), 861 | 2018 | [10.21105/joss.00861](https://doi.org/10.21105/joss.00861) |
 | 23 | Monastra et al. | Assessing ADHD via quantitative electroencephalography: An initial validation | *Neuropsychology*, 13(3), 424–433 | 1999 | [10.1037/0894-4105.13.3.424](https://doi.org/10.1037/0894-4105.13.3.424) |
-| 24 | Hjorth, B. | EEG analysis based on time domain properties | *EEG & Clinical Neurophysiology*, 29(3), 306–310 | 1970 | [10.1016/0013-4694(70)90143-4](https://doi.org/10.1016/0013-4694(70)90143-4) |
+| 24 | Hjorth, B. | EXG analysis based on time domain properties | *EXG & Clinical Neurophysiology*, 29(3), 306–310 | 1970 | [10.1016/0013-4694(70)90143-4](https://doi.org/10.1016/0013-4694(70)90143-4) |
 | 25 | Bandt & Pompe | Permutation entropy: A natural complexity measure for time series | *Physical Review Letters*, 88(17), 174102 | 2002 | [10.1103/PhysRevLett.88.174102](https://doi.org/10.1103/PhysRevLett.88.174102) |
 | 26 | Higuchi, T. | Approach to an irregular time series on the basis of the fractal theory | *Physica D*, 31(2), 277–283 | 1988 | [10.1016/0167-2789(88)90081-4](https://doi.org/10.1016/0167-2789(88)90081-4) |
 | 27 | Peng et al. | Quantification of scaling exponents and crossover phenomena in nonstationary heartbeat time series | *Chaos*, 5(1), 82–87 | 1995 | [10.1063/1.166141](https://doi.org/10.1063/1.166141) |
@@ -1160,31 +1160,31 @@ All DOIs below have been verified via the CrossRef API (`api.crossref.org`) and 
 | 34 | Harmon-Jones & Gable | The role of asymmetric frontal cortical activity in emotion-related phenomena | *Biological Psychology*, 84(3), 451–462 | 2010 | [10.1016/j.biopsycho.2009.08.010](https://doi.org/10.1016/j.biopsycho.2009.08.010) |
 | 35 | Lal & Craig | Driver fatigue: Electroencephalography and psychological assessment | *Psychophysiology*, 39(3), 313–321 | 2002 | [10.1017/s0048577201393095](https://doi.org/10.1017/s0048577201393095) |
 | 36 | Borghini et al. | Measuring neurophysiological signals in aircraft pilots and car drivers | *Neuroscience & Biobehavioral Reviews*, 44, 58–75 | 2014 | [10.1016/j.neubiorev.2012.10.003](https://doi.org/10.1016/j.neubiorev.2012.10.003) |
-| 37 | Lomas, Ivtzan & Fu | A systematic review of the neurophysiology of mindfulness on EEG oscillations | *Neuroscience & Biobehavioral Reviews*, 57, 401–410 | 2015 | [10.1016/j.neubiorev.2015.09.018](https://doi.org/10.1016/j.neubiorev.2015.09.018) |
-| 38 | Monastra et al. | The development of a quantitative EEG scanning process for ADHD | *Neuropsychology*, 15(1), 136–144 | 2001 | [10.1037/0894-4105.15.1.136](https://doi.org/10.1037/0894-4105.15.1.136) |
-| 39 | Arns et al. | Efficacy of Neurofeedback Treatment in ADHD: A Meta-Analysis | *Clinical EEG and Neuroscience*, 40(3), 180–189 | 2009 | [10.1177/155005940904000311](https://doi.org/10.1177/155005940904000311) |
-| 40 | Oathes et al. | Worry, generalized anxiety disorder, and emotion: Evidence from the EEG gamma band | *Biological Psychology*, 79(2), 165–170 | 2008 | [10.1016/j.biopsycho.2008.04.005](https://doi.org/10.1016/j.biopsycho.2008.04.005) |
-| 41 | Stewart et al. | Resting and task-elicited prefrontal EEG alpha asymmetry in depression | *Psychophysiology*, 51(5), 446–455 | 2014 | [10.1111/psyp.12191](https://doi.org/10.1111/psyp.12191) |
-| 42 | Perlis et al. | Beta EEG activity and insomnia | *Sleep Medicine Reviews*, 5(5), 365–376 | 2001 | [10.1053/smrv.2001.0151](https://doi.org/10.1053/smrv.2001.0151) |
-| 43 | Bjørk et al. | Interictal quantitative EEG in migraine: a blinded controlled study | *J. Headache Pain*, 10(5), 331–339 | 2009 | [10.1007/s10194-009-0140-4](https://doi.org/10.1007/s10194-009-0140-4) |
+| 37 | Lomas, Ivtzan & Fu | A systematic review of the neurophysiology of mindfulness on EXG oscillations | *Neuroscience & Biobehavioral Reviews*, 57, 401–410 | 2015 | [10.1016/j.neubiorev.2015.09.018](https://doi.org/10.1016/j.neubiorev.2015.09.018) |
+| 38 | Monastra et al. | The development of a quantitative EXG scanning process for ADHD | *Neuropsychology*, 15(1), 136–144 | 2001 | [10.1037/0894-4105.15.1.136](https://doi.org/10.1037/0894-4105.15.1.136) |
+| 39 | Arns et al. | Efficacy of Neurofeedback Treatment in ADHD: A Meta-Analysis | *Clinical EXG and Neuroscience*, 40(3), 180–189 | 2009 | [10.1177/155005940904000311](https://doi.org/10.1177/155005940904000311) |
+| 40 | Oathes et al. | Worry, generalized anxiety disorder, and emotion: Evidence from the EXG gamma band | *Biological Psychology*, 79(2), 165–170 | 2008 | [10.1016/j.biopsycho.2008.04.005](https://doi.org/10.1016/j.biopsycho.2008.04.005) |
+| 41 | Stewart et al. | Resting and task-elicited prefrontal EXG alpha asymmetry in depression | *Psychophysiology*, 51(5), 446–455 | 2014 | [10.1111/psyp.12191](https://doi.org/10.1111/psyp.12191) |
+| 42 | Perlis et al. | Beta EXG activity and insomnia | *Sleep Medicine Reviews*, 5(5), 365–376 | 2001 | [10.1053/smrv.2001.0151](https://doi.org/10.1053/smrv.2001.0151) |
+| 43 | Bjørk et al. | Interictal quantitative EXG in migraine: a blinded controlled study | *J. Headache Pain*, 10(5), 331–339 | 2009 | [10.1007/s10194-009-0140-4](https://doi.org/10.1007/s10194-009-0140-4) |
 | 44 | Gloss, Nolan & Staba | The role of high-frequency oscillations in epilepsy surgery planning | *Cochrane Database of Systematic Reviews* | 2014 | [10.1002/14651858.cd010235.pub2](https://doi.org/10.1002/14651858.cd010235.pub2) |
 | 45 | Dauvilliers, Y. | Narcolepsy with Cataplexy | In *Neuroimmunology of Sleep* (Springer) | 2007 | [10.1007/978-0-387-69146-6_20](https://doi.org/10.1007/978-0-387-69146-6_20) |
-| 46 | Jeong, J. | EEG dynamics in patients with Alzheimer's disease | *Clinical Neurophysiology*, 115(7), 1490–1505 | 2004 | [10.1016/j.clinph.2004.01.001](https://doi.org/10.1016/j.clinph.2004.01.001) |
-| 47 | Harmon-Jones & Allen | Anger and frontal brain activity: EEG asymmetry consistent with approach motivation | *J. Personality & Social Psychology*, 74(5), 1310–1316 | 1998 | [10.1037/0022-3514.74.5.1310](https://doi.org/10.1037/0022-3514.74.5.1310) |
+| 46 | Jeong, J. | EXG dynamics in patients with Alzheimer's disease | *Clinical Neurophysiology*, 115(7), 1490–1505 | 2004 | [10.1016/j.clinph.2004.01.001](https://doi.org/10.1016/j.clinph.2004.01.001) |
+| 47 | Harmon-Jones & Allen | Anger and frontal brain activity: EXG asymmetry consistent with approach motivation | *J. Personality & Social Psychology*, 74(5), 1310–1316 | 1998 | [10.1037/0022-3514.74.5.1310](https://doi.org/10.1037/0022-3514.74.5.1310) |
 | 48 | Uhlhaas & Singer | Abnormal neural oscillations and synchrony in schizophrenia | *Nature Reviews Neuroscience*, 11(2), 100–113 | 2010 | [10.1038/nrn2774](https://doi.org/10.1038/nrn2774) |
 | 49 | Casali et al. | A theoretically based index of consciousness independent of sensory processing | *Science Translational Medicine*, 5(198), 198ra105 | 2013 | [10.1126/scitranslmed.3006294](https://doi.org/10.1126/scitranslmed.3006294) |
 | 50 | Tononi, G. | An information integration theory of consciousness | *BMC Neuroscience*, 5, 42 | 2004 | [10.1186/1471-2202-5-42](https://doi.org/10.1186/1471-2202-5-42) |
 | 51 | Kosmyna, N. et al. | A Brain-Controlled Quadruped Robot: A Proof-of-Concept Demonstration | *Sensors*, 24(1), 80 | 2023 | [10.3390/s24010080](https://doi.org/10.3390/s24010080) |
-| 52 | Guenther, Kosmyna & Maes | Image classification and reconstruction from low-density EEG | *Scientific Reports*, 14, 15259 | 2024 | [10.1038/s41598-024-66228-1](https://doi.org/10.1038/s41598-024-66228-1) |
-| 53 | Kosmyna & Lécuyer | A conceptual space for EEG-based brain-computer interfaces | *PLOS ONE*, 14(1), e0210145 | 2019 | [10.1371/journal.pone.0210145](https://doi.org/10.1371/journal.pone.0210145) |
+| 52 | Guenther, Kosmyna & Maes | Image classification and reconstruction from low-density EXG | *Scientific Reports*, 14, 15259 | 2024 | [10.1038/s41598-024-66228-1](https://doi.org/10.1038/s41598-024-66228-1) |
+| 53 | Kosmyna & Lécuyer | A conceptual space for EXG-based brain-computer interfaces | *PLOS ONE*, 14(1), e0210145 | 2019 | [10.1371/journal.pone.0210145](https://doi.org/10.1371/journal.pone.0210145) |
 | 54 | Kosmyna, N. | Brain-Computer Interfaces in the Wild | *IEEE SMC 2019* | 2019 | [10.1109/smc.2019.8913928](https://doi.org/10.1109/smc.2019.8913928) |
-| 55 | Kosmyna & Maes | AttentivU: EEG-Based Closed-Loop Biofeedback for Engagement | *Sensors*, 19(23), 5200 | 2019 | [10.3390/s19235200](https://doi.org/10.3390/s19235200) |
-| 56 | Kosmyna, Lindgren & Lécuyer | Attending to Visual Stimuli versus Performing Visual Imagery for EEG-BCIs | *Scientific Reports*, 8, 13222 | 2018 | [10.1038/s41598-018-31472-9](https://doi.org/10.1038/s41598-018-31472-9) |
+| 55 | Kosmyna & Maes | AttentivU: EXG-Based Closed-Loop Biofeedback for Engagement | *Sensors*, 19(23), 5200 | 2019 | [10.3390/s19235200](https://doi.org/10.3390/s19235200) |
+| 56 | Kosmyna, Lindgren & Lécuyer | Attending to Visual Stimuli versus Performing Visual Imagery for EXG-BCIs | *Scientific Reports*, 8, 13222 | 2018 | [10.1038/s41598-018-31472-9](https://doi.org/10.1038/s41598-018-31472-9) |
 | 57 | Kosmyna et al. | Using Wearable Brain Sensing Glasses during Zero-G Flight | *AIAA ASCEND 2023* | 2023 | [10.2514/6.2023-4656](https://doi.org/10.2514/6.2023-4656) |
-| 58 | Kosmyna, El Adl & Kim | Wearable EEG, EOG and fNIRS Glasses for Cognitive Workload Detection | *IEEE BSN 2024* | 2024 | [10.1109/bsn63547.2024.10780518](https://doi.org/10.1109/bsn63547.2024.10780518) |
+| 58 | Kosmyna, El Adl & Kim | Wearable EXG, EOG and fNIRS Glasses for Cognitive Workload Detection | *IEEE BSN 2024* | 2024 | [10.1109/bsn63547.2024.10780518](https://doi.org/10.1109/bsn63547.2024.10780518) |
 | 59 | Baradari, Kosmyna et al. | NeuroChat: A Neuroadaptive AI Chatbot for Learning | *ACM CUI '25* | 2025 | [10.1145/3719160.3736623](https://doi.org/10.1145/3719160.3736623) |
 | 60 | Kosmyna et al. | Your Brain on ChatGPT: Cognitive Debt when Using AI for Essay Writing | arXiv | 2025 | [arXiv:2506.08872](https://arxiv.org/abs/2506.08872) |
-| 61 | Zhuang, Baradari, Kosmyna et al. | Detecting Reading-Induced Confusion Using EEG and Eye Tracking | arXiv | 2025 | [arXiv:2508.14442](https://arxiv.org/abs/2508.14442) |
+| 61 | Zhuang, Baradari, Kosmyna et al. | Detecting Reading-Induced Confusion Using EXG and Eye Tracking | arXiv | 2025 | [arXiv:2508.14442](https://arxiv.org/abs/2508.14442) |
 | 62 | Kosmyna, N. (Ed.) | *Neurotechnologies for Human Augmentation* | Frontiers Research Topics | 2022 | [10.3389/978-2-88971-973-0](https://doi.org/10.3389/978-2-88971-973-0) |
 | 63 | Kosmyna, Tarpin-Bernard & Rivet | Operationalization of conceptual imagery for BCIs | *EUSIPCO 2015* | 2015 | [10.1109/eusipco.2015.7362880](https://doi.org/10.1109/eusipco.2015.7362880) |
 | 64 | Valeriani, Ayaz, Kosmyna et al. | Editorial: Neurotechnologies for Human Augmentation | *Frontiers in Neuroscience*, 15, 789868 | 2021 | [10.3389/fnins.2021.789868](https://doi.org/10.3389/fnins.2021.789868) |
@@ -1193,8 +1193,8 @@ All DOIs below have been verified via the CrossRef API (`api.crossref.org`) and 
 | 67 | Kosmyna et al. | Feasibility of BCI Control in a Realistic Smart Home Environment | *Frontiers in Human Neuroscience*, 10, 416 | 2016 | [10.3389/fnhum.2016.00416](https://doi.org/10.3389/fnhum.2016.00416) |
 | 68 | Kosmyna, N. | AttentivU SPIE 2020 | *SPIE Optical Architectures AR/VR/MR* | 2020 | [10.1117/12.2566398](https://doi.org/10.1117/12.2566398) |
 | 69 | Kosmyna, N. | MIT: Making use of XR | *SPIE AVR21 Industry Talks* | 2021 | [10.1117/12.2597481](https://doi.org/10.1117/12.2597481) |
-| 70 | Kosmyna, N. | Implicit, In-Situ Training Protocol for EEG-BCIs | *IEEE SMC 2019* | 2019 | [10.1109/smc.2019.8914214](https://doi.org/10.1109/smc.2019.8914214) |
-| 71 | Kim, Pei, Singh, Kosmyna et al. | Privacy-Preserving Eye Movement Classification with EOG-EEG Glasses | *IEEE BSN 2024* | 2024 | [10.1109/bsn63547.2024.10780485](https://doi.org/10.1109/bsn63547.2024.10780485) |
+| 70 | Kosmyna, N. | Implicit, In-Situ Training Protocol for EXG-BCIs | *IEEE SMC 2019* | 2019 | [10.1109/smc.2019.8914214](https://doi.org/10.1109/smc.2019.8914214) |
+| 71 | Kim, Pei, Singh, Kosmyna et al. | Privacy-Preserving Eye Movement Classification with EOG-EXG Glasses | *IEEE BSN 2024* | 2024 | [10.1109/bsn63547.2024.10780485](https://doi.org/10.1109/bsn63547.2024.10780485) |
 | 72 | White, Stankovic, Kosmyna et al. | Sensory-Based Alterations and Countermeasures in Spaceflight | *Aerospace Medicine and Human Performance*, 96(3) | 2025 | [10.3357/amhp.6584.2025](https://doi.org/10.3357/amhp.6584.2025) |
 | 73 | Kosmyna & Maes | AttentivU: a Biofeedback Device for Workplace Engagement | *IEEE EMBC 2019* | 2019 | [10.1109/embc.2019.8857177](https://doi.org/10.1109/embc.2019.8857177) |
 | 74 | Zulfikar, Protyasha, Kosmyna et al. | Analyzing Speech Motor Movement using Surface EMG in Adults with ASD | arXiv | 2024 | [arXiv:2407.08877](https://arxiv.org/abs/2407.08877) |

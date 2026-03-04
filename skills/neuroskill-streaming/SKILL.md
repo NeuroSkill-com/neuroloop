@@ -1,6 +1,6 @@
 ---
 name: neuroskill-streaming
-description: NeuroSkill `listen`, `notify`, `calibrate`, `timer`, and `raw` commands — real-time WebSocket event streaming, OS notifications, calibration profiles, focus timer, and raw JSON passthrough. Use when streaming live EEG events, sending alerts, starting calibration, or sending arbitrary commands.
+description: NeuroSkill `listen`, `notify`, `calibrate`, `timer`, and `raw` commands — real-time WebSocket event streaming, OS notifications, calibration profiles, focus timer, and raw JSON passthrough. Use when streaming live EXG events, sending alerts, starting calibration, or sending arbitrary commands.
 ---
 
 # NeuroSkill Streaming & Control Commands
@@ -10,7 +10,7 @@ description: NeuroSkill `listen`, `notify`, `calibrate`, `timer`, and `raw` comm
 ## `listen` — Real-Time Event Streaming
 
 Passively collect real-time broadcast events from the server for a fixed duration.
-Events include raw EEG packets, PPG, IMU, scores, and label-created notifications.
+Events include raw EXG packets, PPG, IMU, scores, and label-created notifications.
 
 > Requires WebSocket (`--http` mode has no push streaming).
 
@@ -19,14 +19,14 @@ npx neuroskill listen                         # 5 seconds (default)
 npx neuroskill listen --seconds 30
 npx neuroskill listen --seconds 10 --json
 npx neuroskill listen --seconds 5 --json | jq '[.[] | select(.event == "scores")]'
-npx neuroskill listen --seconds 5 --json | jq 'map(select(.event == "eeg")) | length'
+npx neuroskill listen --seconds 5 --json | jq 'map(select(.event == "EXG")) | length'
 ```
 
 ### JSON Event Shapes
 
 ```jsonc
-// EEG packet (4 channels × N samples):
-{ "event": "eeg", "electrode": 0, "samples": [12.3, -4.1], "timestamp": 1740412800.512 }
+// EXG packet (4 channels × N samples):
+{ "event": "EXG", "electrode": 0, "samples": [12.3, -4.1], "timestamp": 1740412800.512 }
 
 // PPG packet:
 { "event": "ppg", "channel": 0, "samples": [2048.1, 2051.3], "timestamp": 1740412800.512 }

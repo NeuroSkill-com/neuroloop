@@ -1,6 +1,6 @@
 {
   "name": "neuroloop",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "author": "NeuroSkill team (https://neuroskill.com)",
   "contributors": [
     "Nataliya Kosmyna <nkosmyna@mit.edu>",
@@ -9,7 +9,7 @@
   "repository": "https://github.com/NeuroSkill-com/neuroloop",
   "homepage": "https://neurloop.io",
   "license": "GPL-3.0-only",
-  "description": "EEG-aware coding agent — run `npx neuroloop` to start",
+  "description": "EXG-aware coding agent — run `npx neuroloop` to start",
   "type": "module",
   "bin": {
     "neuroloop": "dist/neuroloop.js"
@@ -17,7 +17,6 @@
   "files": [
     "dist",
     "skills",
-    "pi-pkg",
     "METRICS.md",
     "NEUROLOOP.md"
   ],
@@ -26,15 +25,17 @@
     "configDir": ".neuroloop"
   },
   "scripts": {
+    "dev": "npm run build && npm install . -g && neuroloop",
     "build": "node build.mjs",
     "build:watch": "node build.mjs --watch",
     "start": "PI_PACKAGE_DIR=$(pwd)/pi-pkg npx tsx src/main.ts",
     "prepublishOnly": "node build.mjs"
   },
   "dependencies": {
-    "@mariozechner/pi-coding-agent": "^0.55.1",
-    "@mariozechner/pi-tui": "^0.55.1",
-    "@sinclair/typebox": "^0.34.48"
+    "@mariozechner/pi-coding-agent": "^0.55.4",
+    "@mariozechner/pi-tui": "^0.55.4",
+    "@sinclair/typebox": "^0.34.48",
+    "ws": "^8.0.0"
   },
   "devDependencies": {
     "@mariozechner/pi-ai": "*",

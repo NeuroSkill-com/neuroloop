@@ -21,7 +21,7 @@ process.env.PI_SKIP_VERSION_CHECK = "1";
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -49,26 +49,12 @@ const SKILLS_DIR = join(NEUROLOOP_DIR, "skills");
 const METRICS_MD_PATH = join(NEUROLOOP_DIR, "METRICS.md");
 
 // ---------------------------------------------------------------------------
-// PI_PACKAGE_DIR — point at the bundled pi-pkg when not set externally.
-//
-// In development:  `PI_PACKAGE_DIR=$(pwd)/pi-pkg npx tsx src/main.ts`
-//   sets this explicitly, so nothing changes.
-// In production (npx neuroskill):  the bundle lives at dist/neuroloop.js, so
-//   NEUROLOOP_DIR == package root and pi-pkg sits alongside dist/.
-// ---------------------------------------------------------------------------
-if (!process.env.PI_PACKAGE_DIR) {
-	process.env.PI_PACKAGE_DIR = join(NEUROLOOP_DIR, "pi-pkg");
-}
-
-// ---------------------------------------------------------------------------
 // Auth, models, settings — all stored under ~/.neuroloop
 // ---------------------------------------------------------------------------
 
 const authStorage = AuthStorage.create(join(AGENT_DIR, "auth.json"));
 const modelRegistry = new ModelRegistry(authStorage, join(AGENT_DIR, "models.json"));
 const settingsManager = SettingsManager.create(process.cwd(), AGENT_DIR);
-
-
 
 // ---------------------------------------------------------------------------
 // Ollama — auto-discover all available models, always include gpt-oss:20b.
@@ -139,6 +125,9 @@ await registerOllamaModels();
 // Resource loader
 // ---------------------------------------------------------------------------
 
+// Populated by skillsOverride; printed to the terminal after the TUI exits.
+let loadedSkills: Skill[] = [];
+
 const loader = new DefaultResourceLoader({
 	cwd: process.cwd(),
 	agentDir: AGENT_DIR,
@@ -169,7 +158,10 @@ const loader = new DefaultResourceLoader({
 				extra.push({
 					name: nameMatch[1].trim(),
 					description: descMatch[1].trim(),
-					filePath: skillFile,
+					// Use a cwd-relative path so [Skills] shows short readable names.
+					// The read tool resolves relative paths from cwd, so the LLM can
+					// still load the file when it invokes this skill.
+					filePath: relative(process.cwd(), skillFile),
 					baseDir: join(SKILLS_DIR, entry.name),
 					source: "path",
 					disableModelInvocation: false,
@@ -181,15 +173,16 @@ const loader = new DefaultResourceLoader({
 		if (existsSync(METRICS_MD_PATH)) {
 			extra.push({
 				name: "neuroskill-metrics",
-				description: "NeuroSkill EEG metrics reference — all indices, band powers, scores, and their scientific basis.",
-				filePath: METRICS_MD_PATH,
+				description: "NeuroSkill EXG metrics reference — all indices, band powers, scores, and their scientific basis.",
+				filePath: relative(process.cwd(), METRICS_MD_PATH),
 				baseDir: NEUROLOOP_DIR,
 				source: "path",
 				disableModelInvocation: false,
 			});
 		}
 
-		return { skills: [...base.skills, ...extra], diagnostics: base.diagnostics };
+		loadedSkills = [...base.skills, ...extra];
+		return { skills: loadedSkills, diagnostics: base.diagnostics };
 	},
 
 	// Brief context note (doesn't duplicate the skills above).
@@ -197,7 +190,7 @@ const loader = new DefaultResourceLoader({
 		const note = [
 			"# NeuroLoop Agent",
 			"",
-			"EEG-aware coding agent. A live neuroskill status snapshot is injected as an",
+			"EXG-aware coding agent. A live neuroskill status snapshot is injected as an",
 			"assistant message before every turn. Use the `neuroskill_run` tool to query",
 			"any other neuroskill command.",
 			"",
@@ -208,7 +201,7 @@ const loader = new DefaultResourceLoader({
 		return {
 			agentsFiles: [
 				...base.agentsFiles,
-				{ path: join(NEUROLOOP_DIR, "NEUROLOOP.md"), content: note },
+				{ path: relative(process.cwd(), join(NEUROLOOP_DIR, "NEUROLOOP.md")), content: note },
 			],
 		};
 	},
@@ -246,3 +239,12 @@ const mode = new InteractiveMode(session, {
 });
 
 await mode.run();
+
+// ---------------------------------------------------------------------------
+// Post-exit: print loaded skills with package-relative paths.
+// ---------------------------------------------------------------------------
+
+console.log(`\nSkills loaded (${loadedSkills.length}):`);
+for (const skill of loadedSkills) {
+	console.log(`  ${skill.name}`);
+}

@@ -1,6 +1,6 @@
 ---
 name: neuroskill-transport
-description: NeuroSkill EEG API transport layer — WebSocket and HTTP protocols, port discovery, Quick Start, output modes (default/--json/--full), and global CLI flags. Use when setting up a connection, choosing transport, or understanding output format options.
+description: NeuroSkill EXG API transport layer — WebSocket and HTTP protocols, port discovery, Quick Start, output modes (default/--json/--full), and global CLI flags. Use when setting up a connection, choosing transport, or understanding output format options.
 ---
 
 # NeuroSkill Transport & Quick Start
@@ -14,7 +14,7 @@ NeuroSkill runs a local server (auto-discovered via mDNS or `lsof`). All command
 
 - **Full-duplex, low-latency.** Best for live data, event streaming, and polling loops.
 - Commands are JSON messages sent over the socket; responses arrive as JSON messages.
-- Supports real-time broadcast events (EEG packets, scores, label-created, …).
+- Supports real-time broadcast events (EXG packets, scores, label-created, …).
 - Used by default when the server is reachable.
 
 ```bash
@@ -149,9 +149,9 @@ npx neuroskill umap         --full   # cluster analysis + full points[] array
 | `--mode <m>` | (`search-labels`) `text` \| `context` \| `both` |
 | `--k <n>` | Number of nearest neighbors (`search`, `search-labels`) |
 | `--k-text <n>` | (`interactive`) k for text-label HNSW search (default 5) |
-| `--k-eeg <n>` | (`interactive`) k for EEG-similarity HNSW search (default 5) |
+| `--k-EXG <n>` | (`interactive`) k for EXG-similarity HNSW search (default 5) |
 | `--k-labels <n>` | (`interactive`) k for label-proximity step (default 3) |
-| `--reach <n>` | (`interactive`) temporal window in minutes around each EEG point (default 10) |
+| `--reach <n>` | (`interactive`) temporal window in minutes around each EXG point (default 10) |
 | `--ef <n>` | HNSW ef parameter (`search-labels`; default `max(k×4, 64)`) |
 | `--seconds <n>` | Duration for `listen` (default 5) |
 | `--profile <p>` | Profile name or UUID for `calibrate` |
@@ -162,7 +162,7 @@ npx neuroskill umap         --full   # cluster analysis + full points[] array
 ## Polling with `status`
 
 `status` is the single fastest call to get a complete system snapshot.
-Poll it periodically from any script or external tool to react to EEG state changes.
+Poll it periodically from any script or external tool to react to EXG state changes.
 
 ```bash
 # One-shot snapshot:

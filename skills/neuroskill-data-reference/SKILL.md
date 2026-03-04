@@ -1,13 +1,13 @@
 ---
 name: neuroskill-data-reference
-description: NeuroSkill EEG data reference — all metric fields including band powers, EEG ratios and indices, core scores, complexity measures, PPG/HRV fields, motion and artifact markers, sleep stage codes, EXG correlate indices, and consciousness metrics. Use when looking up what a specific metric means or its value range.
+description: NeuroSkill EXG data reference — all metric fields including band powers, EXG ratios and indices, core scores, complexity measures, PPG/HRV fields, motion and artifact markers, sleep stage codes, EXG correlate indices, and consciousness metrics. Use when looking up what a specific metric means or its value range.
 ---
 
 # NeuroSkill Data Reference
 
 ---
 
-## EEG Band Powers
+## EXG Band Powers
 
 Relative power — values sum to approximately 1.0.
 Found under `scores.bands` in `status`, or as `rel_*` top-level keys in metric responses.
@@ -22,7 +22,7 @@ Found under `scores.bands` in `status`, or as `rel_*` top-level keys in metric r
 
 ---
 
-## EEG Ratios & Indices
+## EXG Ratios & Indices
 
 | Field | Formula | What it means |
 |---|---|---|
@@ -61,7 +61,7 @@ Found under `scores.bands` in `status`, or as `rel_*` top-level keys in metric r
 
 ## Complexity Measures
 
-Nonlinear EEG measures — higher complexity generally means a more flexible, awake brain state.
+Nonlinear EXG measures — higher complexity generally means a more flexible, awake brain state.
 
 | Field | What it means |
 |---|---|
@@ -114,7 +114,7 @@ Derived from the Muse PPG sensor (forehead).
 
 Used in `sleep` and `status.sleep`.
 
-| Stage | Code | EEG signature |
+| Stage | Code | EXG signature |
 |---|---|---|
 | Wake | `0` | High beta, present alpha when eyes closed |
 | N1 | `1` | Slow eye movements, alpha fades, theta begins |
@@ -148,14 +148,14 @@ Only papers present in that list are cited here.
 |---|---|---|
 | [64] | Monastra, V. J., Lubar, J. F., Linden, M. (2001). The development of a quantitative electroencephalographic scanning process for ADHD. *Neuropsychology*, 15(1), 136–144. | doi:10.1037/0894-4105.15.1.136 |
 | [66] | Demerdzieva, A., Pop-Jordanova, N. (2015). Relation Between Frontal Alpha Asymmetry and Anxiety in Young Patients with Generalized Anxiety Disorder. *PRILOZI*, 36(2), 157–177. | doi:10.1515/prilozi-2015-0064 |
-| [67] | Stewart, J. L., Coan, J. A., Towers, D. A., Allen, J. J. B. (2014). Resting and task-elicited prefrontal EEG alpha asymmetry in depression. *Psychophysiology*, 51(5), 446–455. | doi:10.1111/psyp.12191 |
-| [68] | Perlis, M. L., Merica, H., Smith, M. T., Giles, D. E. (2001). Beta EEG activity and insomnia. *Sleep Medicine Reviews*, 5(5), 365–376. | doi:10.1053/smrv.2001.0151 |
-| [69] | Bjørk, M. H., Stovner, L. J., Engstrøm, M. et al. (2009). Interictal quantitative EEG in migraine: a blinded controlled study. *The Journal of Headache and Pain*, 10(5), 331–339. | doi:10.1007/s10194-009-0140-4 |
+| [67] | Stewart, J. L., Coan, J. A., Towers, D. A., Allen, J. J. B. (2014). Resting and task-elicited prefrontal EXG alpha asymmetry in depression. *Psychophysiology*, 51(5), 446–455. | doi:10.1111/psyp.12191 |
+| [68] | Perlis, M. L., Merica, H., Smith, M. T., Giles, D. E. (2001). Beta EXG activity and insomnia. *Sleep Medicine Reviews*, 5(5), 365–376. | doi:10.1053/smrv.2001.0151 |
+| [69] | Bjørk, M. H., Stovner, L. J., Engstrøm, M. et al. (2009). Interictal quantitative EXG in migraine: a blinded controlled study. *The Journal of Headache and Pain*, 10(5), 331–339. | doi:10.1007/s10194-009-0140-4 |
 | [70] | Gloss, D. S., Nolan, S. J., Staba, R. (2014). The role of high-frequency oscillations in epilepsy surgery planning. *Cochrane Database of Systematic Reviews*. | doi:10.1002/14651858.cd010235.pub2 |
 | [71] | Dauvilliers, Y. (2007). Narcolepsy with Cataplexy: Hypocretin and Immunological Aspects. In: *Neuroimmunology of Sleep* (Springer), pp. 337–352. | doi:10.1007/978-0-387-69146-6_20 |
-| [72] | Jeong, J. (2004). EEG dynamics in patients with Alzheimer's disease. *Clinical Neurophysiology*, 115(7), 1490–1505. | doi:10.1016/j.clinph.2004.01.001 |
-| [73] | Spironelli, C., Fusina, F., Bortolomasi, M., Angrilli, A. (2021). EEG Frontal Asymmetry in Dysthymia, Major Depressive Disorder and Euthymic Bipolar Disorder. *Symmetry*, 13(12), 2414. | doi:10.3390/sym13122414 |
+| [72] | Jeong, J. (2004). EXG dynamics in patients with Alzheimer's disease. *Clinical Neurophysiology*, 115(7), 1490–1505. | doi:10.1016/j.clinph.2004.01.001 |
+| [73] | Spironelli, C., Fusina, F., Bortolomasi, M., Angrilli, A. (2021). EXG Frontal Asymmetry in Dysthymia, Major Depressive Disorder and Euthymic Bipolar Disorder. *Symmetry*, 13(12), 2414. | doi:10.3390/sym13122414 |
 | [74] | Uhlhaas, P. J., Singer, W. (2010). Abnormal neural oscillations and synchrony in schizophrenia. *Nature Reviews Neuroscience*, 11(2), 100–113. | doi:10.1038/nrn2774 |
 | [75] | Casali, A. G., Gosseries, O., Rosanova, M. et al. (2013). A Theoretically Based Index of Consciousness Independent of Sensory Processing and Behavior. *Science Translational Medicine*, 5(198), 198ra105. | doi:10.1126/scitranslmed.3006294 |
-| [6]  | Klimesch, W. (1999). EEG alpha and theta oscillations reflect cognitive and memory performance. *Brain Research Reviews*, 29(2–3), 169–195. | doi:10.1016/s0165-0173(98)00056-3 |
+| [6]  | Klimesch, W. (1999). EXG alpha and theta oscillations reflect cognitive and memory performance. *Brain Research Reviews*, 29(2–3), 169–195. | doi:10.1016/s0165-0173(98)00056-3 |
 | [76] | Tononi, G. (2004). An information integration theory of consciousness. *BMC Neuroscience*, 5, 42. | doi:10.1186/1471-2202-5-42 |

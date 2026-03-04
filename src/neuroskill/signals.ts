@@ -90,7 +90,7 @@ export function detectSignals(lp: string): Signals {
 			lp,
 			/\bsession\b|right.?now\b|current.?state|how.?am.?i\b/,
 			/my.?focus\b|my.?energy\b|my.?state\b|my.?metrics\b|my.?mood\b|my.?brain\b/,
-			/\beeg\b|biofeedback|brain.?state/,
+			/\bEXG\b|biofeedback|brain.?state/,
 			/cognitive.?load|engagement.?level|attention.?span/,
 			/work.?session|study.?session|focus.?session|meditation.?session/,
 			/stress.?level|anxiety.?level|relaxation.?level|mental.?state/,

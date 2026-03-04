@@ -1,8 +1,8 @@
 # NeuroLoop
 
-**NeuroLoop** is an EEG-aware AI coding and life companion powered by a real-time consumer EEG device (Muse 2 / Muse S). It reads brainwaves and physiology continuously and uses that live biometric data to inform every response — adapting its tone, offering guided protocols, and labelling meaningful mental states as they happen.
+**NeuroLoop** is an EXG-aware AI coding and life companion powered by a real-time consumer EXG device (Muse 2 / Muse S). It reads brainwaves and physiology continuously and uses that live biometric data to inform every response — adapting its tone, offering guided protocols, and labelling meaningful mental states as they happen.
 
-NeuroLoop runs on top of the [pi coding agent](https://github.com/mariozechner/pi-coding-agent) framework and communicates with the [NeuroSkill](https://neuroskill.com) EEG analysis server, which exposes a local WebSocket API for real-time neural data.
+NeuroLoop runs on top of the [pi coding agent](https://github.com/mariozechner/pi-coding-agent) framework and communicates with the [NeuroSkill](https://neuroskill.com) EXG analysis server, which exposes a local WebSocket API for real-time neural data.
 
 [Paper](https://arxiv.org/abs/2603.03212)
 
@@ -10,10 +10,10 @@ NeuroLoop runs on top of the [pi coding agent](https://github.com/mariozechner/p
 
 ## Features
 
-- 🧠 **Live EEG context** — injects a real-time snapshot of brain state (focus, relaxation, engagement, drowsiness, HRV, sleep stage, consciousness indices, etc.) into every LLM turn
+- 🧠 **Live EXG context** — injects a real-time snapshot of brain state (focus, relaxation, engagement, drowsiness, HRV, sleep stage, consciousness indices, etc.) into every LLM turn
 - 🎯 **Contextual skill loading** — automatically selects and injects relevant skill files based on the user's message domain
 - 🏃 **Guided protocols** — 70+ mind-body practices (breathing, meditation, somatic work, sleep, music, exercise) triggered and timed from within the agent
-- 🏷️ **Auto-labelling** — silently annotates notable mental, emotional, and philosophical moments as EEG timestamps
+- 🏷️ **Auto-labelling** — silently annotates notable mental, emotional, and philosophical moments as EXG timestamps
 - 💾 **Persistent memory** — reads and writes a long-term memory file across sessions
 - 🌐 **Web tools** — `web_fetch` and `web_search` available to the agent
 - 📡 **Prewarm cache** — kicks off expensive `neuroskill compare` runs proactively in the background
@@ -26,7 +26,7 @@ NeuroLoop runs on top of the [pi coding agent](https://github.com/mariozechner/p
 npx neuroloop
 ```
 
-Requires Node.js ≥ 20. The NeuroSkill EEG server must be running and a Muse device connected for live biometric features.
+Requires Node.js ≥ 20. The NeuroSkill EXG server must be running and a Muse device connected for live biometric features.
 
 ---
 
@@ -34,7 +34,7 @@ Requires Node.js ≥ 20. The NeuroSkill EEG server must be running and a Muse de
 
 On every user message the harness:
 
-1. Runs `neuroskill status` and injects the live EEG snapshot into the system prompt and a visible chat bubble
+1. Runs `neuroskill status` and injects the live EXG snapshot into the system prompt and a visible chat bubble
 2. Detects domain signals in the user's prompt (stress, sleep, focus, protocols, etc.)
 3. Runs the relevant NeuroSkill commands in parallel (indices, session trends, label search, etc.)
 4. If protocol intent is detected, injects the full protocol repertoire (`skills/neuroskill-protocols/SKILL.md`)
@@ -42,11 +42,11 @@ On every user message the harness:
 
 ---
 
-## EEG Metrics
+## EXG Metrics
 
 NeuroLoop exposes 40+ neuroscientific metrics derived from the Muse headset, including:
 
-- EEG band powers (δ, θ, α, β, γ) at TP9, AF7, AF8, TP10
+- EXG band powers (δ, θ, α, β, γ) at TP9, AF7, AF8, TP10
 - Ratios and indices: TAR, BAR, TBR, DTR, PSE, APF, BPS, SNR, Coherence, PAC, FAA
 - Complexity measures: Permutation Entropy, Higuchi FD, DFA Exponent, Sample Entropy
 - Composite scores: Focus, Relaxation, Engagement, Meditation, Cognitive Load, Drowsiness
@@ -54,7 +54,7 @@ NeuroLoop exposes 40+ neuroscientific metrics derived from the Muse headset, inc
 - PPG / HRV: Heart Rate, RMSSD, SDNN, pNN50, LF/HF Ratio, SpO₂, Baevsky Stress Index
 - Sleep staging: Wake / N1 / N2 / N3 / REM
 
-> ⚠️ **Research Use Only.** All metrics are experimental outputs from consumer-grade EEG hardware. They are not validated clinical measurements, not FDA/CE-cleared, and must not be used for diagnosis or treatment.
+> ⚠️ **Research Use Only.** All metrics are experimental outputs from consumer-grade EXG hardware. They are not validated clinical measurements, not FDA/CE-cleared, and must not be used for diagnosis or treatment.
 
 See [`METRICS.md`](METRICS.md) for the full scientific reference for every metric.
 
@@ -70,7 +70,7 @@ neuroloop/
 │   └── memory.ts        # Persistent memory helpers
 ├── skills/              # Domain skill files injected into the system prompt
 ├── NEUROLOOP.md         # Capability index (skill routing table)
-├── METRICS.md           # Full neuroscientific reference for all EEG metrics
+├── METRICS.md           # Full neuroscientific reference for all EXG metrics
 ├── pi-pkg/              # pi package manifest
 └── dist/                # Compiled output (neuroloop.js)
 ```
@@ -84,7 +84,7 @@ If you use NeuroLoop in academic work, please cite it as:
 ```bibtex
 @software{neuroloop2026,
   author       = {Nataliya Kosmyna and Eugene Hauptmann},
-  title        = {{NeuroLoop: An EEG-Aware AI Companion Powered by Real-Time Brainwave Analysis}},
+  title        = {{NeuroLoop: An EXG-Aware AI Companion Powered by Real-Time Brainwave Analysis}},
   year         = {2026},
   version      = {0.0.1},
   url          = {https://github.com/NeuroSkill-com/neuroloop}
@@ -98,7 +98,7 @@ NeuroLoop builds on the following neuroscientific foundations. If you use specif
 ```bibtex
 @article{krigolson2017choosing,
   author  = {Krigolson, Olav E. and Williams, Chad C. and Norton, Angela and Hassall, Cameron D. and Colino, Francisco L.},
-  title   = {Choosing {MUSE}: Validation of a Low-Cost, Portable {EEG} System for {ERP} Research},
+  title   = {Choosing {MUSE}: Validation of a Low-Cost, Portable {EXG} System for {ERP} Research},
   journal = {Frontiers in Neuroscience},
   volume  = {11},
   pages   = {109},
@@ -108,7 +108,7 @@ NeuroLoop builds on the following neuroscientific foundations. If you use specif
 
 @inproceedings{cannard2021validating,
   author    = {Cannard, Christian and Wahbeh, Helané and Delorme, Arnaud},
-  title     = {Validating the Wearable {MUSE} Headset for {EEG} Spectral Analysis and Frontal Alpha Asymmetry},
+  title     = {Validating the Wearable {MUSE} Headset for {EXG} Spectral Analysis and Frontal Alpha Asymmetry},
   booktitle = {2021 IEEE International Conference on Bioinformatics and Biomedicine (BIBM)},
   year      = {2021},
   doi       = {10.1109/bibm52615.2021.9669778}
@@ -116,7 +116,7 @@ NeuroLoop builds on the following neuroscientific foundations. If you use specif
 
 @article{coan2004frontal,
   author  = {Coan, James A. and Allen, John J. B.},
-  title   = {Frontal {EEG} Asymmetry as a Moderator and Mediator of Emotion},
+  title   = {Frontal {EXG} Asymmetry as a Moderator and Mediator of Emotion},
   journal = {Biological Psychology},
   volume  = {67},
   number  = {1--2},
@@ -136,9 +136,9 @@ NeuroLoop builds on the following neuroscientific foundations. If you use specif
   doi     = {10.1126/scitranslmed.3006294}
 }
 
-@article{klimesch1999eeg,
+@article{klimesch1999EXG,
   author  = {Klimesch, Wolfgang},
-  title   = {{EEG} Alpha and Theta Oscillations Reflect Cognitive and Memory Performance: A Review and Analysis},
+  title   = {{EXG} Alpha and Theta Oscillations Reflect Cognitive and Memory Performance: A Review and Analysis},
   journal = {Brain Research Reviews},
   volume  = {29},
   number  = {2--3},

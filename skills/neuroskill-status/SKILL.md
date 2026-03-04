@@ -1,6 +1,6 @@
 ---
 name: neuroskill-status
-description: NeuroSkill `status` command — full system snapshot including device state, signal quality, EEG scores, band powers, ratios, embeddings, labels, sleep summary, and recording history. Use when checking current EEG state, device connection, or session metadata.
+description: NeuroSkill `status` command — full system snapshot including device state, signal quality, EXG scores, band powers, ratios, embeddings, labels, sleep summary, and recording history. Use when checking current EXG state, device connection, or session metadata.
 ---
 
 # NeuroSkill `status` Command
@@ -39,7 +39,7 @@ curl -s -X POST http://127.0.0.1:8375/ \
     "name": "Muse-A1B2",
     "battery": 73,                 // percent
     "firmware": "1.3.4",
-    "eeg_samples": 195840,
+    "EXG_samples": 195840,
     "ppg_samples": 30600,
     "imu_samples": 122400
   },
@@ -74,7 +74,7 @@ curl -s -X POST http://127.0.0.1:8375/ \
       "rel_beta":  0.17,
       "rel_gamma": 0.05
     },
-    // EEG ratios & spectral indices:
+    // EXG ratios & spectral indices:
     "faa": 0.042,                  // Frontal Alpha Asymmetry (positive = approach)
     "tar": 0.56,                   // Theta/Alpha Ratio
     "bar": 0.53,                   // Beta/Alpha Ratio
@@ -121,7 +121,7 @@ curl -s -X POST http://127.0.0.1:8375/ \
 
 | Hidden field | Type | Contents |
 |---|---|---|
-| `scores.faa`, `scores.tar`, `scores.bar` … | numbers | EEG ratios and spectral indices not surfaced in the default summary |
+| `scores.faa`, `scores.tar`, `scores.bar` … | numbers | EXG ratios and spectral indices not surfaced in the default summary |
 | `calibration.actions[]` | array | Full ordered list of calibration step objects |
 | `labels.recent[]` | array | Full label objects; summary only prints text + timestamp |
 | `history.today_vs_avg` | object | Per-metric today-vs-7-day-avg comparison table |

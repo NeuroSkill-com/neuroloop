@@ -5,7 +5,7 @@
  * relaxation, grounding, recovery reset, somatic scan, etc.) step by step with:
  *   • OS notifications at every step transition
  *   • Per-step timing (sleep that respects the AbortSignal)
- *   • EEG labelling at every step (always on — the protocol IS the labelling run)
+ *   • EXG labelling at every step (always on — the protocol IS the labelling run)
  *   • Streamed progress via onUpdate so the UI shows live step output
  *
  * STEP GRANULARITY CONTRACT (enforced by description — see below):
@@ -47,7 +47,7 @@ async function notify(title: string, body?: string): Promise<void> {
 	await runNeuroSkill(["notify", title, ...(body ? [body] : [])]);
 }
 
-/** Create an EEG label via neuroskill. Non-fatal if neuroskill is unavailable. */
+/** Create an EXG label via neuroskill. Non-fatal if neuroskill is unavailable. */
 async function label(text: string, context?: string): Promise<void> {
 	await runNeuroSkill(["label", text, ...(context ? ["--context", context] : [])]);
 }
@@ -84,7 +84,7 @@ const StepSchema = Type.Object({
 export const runProtocolTool = {
 	name: "run_protocol",
 	label: "Run Guided Protocol",
-	description: `Execute a multi-step guided protocol step by step with OS notifications, per-step timing, and EEG labelling at every step.
+	description: `Execute a multi-step guided protocol step by step with OS notifications, per-step timing, and EXG labelling at every step.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 WHEN TO CALL THIS TOOL — read before using:
@@ -97,7 +97,7 @@ WHEN TO CALL THIS TOOL — read before using:
 • If the user seems uncertain, reluctant, or mid-conversation, offer — don't execute.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-AVAILABLE PROTOCOL CATEGORIES (choose the best fit for the EEG):
+AVAILABLE PROTOCOL CATEGORIES (choose the best fit for the EXG):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Attention & Focus
   • Theta-Beta Neurofeedback Anchor — high tbr / low focus / high adhd_index
@@ -327,7 +327,7 @@ MANDATORY STEP STRUCTURE — follow this exactly:
 5. Use short, imperative language in step names (visible in the notification title).
    Put the count rhythm or cue text in the instruction (visible in the body).
 
-6. EEG labelling is always on — every step creates a timestamped brain-state record.
+6. EXG labelling is always on — every step creates a timestamped brain-state record.
    This is intentional: the protocol IS the labelling run.
 
 ═══════════════════════════════════════════════════════════════
@@ -395,7 +395,7 @@ DURATION GUIDELINES:
 
 			await notify(`${step.name}${durationNote}`, step.instruction);
 
-			// Label every step — the protocol is the EEG record.
+			// Label every step — the protocol is the EXG record.
 			await label(
 				`${isAnnouncement ? "announce" : "step"} ${i + 1}: ${step.name.replace(/^[▶►] /, "").slice(0, 40).toLowerCase()}`,
 				`Protocol "${title}", step ${num}. ${step.instruction}`,

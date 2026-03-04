@@ -180,16 +180,16 @@ npx neuroskill compare \
 # Find concepts related to "deep focus" across all data layers:
 npx neuroskill interactive "deep focus"
 
-# Increase reach to capture labels up to 30 minutes from each EEG point:
+# Increase reach to capture labels up to 30 minutes from each EXG point:
 npx neuroskill interactive "deep focus" --reach 30
 
 # More neighbors at each layer for a richer graph:
-npx neuroskill interactive "meditation" --k-text 8 --k-eeg 8 --k-labels 5 --reach 20
+npx neuroskill interactive "meditation" --k-text 8 --k-EXG 8 --k-labels 5 --reach 20
 
 # What text labels are semantically closest to "anxiety"?
 npx neuroskill interactive "anxiety" --json | jq '[.nodes[] | select(.kind == "text_label") | {text, sim: (1 - .distance | . * 100 | round)}]'
 
-# What nearby labels cluster around EEG moments found via "stress"?
+# What nearby labels cluster around EXG moments found via "stress"?
 npx neuroskill interactive "stress" --json | jq '[.nodes[] | select(.kind == "found_label") | .text]'
 
 # Count discovered nodes by layer:
@@ -265,7 +265,7 @@ npx neuroskill sleep
 # Every 5 minutes: log focus score to a CSV
 */5 * * * * node /path/to/npx neuroskill status --json \
   | jq -r '[now, .scores.focus, .scores.relaxation, .scores.hr] | @csv' \
-  >> ~/eeg_log.csv
+  >> ~/EXG_log.csv
 
 # ── Shell function wrappers ───────────────────────────────────────────────
 neuroskill_focus()  { npx neuroskill status --json | jq '.scores.focus'; }

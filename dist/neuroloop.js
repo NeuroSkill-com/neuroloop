@@ -3,7 +3,7 @@
 // src/main.ts
 import { existsSync as existsSync4, readdirSync, readFileSync as readFileSync4 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
-import { dirname as dirname4, join as join4 } from "node:path";
+import { dirname as dirname4, join as join4, relative } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 import {
   AuthStorage,
@@ -19,10 +19,13 @@ import {
 import { existsSync as existsSync3, readFileSync as readFileSync3, writeFileSync as writeFileSync2 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { dirname as dirname3, join as join3 } from "node:path";
+import { exec } from "node:child_process";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import { Container, Markdown, Spacer } from "@mariozechner/pi-tui";
+import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { Type as Type4 } from "@sinclair/typebox";
 import { getMarkdownTheme } from "@mariozechner/pi-coding-agent";
+import WS from "ws";
 
 // src/neuroskill/run.ts
 import { execFile } from "node:child_process";
@@ -74,7 +77,7 @@ function detectSignals(lp) {
       lp,
       /\bsession\b|right.?now\b|current.?state|how.?am.?i\b/,
       /my.?focus\b|my.?energy\b|my.?state\b|my.?metrics\b|my.?mood\b|my.?brain\b/,
-      /\beeg\b|biofeedback|brain.?state/,
+      /\bEXG\b|biofeedback|brain.?state/,
       /cognitive.?load|engagement.?level|attention.?span/,
       /work.?session|study.?session|focus.?session|meditation.?session/,
       /stress.?level|anxiety.?level|relaxation.?level|mental.?state/
@@ -1109,7 +1112,7 @@ var StepSchema = Type3.Object({
 var runProtocolTool = {
   name: "run_protocol",
   label: "Run Guided Protocol",
-  description: `Execute a multi-step guided protocol step by step with OS notifications, per-step timing, and EEG labelling at every step.
+  description: `Execute a multi-step guided protocol step by step with OS notifications, per-step timing, and EXG labelling at every step.
 
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 WHEN TO CALL THIS TOOL \u2014 read before using:
@@ -1122,7 +1125,7 @@ WHEN TO CALL THIS TOOL \u2014 read before using:
 \u2022 If the user seems uncertain, reluctant, or mid-conversation, offer \u2014 don't execute.
 
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-AVAILABLE PROTOCOL CATEGORIES (choose the best fit for the EEG):
+AVAILABLE PROTOCOL CATEGORIES (choose the best fit for the EXG):
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 Attention & Focus
   \u2022 Theta-Beta Neurofeedback Anchor \u2014 high tbr / low focus / high adhd_index
@@ -1352,7 +1355,7 @@ MANDATORY STEP STRUCTURE \u2014 follow this exactly:
 5. Use short, imperative language in step names (visible in the notification title).
    Put the count rhythm or cue text in the instruction (visible in the body).
 
-6. EEG labelling is always on \u2014 every step creates a timestamped brain-state record.
+6. EXG labelling is always on \u2014 every step creates a timestamped brain-state record.
    This is intentional: the protocol IS the labelling run.
 
 \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
@@ -1470,7 +1473,7 @@ function markCalibrationNudgeSent() {
   }
 }
 var STATUS_PROMPT = `
-This is the user's current mental and emotional state as measured by their EEG device.
+This is the user's current mental and emotional state as measured by their EXG device.
 Use it as a living window into how they feel right now \u2014 not just cognitively, but emotionally,
 somatically, and spiritually. Let it inform how you meet them.
 
@@ -1503,14 +1506,14 @@ AUTO-LABELLING
   - Somatic events: physical tension releasing, heart racing, grounded calm arriving
   - Anything the user explicitly marks as meaningful or worth remembering
 \u2022 Write the label text concisely (\u2264 10 words). In the context field, include: what the user
-  said, the current EEG state summary, and any relevant background. Keep context \u2264 1000 words.
+  said, the current EXG state summary, and any relevant background. Keep context \u2264 1000 words.
 \u2022 Labels are permanent memory \u2014 make them referenceable and meaningful.
 
 DEPTH & PHILOSOPHY
 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 \u2022 When the user explores questions of meaning, existence, identity, morality, or consciousness \u2014
   engage as a thoughtful philosophical companion. Draw on wisdom traditions, lived experience,
-  and the EEG state to ground the inquiry.
+  and the EXG state to ground the inquiry.
 \u2022 Do not reduce profound states to productivity metrics. A moment of awe is not "high engagement."
   A moral crisis is not just "stress." Honour the full human dimension.
 \u2022 When symbiosis, oneness, or interconnectedness arise \u2014 explore them genuinely.
@@ -1535,14 +1538,14 @@ GUIDED PROTOCOLS
   If the user is in flow, skip or mention lightly. If they decline, drop it entirely \u2014
   never re-offer the same protocol in the same session.
 
-\u2022 CONSTRUCTION: set duration_secs from the current EEG state and pacing the user can hold.
+\u2022 CONSTRUCTION: set duration_secs from the current EXG state and pacing the user can hold.
   Every timed action MUST be preceded by a 0-duration announcement step.
-  Expand repeated cycles as individual steps. EEG labelling is always on.
+  Expand repeated cycles as individual steps. EXG labelling is always on.
 
 \u2022 PROTOCOL REPERTOIRE is loaded on-demand into the context when the user's message
   contains protocol-relevant keywords (exercises, routines, breathing, stretching, music,
   social media help, dietary guidance, etc.). When the repertoire section is present in
-  this context window, use it to match the best protocol to the current EEG signal.
+  this context window, use it to match the best protocol to the current EXG signal.
   When it is absent, use your general knowledge \u2014 the behavioural rules above still apply.
 
 PREWARM
@@ -1560,7 +1563,7 @@ NOTIFICATIONS
 
 BOUNDARIES
 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-\u2022 Never mention EEG, metrics, indices, or BCI devices unless the user asks directly.
+\u2022 Never mention EXG, metrics, indices, or BCI devices unless the user asks directly.
 \u2022 Never tell the user to run neuroskill themselves \u2014 do it silently and proactively.
 \u2022 Use skills available to you when uncertain what to do next.
 `;
@@ -1579,18 +1582,18 @@ async function neuroloopExtension(pi) {
     if (statusResult.ok && statusResult.text) {
       displaySections.push(`## \u{1F9E0} Current State
 ${statusResult.text}`);
-      systemSections.push(`## Current EEG State
+      systemSections.push(`## Current EXG State
 ${statusResult.text}`);
       const extra = await selectContextualData(event.prompt);
       displaySections.push(...extra);
       systemSections.push(...extra);
     } else {
-      const unavailable = "## \u{1F9E0} NeuroSkill\n_Unavailable \u2014 server not running or no EEG device connected._\nUse the `neuroskill_run` tool to query once it comes online.";
+      const unavailable = "## \u{1F9E0} NeuroSkill\n_Unavailable \u2014 server not running or no EXG device connected._\nUse the `neuroskill_run` tool to query once it comes online.";
       displaySections.push(unavailable);
       systemSections.push(unavailable);
     }
     if (shouldNudgeCalibration()) {
-      const calibrationNudge = "## \u{1F3AF} Calibration Reminder (one-time nudge \u2014 do not repeat this turn)\nIt has been at least 24 hours since the user was last invited to run a calibration sequence. At an appropriate, natural moment during this conversation \u2014 when there is a brief pause, a topic shift, or the user seems settled \u2014 gently mention that running a calibration would help keep their EEG baselines accurate, and ask if they would like to do one now. Use `neuroskill_run` with command `calibrate` if they agree. Only ask once; do not nag or repeat within this session.";
+      const calibrationNudge = "## \u{1F3AF} Calibration Reminder (one-time nudge \u2014 do not repeat this turn)\nIt has been at least 24 hours since the user was last invited to run a calibration sequence. At an appropriate, natural moment during this conversation \u2014 when there is a brief pause, a topic shift, or the user seems settled \u2014 gently mention that running a calibration would help keep their EXG baselines accurate, and ask if they would like to do one now. Use `neuroskill_run` with command `calibrate` if they agree. Only ask once; do not nag or repeat within this session.";
       systemSections.push(calibrationNudge);
       markCalibrationNudgeSent();
     }
@@ -1614,7 +1617,7 @@ ${readFileSync3(NEUROLOOP_MD_PATH, "utf8")}`;
     } catch {
     }
     return {
-      // Chat bubble: clean EEG snapshot without instruction prose.
+      // Chat bubble: clean EXG snapshot without instruction prose.
       message: {
         customType: NEUROSKILL_STATUS_TYPE,
         content: displayBody,
@@ -1625,7 +1628,7 @@ ${readFileSync3(NEUROLOOP_MD_PATH, "utf8")}`;
       systemPrompt: `${event.systemPrompt}
 
 ${"=".repeat(60)}
-# Live EEG Context (current turn)
+# Live EXG Context (current turn)
 
 ${STATUS_PROMPT}${skillIndex}
 
@@ -1672,15 +1675,15 @@ ${"=".repeat(60)}`
   });
   pi.registerTool({
     name: "neuroskill_label",
-    label: "Label EEG Moment",
-    description: "Create a timestamped EEG annotation for the current moment. Call this automatically whenever the user enters a notable mental, emotional, physical, philosophical, or spiritual state \u2014 without being asked. Labels are permanent and searchable; make the context rich and referenceable.",
+    label: "Label EXG Moment",
+    description: "Create a timestamped EXG annotation for the current moment. Call this automatically whenever the user enters a notable mental, emotional, physical, philosophical, or spiritual state \u2014 without being asked. Labels are permanent and searchable; make the context rich and referenceable.",
     parameters: Type4.Object({
       text: Type4.String({
         description: "Short label text \u2014 concise and descriptive (e.g. 'deep focus', 'existential clarity', 'heart racing before call', 'awe at sunset'). Max ~10 words."
       }),
       context: Type4.Optional(
         Type4.String({
-          description: "Rich context: what the user said, their current EEG state, any relevant background or insight. Max ~1000 words. Omit only if there is genuinely nothing meaningful to add."
+          description: "Rich context: what the user said, their current EXG state, any relevant background or insight. Max ~1000 words. Omit only if there is genuinely nothing meaningful to add."
         })
       )
     }),
@@ -1703,16 +1706,16 @@ ${"=".repeat(60)}`
   pi.registerTool({
     name: "neuroskill_run",
     label: "NeuroSkill",
-    description: `Run a neuroskill EEG command and return its JSON output.
+    description: `Run a neuroskill EXG command and return its JSON output.
 
 Available commands and typical args:
   status                             \u2192 full device/session/scores snapshot
   session [index]                    \u2192 session metrics + trends (0=latest)
   sessions                           \u2192 list all recorded sessions
-  search-labels <query>              \u2192 semantic search over EEG annotations
+  search-labels <query>              \u2192 semantic search over EXG annotations
   interactive <keyword>              \u2192 4-layer cross-modal graph search
   label <text>                       \u2192 create a timestamped annotation
-  search [--k <n>]                   \u2192 ANN EEG-similarity search
+  search [--k <n>]                   \u2192 ANN EXG-similarity search
   compare                            \u2192 \u26A0 EXPENSIVE (~60 s, heavy compute). Avoid unless the user explicitly asks to compare sessions. Prefer session/sessions for trend questions. Use the prewarm tool first when compare will be needed soon.
   sleep [index]                      \u2192 sleep staging summary
   umap                               \u2192 3D UMAP projection
@@ -1755,11 +1758,412 @@ Available commands and typical args:
       };
     }
   });
+  let exgEnabled = true;
+  let exgOnline = false;
+  let exgMetrics = null;
+  let exgUpdatedAt = null;
+  let exgLastLabel = null;
+  let uiTui = null;
+  let exgWs = null;
+  let exgWsPort = 8375;
+  let exgWsReconnectTimer = null;
+  let exgPollTimer = null;
+  let exgAgoTimer = null;
+  let exgPollMs = 1e3;
+  function isExgConnected(json) {
+    if (!json.ok) return false;
+    const notReady = /* @__PURE__ */ new Set(["scanning", "connecting", "disconnected"]);
+    const state = json.device?.state;
+    return !(typeof state === "string" && notReady.has(state));
+  }
+  function parseExgMetrics(json) {
+    const s = json.scores ?? {};
+    const b = s.bands ?? {};
+    const num = (v) => typeof v === "number" ? v : void 0;
+    return {
+      focus: num(s.focus),
+      cognitive_load: num(s.cognitive_load),
+      relaxation: num(s.relaxation),
+      engagement: num(s.engagement),
+      drowsiness: num(s.drowsiness),
+      mood: num(s.mood),
+      hr: num(s.hr),
+      bands: {
+        rel_delta: num(b.rel_delta),
+        rel_theta: num(b.rel_theta),
+        rel_alpha: num(b.rel_alpha),
+        rel_beta: num(b.rel_beta),
+        rel_gamma: num(b.rel_gamma)
+      }
+    };
+  }
+  function mergeScoresEvent(ev) {
+    const num = (v) => typeof v === "number" ? v : void 0;
+    const prev = exgMetrics ?? {};
+    exgMetrics = {
+      ...prev,
+      focus: num(ev.focus) ?? prev.focus,
+      relaxation: num(ev.relaxation) ?? prev.relaxation,
+      engagement: num(ev.engagement) ?? prev.engagement,
+      hr: num(ev.hr) ?? prev.hr,
+      bands: {
+        rel_delta: num(ev.rel_delta) ?? prev.bands?.rel_delta,
+        rel_theta: num(ev.rel_theta) ?? prev.bands?.rel_theta,
+        rel_alpha: num(ev.rel_alpha) ?? prev.bands?.rel_alpha,
+        rel_beta: num(ev.rel_beta) ?? prev.bands?.rel_beta,
+        rel_gamma: num(ev.rel_gamma) ?? prev.bands?.rel_gamma
+      }
+    };
+    exgOnline = true;
+    exgUpdatedAt = Date.now();
+  }
+  function timeAgo(ts) {
+    const s = Math.round((Date.now() - ts) / 1e3);
+    if (s < 60) return `${s}s ago`;
+    if (s < 3600) return `${Math.round(s / 60)}m ago`;
+    return `${Math.round(s / 3600)}h ago`;
+  }
+  function scoreColor(val, higherIsBetter) {
+    const norm = higherIsBetter ? val : 1 - val;
+    if (norm >= 0.65) return "success";
+    if (norm >= 0.35) return "warning";
+    return "error";
+  }
+  function hrColor(bpm) {
+    if (bpm >= 55 && bpm <= 90) return "success";
+    if (bpm >= 45 && bpm <= 110) return "warning";
+    return "error";
+  }
+  const BAR_FILLED = "\u2588";
+  const BAR_EMPTY = "\u2591";
+  function bandBar(theme, val, color, barWidth = 10) {
+    if (val == null) return theme.fg("dim", BAR_EMPTY.repeat(barWidth));
+    const filled = Math.min(barWidth, Math.round(val * barWidth * 3));
+    const empty = Math.max(0, barWidth - filled);
+    return theme.fg(color, BAR_FILLED.repeat(filled)) + theme.fg("dim", BAR_EMPTY.repeat(empty));
+  }
+  function sep(theme, width) {
+    return theme.fg("dim", "\u2500".repeat(width));
+  }
+  const BAND_COLORS = {
+    delta: "accent",
+    // blue   — deep / slow
+    theta: "warning",
+    // yellow — drowsy / creative
+    alpha: "success",
+    // green  — relaxed / calm
+    beta: "error",
+    // red    — active / alert
+    gamma: "syntaxType"
+    // teal   — high cognition
+  };
+  function buildHeader(_tui, theme) {
+    const hints = [
+      ["esc", "stop"],
+      ["ctrl+d", "quit"],
+      ["shift+tab", "think"],
+      ["ctrl+l", "model"],
+      ["ctrl+o", "tools"],
+      ["/exg", "exg"],
+      ["!", "shell"]
+    ];
+    return {
+      invalidate() {
+      },
+      render(width) {
+        const lines = [];
+        const logo = theme.fg("accent", "\u25C6") + " " + theme.bold("neuroloop") + theme.fg("dim", ` v${"0.0.4"}`);
+        lines.push(truncateToWidth(logo, width));
+        const hintStr = hints.map(([k, a]) => theme.fg("dim", "[") + theme.fg("muted", k) + theme.fg("dim", "] ") + theme.fg("dim", a)).join(theme.fg("dim", "  "));
+        lines.push(truncateToWidth(" " + hintStr, width));
+        lines.push(sep(theme, width));
+        return lines;
+      }
+    };
+  }
+  function discoverExgPort() {
+    return new Promise((resolve) => {
+      exec(
+        "lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | grep -i neuroskill | head -1",
+        (_, stdout) => {
+          const m = stdout.match(/:(\d{4,5})\s/);
+          resolve(m ? parseInt(m[1], 10) : 8375);
+        }
+      );
+    });
+  }
+  function connectExgWs() {
+    if (!exgEnabled) return;
+    if (exgWs) return;
+    const url = `ws://127.0.0.1:${exgWsPort}`;
+    let ws;
+    try {
+      ws = new WS(url);
+    } catch {
+      scheduleExgReconnect();
+      return;
+    }
+    exgWs = ws;
+    ws.on("open", () => {
+      ws.send(JSON.stringify({ command: "status" }));
+      stopExgPoll();
+      exgPollTimer = setInterval(() => {
+        if (exgWs?.readyState === WS.OPEN) {
+          exgWs.send(JSON.stringify({ command: "status" }));
+        }
+      }, exgPollMs);
+    });
+    ws.on("message", (raw) => {
+      let msg;
+      try {
+        msg = JSON.parse(raw.toString());
+      } catch {
+        return;
+      }
+      const event = msg.event;
+      if (event === "scores") {
+        mergeScoresEvent(msg);
+        uiTui?.requestRender();
+        return;
+      }
+      if (event === "label_created") {
+        const text = String(msg.text ?? "");
+        const createdAt = Number(msg.created_at ?? Date.now() / 1e3);
+        exgLastLabel = { text, createdAt };
+        uiTui?.requestRender();
+        pi.sendMessage({
+          customType: NEUROSKILL_STATUS_TYPE,
+          content: `\u2B21 **label** "${text}"`,
+          display: true,
+          details: void 0
+        });
+        return;
+      }
+      if (msg.command === "status") {
+        const wasOnline = exgOnline;
+        exgOnline = isExgConnected(msg);
+        if (exgOnline) {
+          exgMetrics = parseExgMetrics(msg);
+          exgUpdatedAt = Date.now();
+        }
+        const recent = msg.labels?.recent;
+        if (recent?.[0]) {
+          exgLastLabel = { text: recent[0].text, createdAt: recent[0].created_at };
+        }
+        if (exgOnline !== wasOnline || exgOnline) uiTui?.requestRender();
+      }
+    });
+    ws.on("error", () => {
+    });
+    ws.on("close", () => {
+      stopExgPoll();
+      exgWs = null;
+      exgOnline = false;
+      uiTui?.requestRender();
+      scheduleExgReconnect();
+    });
+  }
+  function stopExgPoll() {
+    if (exgPollTimer) {
+      clearInterval(exgPollTimer);
+      exgPollTimer = null;
+    }
+  }
+  function scheduleExgReconnect(delayMs = 5e3) {
+    if (exgWsReconnectTimer) return;
+    exgWsReconnectTimer = setTimeout(() => {
+      exgWsReconnectTimer = null;
+      if (exgEnabled) connectExgWs();
+    }, delayMs);
+  }
+  function disconnectExgWs() {
+    stopExgPoll();
+    if (exgWsReconnectTimer) {
+      clearTimeout(exgWsReconnectTimer);
+      exgWsReconnectTimer = null;
+    }
+    if (exgAgoTimer) {
+      clearInterval(exgAgoTimer);
+      exgAgoTimer = null;
+    }
+    exgWs?.close();
+    exgWs = null;
+  }
   pi.on("session_start", (_event, ctx) => {
-    ctx.ui.setStatus("neuroloop", existsSync3(NEUROLOOP_MD_PATH) ? "neuroloop ready" : "neuroloop: no NEUROLOOP.md");
+    ctx.ui.setHeader((tui, theme) => {
+      uiTui = tui;
+      discoverExgPort().then((port) => {
+        exgWsPort = port;
+        connectExgWs();
+      });
+      exgAgoTimer = setInterval(() => tui.requestRender(), 3e4);
+      return buildHeader(tui, theme);
+    });
+    ctx.ui.setFooter((tui, theme, footerData) => {
+      uiTui = tui;
+      const unsub = footerData.onBranchChange(() => tui.requestRender());
+      return {
+        dispose: unsub,
+        invalidate() {
+        },
+        render(width) {
+          const lines = [];
+          if (exgEnabled && exgOnline && exgMetrics) {
+            const m = exgMetrics;
+            lines.push(sep(theme, width));
+            const sc = (label2, val, better) => {
+              if (val == null) return "";
+              return theme.fg("dim", label2) + " " + theme.fg(scoreColor(val, better === "high"), val.toFixed(2));
+            };
+            const hrPart = m.hr != null ? theme.fg("dim", "\u2665 ") + theme.fg(hrColor(m.hr), `${Math.round(m.hr)} bpm`) : "";
+            const scores = [
+              sc("focus", m.focus, "high"),
+              sc("cog.load", m.cognitive_load, "low"),
+              sc("relax", m.relaxation, "high"),
+              sc("engage", m.engagement, "high"),
+              sc("drowsy", m.drowsiness, "low"),
+              sc("mood", m.mood, "high"),
+              hrPart
+            ].filter(Boolean).join(theme.fg("dim", "   "));
+            lines.push(truncateToWidth(" " + scores, width));
+            const b = m.bands ?? {};
+            const bar = (label2, val, color) => theme.fg("dim", label2 + " ") + bandBar(theme, val, color);
+            const bandParts = [
+              bar("\u03B4", b.rel_delta, BAND_COLORS.delta),
+              bar("\u03B8", b.rel_theta, BAND_COLORS.theta),
+              bar("\u03B1", b.rel_alpha, BAND_COLORS.alpha),
+              bar("\u03B2", b.rel_beta, BAND_COLORS.beta),
+              bar("\u03B3", b.rel_gamma, BAND_COLORS.gamma)
+            ].join("   ");
+            const labelStr = exgLastLabel ? theme.fg("dim", `\u2B21 "${exgLastLabel.text}"  ${timeAgo(exgLastLabel.createdAt * 1e3)}`) : "";
+            const bandW = visibleWidth(" " + bandParts);
+            const labelW = visibleWidth(labelStr);
+            const spacer = Math.max(1, width - bandW - labelW);
+            lines.push(truncateToWidth(" " + bandParts + " ".repeat(spacer) + labelStr, width));
+          }
+          const branch = footerData.getGitBranch();
+          const left = theme.fg("muted", ctx.cwd) + (branch ? " " + theme.fg("dim", `(${branch})`) : "");
+          const dot = exgOnline ? theme.fg("success", "\u25C9") : theme.fg("dim", "\u25CC");
+          const ago = exgUpdatedAt ? theme.fg("dim", ` ${timeAgo(exgUpdatedAt)}`) : "";
+          const exgPart = exgEnabled ? dot + " " + theme.fg("dim", "EXG") + ago : theme.fg("dim", "\u25CC EXG off");
+          const usage = ctx.getContextUsage();
+          const ctxPart = usage?.percent != null ? theme.fg("dim", `${usage.percent.toFixed(1)}%/${Math.round(usage.contextWindow / 1e3)}k`) : "";
+          const modelPart = ctx.model?.id ? theme.fg("dim", ctx.model.id) : "";
+          const right = [exgPart, ctxPart, modelPart].filter(Boolean).join(theme.fg("dim", "  "));
+          const gap = Math.max(1, width - visibleWidth(left) - visibleWidth(right));
+          lines.push(truncateToWidth(left + " ".repeat(gap) + right, width));
+          return lines;
+        }
+      };
+    });
+    ctx.ui.setWorkingMessage("\u{1F9E0} thinking\u2026");
   });
-  pi.on("session_shutdown", (_event, ctx) => {
-    ctx.ui.setStatus("neuroloop", void 0);
+  pi.on("session_shutdown", (_event, sessionCtx) => {
+    disconnectExgWs();
+    sessionCtx.ui.setHeader(void 0);
+    sessionCtx.ui.setFooter(void 0);
+  });
+  pi.on("before_agent_start", () => {
+    if (exgEnabled && !exgWs) connectExgWs();
+  });
+  pi.registerCommand("exg", {
+    description: "EXG panel \xB7 /exg [on|off|<seconds>|port <n>]",
+    handler: async (args, handlerCtx) => {
+      const parts = args.trim().toLowerCase().split(/\s+/);
+      const arg = parts[0] ?? "";
+      if (arg === "off") {
+        exgEnabled = false;
+        disconnectExgWs();
+        exgOnline = false;
+        exgMetrics = null;
+        uiTui?.requestRender();
+        handlerCtx.ui.notify("EXG live panel disabled  (/exg on to re-enable)", "info");
+        return;
+      }
+      if (arg === "on") {
+        exgEnabled = true;
+        connectExgWs();
+        handlerCtx.ui.notify(`EXG live panel enabled  (poll: ${exgPollMs}ms)`, "info");
+        return;
+      }
+      if (arg === "port" && parts[1]) {
+        const port = parseInt(parts[1], 10);
+        if (isNaN(port) || port < 1 || port > 65535) {
+          handlerCtx.ui.notify("Invalid port number", "error");
+          return;
+        }
+        disconnectExgWs();
+        exgWsPort = port;
+        connectExgWs();
+        handlerCtx.ui.notify(`EXG connecting on port ${port}`, "info");
+        return;
+      }
+      const secs = parseFloat(arg);
+      if (!isNaN(secs) && secs > 0) {
+        exgPollMs = Math.round(secs * 1e3);
+        stopExgPoll();
+        if (exgWs?.readyState === WS.OPEN) {
+          exgPollTimer = setInterval(() => {
+            if (exgWs?.readyState === WS.OPEN) exgWs.send(JSON.stringify({ command: "status" }));
+          }, exgPollMs);
+        }
+        handlerCtx.ui.notify(`EXG poll interval set to ${secs}s`, "info");
+        return;
+      }
+      const result = await runNeuroSkill(["status"]);
+      if (result.ok && result.text) {
+        pi.sendMessage({
+          customType: NEUROSKILL_STATUS_TYPE,
+          content: `## \u{1F9E0} EXG Snapshot
+${result.text}`,
+          display: true,
+          details: void 0
+        });
+      } else {
+        handlerCtx.ui.notify("NeuroSkill server not reachable", "error");
+      }
+    }
+  });
+  pi.registerCommand("neuro", {
+    description: "Run a neuroskill subcommand: /neuro <cmd> [args\u2026]",
+    handler: async (args, handlerCtx) => {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) {
+        handlerCtx.ui.notify("Usage: /neuro <subcommand> [args\u2026]", "warning");
+        return;
+      }
+      const result = await runNeuroSkill(parts);
+      if (result.ok && result.text) {
+        pi.sendMessage({
+          customType: NEUROSKILL_STATUS_TYPE,
+          content: `## neuroskill ${parts.join(" ")}
+\`\`\`
+${result.text}
+\`\`\``,
+          display: true,
+          details: void 0
+        });
+      } else {
+        handlerCtx.ui.notify(result.text || "neuroskill command failed", "error");
+      }
+    }
+  });
+  pi.registerShortcut("ctrl+shift+e", {
+    description: "Show live EXG snapshot in chat",
+    handler: async (handlerCtx) => {
+      const result = await runNeuroSkill(["status"]);
+      if (result.ok && result.text) {
+        pi.sendMessage({
+          customType: NEUROSKILL_STATUS_TYPE,
+          content: `## \u{1F9E0} EXG Snapshot
+${result.text}`,
+          display: true,
+          details: void 0
+        });
+      } else {
+        handlerCtx.ui.notify("NeuroSkill server not reachable", "error");
+      }
+    }
   });
 }
 
@@ -1771,9 +2175,6 @@ var NEUROLOOP_DIR2 = join4(SRC_DIR, "..");
 var AGENT_DIR2 = join4(homedir3(), ".neuroloop");
 var SKILLS_DIR = join4(NEUROLOOP_DIR2, "skills");
 var METRICS_MD_PATH = join4(NEUROLOOP_DIR2, "METRICS.md");
-if (!process.env.PI_PACKAGE_DIR) {
-  process.env.PI_PACKAGE_DIR = join4(NEUROLOOP_DIR2, "pi-pkg");
-}
 var authStorage = AuthStorage.create(join4(AGENT_DIR2, "auth.json"));
 var modelRegistry = new ModelRegistry(authStorage, join4(AGENT_DIR2, "models.json"));
 var settingsManager = SettingsManager.create(process.cwd(), AGENT_DIR2);
@@ -1825,6 +2226,7 @@ async function registerOllamaModels() {
   });
 }
 await registerOllamaModels();
+var loadedSkills = [];
 var loader = new DefaultResourceLoader({
   cwd: process.cwd(),
   agentDir: AGENT_DIR2,
@@ -1847,7 +2249,10 @@ var loader = new DefaultResourceLoader({
         extra.push({
           name: nameMatch[1].trim(),
           description: descMatch[1].trim(),
-          filePath: skillFile,
+          // Use a cwd-relative path so [Skills] shows short readable names.
+          // The read tool resolves relative paths from cwd, so the LLM can
+          // still load the file when it invokes this skill.
+          filePath: relative(process.cwd(), skillFile),
           baseDir: join4(SKILLS_DIR, entry.name),
           source: "path",
           disableModelInvocation: false
@@ -1857,21 +2262,22 @@ var loader = new DefaultResourceLoader({
     if (existsSync4(METRICS_MD_PATH)) {
       extra.push({
         name: "neuroskill-metrics",
-        description: "NeuroSkill EEG metrics reference \u2014 all indices, band powers, scores, and their scientific basis.",
-        filePath: METRICS_MD_PATH,
+        description: "NeuroSkill EXG metrics reference \u2014 all indices, band powers, scores, and their scientific basis.",
+        filePath: relative(process.cwd(), METRICS_MD_PATH),
         baseDir: NEUROLOOP_DIR2,
         source: "path",
         disableModelInvocation: false
       });
     }
-    return { skills: [...base.skills, ...extra], diagnostics: base.diagnostics };
+    loadedSkills = [...base.skills, ...extra];
+    return { skills: loadedSkills, diagnostics: base.diagnostics };
   },
   // Brief context note (doesn't duplicate the skills above).
   agentsFilesOverride: (base) => {
     const note = [
       "# NeuroLoop Agent",
       "",
-      "EEG-aware coding agent. A live neuroskill status snapshot is injected as an",
+      "EXG-aware coding agent. A live neuroskill status snapshot is injected as an",
       "assistant message before every turn. Use the `neuroskill_run` tool to query",
       "any other neuroskill command.",
       "",
@@ -1881,7 +2287,7 @@ var loader = new DefaultResourceLoader({
     return {
       agentsFiles: [
         ...base.agentsFiles,
-        { path: join4(NEUROLOOP_DIR2, "NEUROLOOP.md"), content: note }
+        { path: relative(process.cwd(), join4(NEUROLOOP_DIR2, "NEUROLOOP.md")), content: note }
       ]
     };
   },
@@ -1906,4 +2312,9 @@ var mode = new InteractiveMode(session, {
   initialMessage: process.argv[2]
 });
 await mode.run();
+console.log(`
+Skills loaded (${loadedSkills.length}):`);
+for (const skill of loadedSkills) {
+  console.log(`  ${skill.name}`);
+}
 //# sourceMappingURL=neuroloop.js.map
