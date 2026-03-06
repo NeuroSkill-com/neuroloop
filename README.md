@@ -21,6 +21,7 @@ NeuroLoop™ runs on top of the [pi coding agent](https://github.com/mariozechne
 - 🔍 **Prewarm cache** — kicks off expensive `neuroskill compare` runs proactively in the background so results are ready when needed
 - 🌐 **Web tools** — `web_fetch` and `web_search` available to the agent
 - 📅 **Daily calibration nudge** — reminds the user to run a calibration sequence at most once every 24 hours
+- 🔑 **In-app API key management** — add, list, or remove provider API keys at runtime with `/key` (no file editing required); keys are stored securely in `~/.neuroloop/auth.json`
 - 🤖 **Multi-provider model support** — Anthropic, OpenAI, Gemini, and all Ollama models (including `gpt-oss:20b` as the default local model)
 
 ---
@@ -61,6 +62,10 @@ NeuroLoop extends the pi TUI with:
 
 | Command | Description |
 |---|---|
+| `/key` | Interactive: choose a provider, paste your API key → saved to `~/.neuroloop/auth.json` |
+| `/key list` | Show all supported providers and which ones are currently configured |
+| `/key remove` | Interactive: pick a stored key to delete |
+| `/key remove <id>` | Directly remove a specific provider key (e.g. `/key remove google`) |
 | `/exg` | Show a full EXG snapshot in the chat |
 | `/exg on` | Re-enable the live EXG panel and reconnect WebSocket |
 | `/exg off` | Disable the live EXG panel and disconnect WebSocket |
@@ -158,6 +163,42 @@ Agent data is stored under `~/.neuroloop/` (sessions, auth, settings, models).
 ---
 
 ## Configuration
+
+### API Keys
+
+The quickest way to add an API key is the built-in `/key` command:
+
+```
+/key               # interactive provider picker → paste key → done
+/key list          # see what is configured
+/key remove        # interactive removal
+/key remove google # remove a specific provider directly
+```
+
+Keys are stored in `~/.neuroloop/auth.json`. Supported providers:
+
+| Provider | ID | Environment variable |
+|---|---|---|
+| Google Gemini | `google` | `GEMINI_API_KEY` |
+| Anthropic (Claude) | `anthropic` | `ANTHROPIC_API_KEY` |
+| OpenAI (GPT) | `openai` | `OPENAI_API_KEY` |
+| Mistral AI | `mistral` | `MISTRAL_API_KEY` |
+| Groq | `groq` | `GROQ_API_KEY` |
+| xAI (Grok) | `xai` | `XAI_API_KEY` |
+| OpenRouter | `openrouter` | `OPENROUTER_API_KEY` |
+| Cerebras | `cerebras` | `CEREBRAS_API_KEY` |
+
+You can also set keys via environment variables or by editing `~/.neuroloop/auth.json` directly:
+
+```json
+{
+  "google":    { "type": "api_key", "key": "AIza..." },
+  "anthropic": { "type": "api_key", "key": "sk-ant-..." },
+  "openai":    { "type": "api_key", "key": "sk-..." }
+}
+```
+
+After adding a key, switch to a model from that provider with `/model` (`Ctrl+L`).
 
 ### Models
 

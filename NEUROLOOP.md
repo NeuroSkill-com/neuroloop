@@ -51,6 +51,22 @@ system prompt when the user's message matches the skill's domain.
 
 ---
 
+## Slash Commands
+
+| Command | Description |
+|---|---|
+| `/key` | Interactive: choose a provider, paste your API key → saved to `~/.neuroloop/auth.json` |
+| `/key list` | Show all supported providers and which ones are configured |
+| `/key remove` | Interactive: pick a stored key to delete |
+| `/key remove <id>` | Directly remove a specific provider key (e.g. `/key remove google`) |
+| `/exg` | Show a full EXG snapshot in the chat |
+| `/exg on` / `/exg off` | Enable or disable the live EXG footer panel |
+| `/exg <seconds>` | Change the WebSocket poll interval |
+| `/exg port <n>` | Connect to the NeuroSkill™ server on a different port |
+| `/neuro <cmd> [args…]` | Run any neuroskill subcommand directly |
+
+---
+
 ## How Contextual Loading Works
 
 On every user message, the harness:

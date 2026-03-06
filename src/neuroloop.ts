@@ -10,6 +10,9 @@
  *  3. Register a message renderer for "neuroskill-status" custom messages so
  *     they display with the same unstyled Markdown look as assistant replies.
  *  4. Status bar indicator.
+ *  5. /key command — add, list, and remove API provider keys stored in
+ *     ~/.neuroloop/auth.json (supports Gemini, Anthropic, OpenAI, Mistral,
+ *     Groq, xAI, OpenRouter, Cerebras and any custom provider).
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -24,8 +27,12 @@ import type { TUI } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { getMarkdownTheme } from "@mariozechner/pi-coding-agent";
 
-declare const __NEUROLOOP_VERSION__: string;
+declare const __NEUROLOOP_VERSION__: string | undefined;
 import type { ExtensionAPI, Theme, ThemeColor, ToolDefinition } from "@mariozechner/pi-coding-agent";
+
+const _pkgVersion: string =
+	(typeof __NEUROLOOP_VERSION__ !== "undefined" ? __NEUROLOOP_VERSION__ : undefined) ??
+	(JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../package.json"), "utf8")) as { version: string }).version;
 
 import WS from "ws";
 import { runNeuroSkill, selectContextualData, warmCompareInBackground } from "./neuroskill/index.ts";
@@ -578,6 +585,7 @@ Available commands and typical args:
 			["shift+tab", "think"],
 			["ctrl+l",    "model"],
 			["ctrl+o",    "tools"],
+			["/key",      "api key"],
 			["/exg",      "exg"],
 			["!",         "shell"],
 		];
@@ -589,7 +597,7 @@ Available commands and typical args:
 
 				// ── row 1: ◆ brand ─────────────────────────────────────────
 				const logo = theme.fg("accent", "◆") + " " + theme.bold("neuroloop")
-					+ theme.fg("dim", ` v${__NEUROLOOP_VERSION__}`);
+					+ theme.fg("dim", ` v${_pkgVersion}`);
 				lines.push(truncateToWidth(logo, width));
 
 				// ── row 2: keybinding hints ─────────────────────────────────
@@ -842,7 +850,122 @@ Available commands and typical args:
 		if (exgEnabled && !exgWs) connectExgWs();
 	});
 
-	// ── 4e. /exg — snapshot or live-panel control ─────────────────────────────
+	// ── 4e. /key — add / list / remove API provider keys ────────────────────
+	//
+	//  /key              → interactive: pick provider, enter API key
+	//  /key list         → show which providers are configured
+	//  /key remove       → interactive: pick a configured provider to remove
+	//  /key remove <id>  → directly remove a specific provider key
+
+	/** Known API-key providers with their auth.json id and display name. */
+	const KEY_PROVIDERS: Array<{ id: string; displayName: string; envVar: string }> = [
+		{ id: "google",     displayName: "Google Gemini",      envVar: "GEMINI_API_KEY"      },
+		{ id: "anthropic",  displayName: "Anthropic (Claude)", envVar: "ANTHROPIC_API_KEY"   },
+		{ id: "openai",     displayName: "OpenAI (GPT)",       envVar: "OPENAI_API_KEY"      },
+		{ id: "mistral",    displayName: "Mistral AI",         envVar: "MISTRAL_API_KEY"     },
+		{ id: "groq",       displayName: "Groq",               envVar: "GROQ_API_KEY"        },
+		{ id: "xai",        displayName: "xAI (Grok)",         envVar: "XAI_API_KEY"         },
+		{ id: "openrouter", displayName: "OpenRouter",         envVar: "OPENROUTER_API_KEY"  },
+		{ id: "cerebras",   displayName: "Cerebras",           envVar: "CEREBRAS_API_KEY"    },
+	];
+
+	pi.registerCommand("key", {
+		description: "Manage API provider keys · /key [list|remove [<provider>]]",
+		handler: async (args, handlerCtx) => {
+			const authStorage = handlerCtx.modelRegistry.authStorage;
+			const parts = args.trim().split(/\s+/).filter(Boolean);
+			const sub   = parts[0]?.toLowerCase() ?? "";
+
+			// ── list ─────────────────────────────────────────────────────────
+			if (sub === "list") {
+				const lines: string[] = ["Configured API providers:"];
+				for (const p of KEY_PROVIDERS) {
+					const stored = authStorage.has(p.id);
+					const envSet = !!process.env[p.envVar];
+					const status = stored ? "✓ stored" : envSet ? "  (env)" : "  –";
+					lines.push(`  ${status}  ${p.displayName}  (id: ${p.id})`);
+				}
+				// Also list any stored providers outside the known list
+				const storedAll = authStorage.list();
+				const knownIds  = new Set(KEY_PROVIDERS.map((p) => p.id));
+				for (const id of storedAll) {
+					if (!knownIds.has(id)) lines.push(`  ✓ stored  ${id}  (custom)`);
+				}
+				handlerCtx.ui.notify(lines.join("\n"), "info");
+				return;
+			}
+
+			// ── remove ────────────────────────────────────────────────────────
+			if (sub === "remove") {
+				const targetId = parts[1]?.toLowerCase();
+				let providerId: string | undefined;
+
+				if (targetId) {
+					providerId = targetId;
+				} else {
+					// Interactive: pick from stored providers
+					const storedIds = authStorage.list();
+					if (!storedIds.length) {
+						handlerCtx.ui.notify("No API keys stored — nothing to remove.", "warning");
+						return;
+					}
+					const choices = storedIds.map((id) => {
+						const known = KEY_PROVIDERS.find((p) => p.id === id);
+						return known ? `${known.displayName} (${id})` : id;
+					});
+					const choice = await handlerCtx.ui.select("Remove API Key", choices);
+					if (!choice) return; // user cancelled
+					// Extract the id: if it's "Display (id)" take the part in parens
+					const match = choice.match(/\(([^)]+)\)$/);
+					providerId = match ? match[1] : choice;
+				}
+
+				if (!authStorage.has(providerId)) {
+					handlerCtx.ui.notify(`No stored key for provider "${providerId}".`, "warning");
+					return;
+				}
+				authStorage.remove(providerId);
+				handlerCtx.ui.notify(`Removed API key for "${providerId}".`, "info");
+				return;
+			}
+
+			// ── add (default, no sub-command) ─────────────────────────────────
+			// Build display list: mark already-configured providers
+			const choices = KEY_PROVIDERS.map((p) => {
+				const configured = authStorage.has(p.id) || !!process.env[p.envVar];
+				const mark = configured ? "✓ " : "  ";
+				return `${mark}${p.displayName}`;
+			});
+
+			const choice = await handlerCtx.ui.select("Select API Provider", choices);
+			if (!choice) return; // user cancelled
+
+			// Map back to the provider
+			const idx      = choices.indexOf(choice);
+			const provider = KEY_PROVIDERS[idx];
+			if (!provider) return;
+
+			// Prompt for the key
+			const apiKey = await handlerCtx.ui.input(
+				`Enter API key for ${provider.displayName}`,
+				`Paste your ${provider.envVar} here`,
+			);
+			if (!apiKey?.trim()) {
+				handlerCtx.ui.notify("No key entered — cancelled.", "warning");
+				return;
+			}
+
+			// Persist to ~/.neuroloop/auth.json
+			authStorage.set(provider.id, { type: "api_key", key: apiKey.trim() });
+			handlerCtx.ui.notify(
+				`✓ API key saved for ${provider.displayName}.\n` +
+				`Switch to a ${provider.displayName} model with /model or Ctrl+L.`,
+				"info",
+			);
+		},
+	});
+
+	// ── 4f. /exg — snapshot or live-panel control ─────────────────────────────
 	//
 	//  /exg              → show full snapshot in chat
 	//  /exg on           → re-enable live panel + reconnect WS
@@ -915,7 +1038,7 @@ Available commands and typical args:
 		},
 	});
 
-	// ── 4f. /neuro — run any neuroskill subcommand ────────────────────────────
+	// ── 4g. /neuro — run any neuroskill subcommand ────────────────────────────
 
 	pi.registerCommand("neuro", {
 		description: "Run a neuroskill subcommand: /neuro <cmd> [args…]",
@@ -939,7 +1062,7 @@ Available commands and typical args:
 		},
 	});
 
-	// ── 4g. ctrl+shift+e — quick EXG snapshot ────────────────────────────────
+	// ── 4h. ctrl+shift+e — quick EXG snapshot ────────────────────────────────
 
 	pi.registerShortcut("ctrl+shift+e", {
 		description: "Show live EXG snapshot in chat",

@@ -1443,6 +1443,7 @@ ${step.instruction}`);
 };
 
 // src/neuroloop.ts
+var _pkgVersion = (true ? "0.0.7" : void 0) ?? JSON.parse(readFileSync3(join3(dirname3(fileURLToPath2(import.meta.url)), "../package.json"), "utf8")).version;
 var AGENT_DIR = join3(homedir2(), ".neuroskill");
 var NEUROLOOP_DIR = join3(dirname3(fileURLToPath2(import.meta.url)), "..");
 var NEUROLOOP_MD_PATH = join3(NEUROLOOP_DIR, "NEUROLOOP.md");
@@ -1864,6 +1865,7 @@ Available commands and typical args:
       ["shift+tab", "think"],
       ["ctrl+l", "model"],
       ["ctrl+o", "tools"],
+      ["/key", "api key"],
       ["/exg", "exg"],
       ["!", "shell"]
     ];
@@ -1872,7 +1874,7 @@ Available commands and typical args:
       },
       render(width) {
         const lines = [];
-        const logo = theme.fg("accent", "\u25C6") + " " + theme.bold("neuroloop") + theme.fg("dim", ` v${"0.0.7"}`);
+        const logo = theme.fg("accent", "\u25C6") + " " + theme.bold("neuroloop") + theme.fg("dim", ` v${_pkgVersion}`);
         lines.push(truncateToWidth(logo, width));
         const hintStr = hints.map(([k, a]) => theme.fg("dim", "[") + theme.fg("muted", k) + theme.fg("dim", "] ") + theme.fg("dim", a)).join(theme.fg("dim", "  "));
         lines.push(truncateToWidth(" " + hintStr, width));
@@ -2065,6 +2067,92 @@ Available commands and typical args:
   });
   pi.on("before_agent_start", () => {
     if (exgEnabled && !exgWs) connectExgWs();
+  });
+  const KEY_PROVIDERS = [
+    { id: "google", displayName: "Google Gemini", envVar: "GEMINI_API_KEY" },
+    { id: "anthropic", displayName: "Anthropic (Claude)", envVar: "ANTHROPIC_API_KEY" },
+    { id: "openai", displayName: "OpenAI (GPT)", envVar: "OPENAI_API_KEY" },
+    { id: "mistral", displayName: "Mistral AI", envVar: "MISTRAL_API_KEY" },
+    { id: "groq", displayName: "Groq", envVar: "GROQ_API_KEY" },
+    { id: "xai", displayName: "xAI (Grok)", envVar: "XAI_API_KEY" },
+    { id: "openrouter", displayName: "OpenRouter", envVar: "OPENROUTER_API_KEY" },
+    { id: "cerebras", displayName: "Cerebras", envVar: "CEREBRAS_API_KEY" }
+  ];
+  pi.registerCommand("key", {
+    description: "Manage API provider keys \xB7 /key [list|remove [<provider>]]",
+    handler: async (args, handlerCtx) => {
+      const authStorage2 = handlerCtx.modelRegistry.authStorage;
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      const sub = parts[0]?.toLowerCase() ?? "";
+      if (sub === "list") {
+        const lines = ["Configured API providers:"];
+        for (const p of KEY_PROVIDERS) {
+          const stored = authStorage2.has(p.id);
+          const envSet = !!process.env[p.envVar];
+          const status = stored ? "\u2713 stored" : envSet ? "  (env)" : "  \u2013";
+          lines.push(`  ${status}  ${p.displayName}  (id: ${p.id})`);
+        }
+        const storedAll = authStorage2.list();
+        const knownIds = new Set(KEY_PROVIDERS.map((p) => p.id));
+        for (const id of storedAll) {
+          if (!knownIds.has(id)) lines.push(`  \u2713 stored  ${id}  (custom)`);
+        }
+        handlerCtx.ui.notify(lines.join("\n"), "info");
+        return;
+      }
+      if (sub === "remove") {
+        const targetId = parts[1]?.toLowerCase();
+        let providerId;
+        if (targetId) {
+          providerId = targetId;
+        } else {
+          const storedIds = authStorage2.list();
+          if (!storedIds.length) {
+            handlerCtx.ui.notify("No API keys stored \u2014 nothing to remove.", "warning");
+            return;
+          }
+          const choices2 = storedIds.map((id) => {
+            const known = KEY_PROVIDERS.find((p) => p.id === id);
+            return known ? `${known.displayName} (${id})` : id;
+          });
+          const choice2 = await handlerCtx.ui.select("Remove API Key", choices2);
+          if (!choice2) return;
+          const match = choice2.match(/\(([^)]+)\)$/);
+          providerId = match ? match[1] : choice2;
+        }
+        if (!authStorage2.has(providerId)) {
+          handlerCtx.ui.notify(`No stored key for provider "${providerId}".`, "warning");
+          return;
+        }
+        authStorage2.remove(providerId);
+        handlerCtx.ui.notify(`Removed API key for "${providerId}".`, "info");
+        return;
+      }
+      const choices = KEY_PROVIDERS.map((p) => {
+        const configured = authStorage2.has(p.id) || !!process.env[p.envVar];
+        const mark = configured ? "\u2713 " : "  ";
+        return `${mark}${p.displayName}`;
+      });
+      const choice = await handlerCtx.ui.select("Select API Provider", choices);
+      if (!choice) return;
+      const idx = choices.indexOf(choice);
+      const provider = KEY_PROVIDERS[idx];
+      if (!provider) return;
+      const apiKey = await handlerCtx.ui.input(
+        `Enter API key for ${provider.displayName}`,
+        `Paste your ${provider.envVar} here`
+      );
+      if (!apiKey?.trim()) {
+        handlerCtx.ui.notify("No key entered \u2014 cancelled.", "warning");
+        return;
+      }
+      authStorage2.set(provider.id, { type: "api_key", key: apiKey.trim() });
+      handlerCtx.ui.notify(
+        `\u2713 API key saved for ${provider.displayName}.
+Switch to a ${provider.displayName} model with /model or Ctrl+L.`,
+        "info"
+      );
+    }
   });
   pi.registerCommand("exg", {
     description: "EXG panel \xB7 /exg [on|off|<seconds>|port <n>]",
