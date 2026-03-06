@@ -1443,7 +1443,7 @@ ${step.instruction}`);
 };
 
 // src/neuroloop.ts
-var _pkgVersion = (true ? "0.0.7" : void 0) ?? JSON.parse(readFileSync3(join3(dirname3(fileURLToPath2(import.meta.url)), "../package.json"), "utf8")).version;
+var _pkgVersion = (true ? "0.0.8" : void 0) ?? JSON.parse(readFileSync3(join3(dirname3(fileURLToPath2(import.meta.url)), "../package.json"), "utf8")).version;
 var AGENT_DIR = join3(homedir2(), ".neuroskill");
 var NEUROLOOP_DIR = join3(dirname3(fileURLToPath2(import.meta.url)), "..");
 var NEUROLOOP_MD_PATH = join3(NEUROLOOP_DIR, "NEUROLOOP.md");
