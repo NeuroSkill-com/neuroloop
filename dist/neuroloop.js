@@ -1990,7 +1990,7 @@ Available commands and typical args:
       ["ctrl+o", "tools"],
       ["/key", "api key"],
       ["/exg", "exg"],
-      ["/session", "metrics"],
+      ["/exg-session", "metrics"],
       ["/sleep", "sleep"],
       ["!", "shell"]
     ];
@@ -2377,8 +2377,8 @@ ${result.text}
       handlerCtx.ui.notify(result.error ?? "neuroskill command failed", "error");
     }
   }
-  pi.registerCommand("session", {
-    description: "Session metrics \xB7 /session [index]  (0 = latest)",
+  pi.registerCommand("exg-session", {
+    description: "Session metrics \xB7 /exg-session [index]  (0 = latest)",
     handler: async (args, handlerCtx) => {
       const idx = args.trim() || "0";
       await neuroCmd(["session", idx], `\u{1F4CA} Session ${idx}`, handlerCtx);

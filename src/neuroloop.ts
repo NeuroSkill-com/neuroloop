@@ -630,7 +630,7 @@ Available commands and typical args:
 			["ctrl+o",    "tools"],
 			["/key",      "api key"],
 			["/exg",      "exg"],
-			["/session",  "metrics"],
+			["/exg-session",  "metrics"],
 			["/sleep",    "sleep"],
 			["!",         "shell"],
 		];
@@ -1110,7 +1110,7 @@ Available commands and typical args:
 	// ── 4g′. Convenience neuroskill commands ──────────────────────────────────
 	//
 	// Thin wrappers around common neuroskill subcommands so users don't have to
-	// remember "/neuro session 0" — they just type "/session".
+	// remember "/neuro session 0" — they just type "/exg-session".
 	//
 	// Helper: run neuroskill args, display result in chat or notify on error.
 	async function neuroCmd(
@@ -1131,9 +1131,9 @@ Available commands and typical args:
 		}
 	}
 
-	// /session [index] — current or Nth session metrics
-	pi.registerCommand("session", {
-		description: "Session metrics · /session [index]  (0 = latest)",
+	// /exg-session [index] — current or Nth session metrics
+	pi.registerCommand("exg-session", {
+		description: "Session metrics · /exg-session [index]  (0 = latest)",
 		handler: async (args, handlerCtx) => {
 			const idx = args.trim() || "0";
 			await neuroCmd(["session", idx], `📊 Session ${idx}`, handlerCtx);
