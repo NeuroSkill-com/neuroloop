@@ -59,6 +59,16 @@ export interface Signals {
 	symbiosis: boolean;
 	awe: boolean;
 	identity: boolean;
+	// Health & HealthKit
+	health: boolean;
+	// Screenshots & visual memory
+	screenshots: boolean;
+	// Proactive hooks & automations
+	hooks: boolean;
+	// Do Not Disturb
+	dnd: boolean;
+	// On-device LLM
+	llm: boolean;
 	// Protocol intent
 	protocols: boolean;
 }
@@ -571,6 +581,69 @@ export function detectSignals(lp: string): Signals {
 			/finding.{0,10}(myself|yourself|purpose|meaning.{0,10}(self|who))/,
 			/values.{0,15}(align|match|live|compass|true)|living.{0,10}my.?values/,
 			/\bcharacter\b.{0,15}(build|grow|true|who|define)|defining.{0,10}(who|myself)/,
+		),
+
+		/**
+		 * Health / HealthKit — general health queries, vitals, Apple Health data,
+		 * medical metrics beyond what sport/hrv/sleep already cover.
+		 */
+		health: any(
+			lp,
+			/\bhealth\b.{0,15}(data|kit|summary|report|stats?|metric|check)/,
+			/\bhealthkit\b|\bapple.?health\b|\bhealth.?app\b/,
+			/\bvitals?\b|\bbiometric\b|\bblood.?pressure\b|\bspo2\b|\boxygen\b/,
+			/\bvo2.?max\b|\bresting.?heart\b|\bhealth.?score\b/,
+			/\bmedical\b.{0,15}(data|metric|history|record)/,
+			/\bwellness\b.{0,15}(data|score|metric|report|summary)/,
+		),
+
+		/**
+		 * Screenshots & visual memory — screen captures, what was on screen,
+		 * OCR search, visual history, CLIP image search.
+		 */
+		screenshots: any(
+			lp,
+			/\bscreenshot(s)?\b|\bscreen.?capture\b|\bscreen.?grab\b/,
+			/what.{0,15}(was|were).{0,15}(on|at).{0,10}screen/,
+			/\bocr\b|\bscreen.?text\b|\bvisual.?history\b|\bvisual.?memory\b/,
+			/\bclip\b.{0,15}(search|image|embed|similar)/,
+			/what.{0,10}(was|were).{0,10}(i|you).{0,10}(looking|viewing|reading|watching)/,
+			/screen.{0,15}(at|around|during|near).{0,15}(time|moment|session)/,
+		),
+
+		/**
+		 * Proactive hooks — hook rules, triggers, automations, alerts, scenarios.
+		 */
+		hooks: any(
+			lp,
+			/\bhook(s)?\b.{0,15}(rule|trigger|list|add|remove|creat|enabl|disabl|updat|suggest|log)/,
+			/\bproactive\b.{0,15}(hook|alert|trigger|rule|automation)/,
+			/\bhook\b.{0,15}(scenario|keyword|threshold)/,
+			/\btrigger\b.{0,15}(rule|alert|hook|automation|when|if)/,
+			/\bautomat(e|ion|ic)\b.{0,15}(alert|hook|trigger|notif)/,
+		),
+
+		/**
+		 * Do Not Disturb — DND state, focus modes, interruption blocking.
+		 */
+		dnd: any(
+			lp,
+			/\bdnd\b|\bdo.?not.?disturb\b/,
+			/\bfocus.?mode\b.{0,15}(on|off|status|enable|disable|block)/,
+			/\bsilence\b.{0,15}(notif|alert|interrupt)/,
+			/block.{0,15}(notif|interrupt|distract)/,
+		),
+
+		/**
+		 * On-device LLM — local model management, inference, chat, downloads.
+		 */
+		llm: any(
+			lp,
+			/\bllm\b.{0,15}(status|start|stop|model|catalog|download|chat|log|fit)/,
+			/\blocal\b.{0,15}(model|llm|inference|ai)/,
+			/\bon.?device\b.{0,15}(model|llm|ai|inference)/,
+			/\bgguf\b|\bmodel\b.{0,15}(download|catalog|select|delete|load)/,
+			/\bvision\b.{0,15}(projector|mmproj|model)/,
 		),
 
 		/**

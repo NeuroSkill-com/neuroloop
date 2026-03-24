@@ -1,0 +1,76 @@
+# Changelog
+
+All notable changes to NeuroLoop are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [0.0.9] — 2026-03-24
+
+### Added
+
+- **16 convenience slash commands** for direct neuroskill queries — no more
+  remembering `/neuro session 0` when `/session` will do:
+  - `/session [index]` — current or Nth session metrics (0 = latest)
+  - `/sessions` — list all recorded EXG sessions
+  - `/sleep [index]` — sleep staging summary
+  - `/compare` — compare last two sessions (warns about ~60 s cost)
+  - `/health [sub]` — HealthKit data (`sleep`, `workouts`, `hr`, `steps`, `summary`, `metrics`)
+  - `/label <text>` — create a timestamped EXG annotation (`--context` supported)
+  - `/labels <query>` — semantic search over EXG annotations (`--k` supported)
+  - `/hooks [sub]` — proactive hook rules (`list`, `add`, `remove`, `enable`, `disable`, `log`)
+  - `/dnd [on|off]` — Do Not Disturb status / toggle
+  - `/say <text>` — speak text aloud via on-device TTS (`--voice` supported)
+  - `/notify <title> [body]` — send an OS notification
+  - `/calibrate` — start EXG calibration sequence
+  - `/llm [sub]` — on-device LLM management (`status`, `start`, `stop`, `catalog`, `select`, `chat`)
+  - `/screenshots [query]` — search screenshots (OCR / CLIP) or get EEG-session screenshots
+  - `/timer` — start focus timer
+  - `/umap` — 3D UMAP projection of EXG data
+  - `/listen [--seconds n]` — stream live EXG broadcast events
+- Internal `neuroCmd` helper to reduce boilerplate across all convenience commands.
+- Header hints now show `/session` and `/sleep` for discoverability.
+- `CHANGELOG.md` — this file.
+
+### Changed
+
+- Updated `README.md` with the full convenience command table and updated citation version.
+- Updated `NEUROLOOP.md` skill index with all new slash commands.
+
+---
+
+## [0.0.8] — 2026-03-23
+
+### Added
+
+- `/neuro <cmd> [args…]` — generic slash command to run any neuroskill subcommand.
+- `/exg` — EXG panel control (`on`, `off`, poll interval, port override).
+- `/key` — in-app API key management (add, list, remove).
+- `ctrl+shift+e` keyboard shortcut for quick EXG snapshot.
+- Live WebSocket footer with real-time EXG scores and EEG band bars.
+- Custom TUI header with brand logo and keybinding hints.
+- Daily calibration nudge (at most once per 24 hours).
+- `neuroskill-evidence` skill for scientific references.
+- `neuroskill-screenshots` skill for visual memory / OCR / CLIP search.
+- `neuroskill-hooks` skill for proactive hook rules.
+- `neuroskill-dnd` skill for Do Not Disturb automation.
+- `neuroskill-llm` skill for on-device LLM management.
+- HealthKit integration (`health` command family).
+
+---
+
+## [0.0.7] — 2026-03-22
+
+### Added
+
+- Initial public release.
+- Live EXG context injection on every LLM turn.
+- 30+ domain signal detectors (stress, sleep, focus, grief, awe, philosophy, HRV, etc.).
+- Guided protocol engine with 100+ mind-body practices.
+- Auto-labelling of notable mental, emotional, and philosophical moments.
+- Persistent agent memory (`~/.neuroskill/memory.md`).
+- Prewarm cache for expensive `neuroskill compare` runs.
+- `web_fetch` and `web_search` tools.
+- Multi-provider model support (Anthropic, OpenAI, Gemini, Ollama).

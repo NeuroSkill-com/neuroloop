@@ -72,6 +72,23 @@ NeuroLoop extends the pi TUI with:
 | `/exg <seconds>` | Change the status poll interval (e.g. `/exg 0.5`) |
 | `/exg port <n>` | Connect to the NeuroSkill™ server on a different port |
 | `/neuro <cmd> [args…]` | Run any neuroskill subcommand directly (output shown in chat) |
+| `/session [index]` | Current or Nth session metrics (0 = latest) |
+| `/sessions` | List all recorded EXG sessions |
+| `/sleep [index]` | Sleep staging summary |
+| `/compare` | Compare last two sessions (~60 s, uses cache) |
+| `/health [sub]` | HealthKit data — `sleep`, `workouts`, `hr`, `steps`, `summary`, `metrics` |
+| `/label <text>` | Create a timestamped EXG annotation (supports `--context`) |
+| `/labels <query>` | Semantic search over EXG annotations (supports `--k`) |
+| `/hooks [sub]` | Proactive hook rules — `list`, `add`, `remove`, `enable`, `disable`, `log` |
+| `/dnd [on\|off]` | Do Not Disturb status / toggle |
+| `/say <text>` | Speak text aloud via on-device TTS (supports `--voice`) |
+| `/notify <title> [body]` | Send an OS notification |
+| `/calibrate` | Start EXG calibration sequence |
+| `/llm [sub]` | On-device LLM — `status`, `start`, `stop`, `catalog`, `select`, `chat` |
+| `/screenshots [query]` | Search screenshots (OCR / CLIP) or get EEG-session screenshots |
+| `/timer` | Start focus timer |
+| `/umap` | 3D UMAP projection of EXG data |
+| `/listen [--seconds n]` | Stream live EXG broadcast events |
 
 ### Keyboard Shortcuts
 
@@ -225,7 +242,7 @@ If you use NeuroLoop™ in academic work, please cite it as:
   author       = {Nataliya Kosmyna and Eugene Hauptmann},
   title        = {{NeuroLoop™: An EXG-Aware AI Companion Powered by Real-Time Brainwave Analysis}},
   year         = {2026},
-  version      = {0.0.7},
+  version      = {0.0.9},
   url          = {https://github.com/NeuroSkill-com/neuroloop}
 }
 ```

@@ -1,6 +1,6 @@
 {
   "name": "neuroloop",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "author": "NeuroSkill team (https://neuroskill.com)",
   "contributors": [
     "Nataliya Kosmyna <nkosmyna@mit.edu>",
@@ -33,8 +33,8 @@
     "prepublishOnly": "node build.mjs"
   },
   "dependencies": {
-    "@mariozechner/pi-coding-agent": "^0.55.4",
-    "@mariozechner/pi-tui": "^0.55.4",
+    "@mariozechner/pi-coding-agent": "^0.62.0",
+    "@mariozechner/pi-tui": "^0.62.0",
     "@sinclair/typebox": "^0.34.48",
     "ws": "^8.0.0"
   },

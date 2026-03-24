@@ -372,14 +372,57 @@ Available commands and typical args:
   status                             → full device/session/scores snapshot
   session [index]                    → session metrics + trends (0=latest)
   sessions                           → list all recorded sessions
+  say "text" [--voice <name>]        → speak text aloud via on-device TTS
+  notify "title" ["body"]            → show a native OS notification
+  label <text> [--context <ctx>]     → create a timestamped annotation
   search-labels <query>              → semantic search over EXG annotations
+  search-images <query>              → search screenshots by OCR text
+  search-images --by-image <path>    → search screenshots by visual similarity (CLIP)
+  screenshots-around --at <utc>      → find screenshots near a timestamp (±window)
+  screenshots-for-eeg                → find screenshots captured during an EEG session
+  eeg-for-screenshots <query>        → find EEG data & labels near screenshot matches
   interactive <keyword>              → 4-layer cross-modal graph search
-  label <text>                       → create a timestamped annotation
   search [--k <n>]                   → ANN EXG-similarity search
-  compare                            → ⚠ EXPENSIVE (~60 s, heavy compute). Avoid unless the user explicitly asks to compare sessions. Prefer session/sessions for trend questions. Use the prewarm tool first when compare will be needed soon.
+  compare                            → ⚠ EXPENSIVE (~60 s). Avoid unless explicitly asked. Use the prewarm tool first.
   sleep [index]                      → sleep staging summary
+  sleep-schedule                     → show current sleep schedule
+  sleep-schedule set [--bedtime HH:MM] [--wake HH:MM] [--preset <id>] → update sleep schedule
+  calibrate                          → open calibration window and start
+  calibrations                       → list all calibration profiles
+  calibrations create "name" --actions "L1:20,L2:20" [--loops N] [--break N]
+  calibrations update <id-or-name> [--name ...] [--actions ...] [--loops N]
+  calibrations delete <id-or-name>   → delete a calibration profile
+  timer                              → open focus-timer and start work phase
   umap                               → 3D UMAP projection
   listen [--seconds <n>]             → stream broadcast events
+  hooks                              → list proactive hook rules + metadata
+  hooks list                         → list raw hook rules
+  hooks add <name> --keywords "..." --scenario <s> --threshold <n>
+  hooks remove <name>                → delete a hook
+  hooks enable <name> / disable <name> → toggle a hook
+  hooks update <name> [--keywords ...] [--threshold ...]
+  hooks suggest "kw1,kw2"            → suggest threshold from real data
+  hooks log [--limit N --offset M]   → paginated hook trigger log
+  health                             → HealthKit summary (last 24h)
+  health summary [--start --end]     → aggregate counts for a time range
+  health sleep [--start --end]       → Apple Health sleep samples
+  health workouts [--start --end]    → workout sessions
+  health hr [--start --end]          → heart rate samples
+  health steps [--start --end]       → step counts
+  health metrics --metric-type <t>   → scalar health metrics (hrv, vo2Max, …)
+  health metric-types                → list all stored metric types
+  dnd                                → DND automation status
+  dnd on / dnd off                   → force-enable/disable DND
+  llm status                         → LLM server status
+  llm start / llm stop               → load/unload model
+  llm catalog                        → model catalog with download states
+  llm add <repo> <filename> [--mmproj <file>] → add external model
+  llm select <filename>              → set active text model
+  llm mmproj <filename|none>         → set active vision projector
+  llm download/pause/resume/cancel/delete <filename>
+  llm downloads                      → list all downloads with progress
+  llm fit                            → check which models fit in RAM/VRAM
+  llm chat "message" [--image a.jpg] → single-shot LLM chat (supports vision)
   raw <json>                         → send arbitrary JSON to the server`,
 		parameters: Type.Object({
 			command: Type.String({ description: "The neuroskill subcommand to run." }),
@@ -587,6 +630,8 @@ Available commands and typical args:
 			["ctrl+o",    "tools"],
 			["/key",      "api key"],
 			["/exg",      "exg"],
+			["/session",  "metrics"],
+			["/sleep",    "sleep"],
 			["!",         "shell"],
 		];
 
@@ -1059,6 +1104,215 @@ Available commands and typical args:
 			} else {
 				handlerCtx.ui.notify(result.text || "neuroskill command failed", "error");
 			}
+		},
+	});
+
+	// ── 4g′. Convenience neuroskill commands ──────────────────────────────────
+	//
+	// Thin wrappers around common neuroskill subcommands so users don't have to
+	// remember "/neuro session 0" — they just type "/session".
+	//
+	// Helper: run neuroskill args, display result in chat or notify on error.
+	async function neuroCmd(
+		cmdArgs: string[],
+		title: string,
+		handlerCtx: { ui: { notify(msg: string, level: string): void } },
+	): Promise<void> {
+		const result = await runNeuroSkill(cmdArgs);
+		if (result.ok && result.text) {
+			pi.sendMessage({
+				customType: NEUROSKILL_STATUS_TYPE,
+				content: `## ${title}\n\`\`\`\n${result.text}\n\`\`\``,
+				display: true,
+				details: undefined,
+			});
+		} else {
+			handlerCtx.ui.notify(result.error ?? "neuroskill command failed", "error");
+		}
+	}
+
+	// /session [index] — current or Nth session metrics
+	pi.registerCommand("session", {
+		description: "Session metrics · /session [index]  (0 = latest)",
+		handler: async (args, handlerCtx) => {
+			const idx = args.trim() || "0";
+			await neuroCmd(["session", idx], `📊 Session ${idx}`, handlerCtx);
+		},
+	});
+
+	// /sessions — list all recorded sessions
+	pi.registerCommand("sessions", {
+		description: "List all recorded EXG sessions",
+		handler: async (_args, handlerCtx) => {
+			await neuroCmd(["sessions"], "📋 Sessions", handlerCtx);
+		},
+	});
+
+	// /sleep [index] — sleep staging summary
+	pi.registerCommand("sleep", {
+		description: "Sleep staging · /sleep [index]",
+		handler: async (args, handlerCtx) => {
+			const parts = args.trim().split(/\s+/).filter(Boolean);
+			await neuroCmd(["sleep", ...parts], "😴 Sleep", handlerCtx);
+		},
+	});
+
+	// /compare — session comparison (uses cache / warns about cost)
+	pi.registerCommand("compare", {
+		description: "Compare last two sessions (slow ~60 s, uses cache)",
+		handler: async (_args, handlerCtx) => {
+			handlerCtx.ui.notify("Running compare — this may take up to 60 s …", "info");
+			await neuroCmd(["compare"], "🔀 Session Comparison", handlerCtx);
+		},
+	});
+
+	// /health [sub] — HealthKit data
+	pi.registerCommand("health", {
+		description: "HealthKit · /health [sleep|workouts|hr|steps|summary|metrics …]",
+		handler: async (args, handlerCtx) => {
+			const parts = args.trim().split(/\s+/).filter(Boolean);
+			await neuroCmd(["health", ...parts], "🏥 Health" + (parts.length ? ` — ${parts[0]}` : ""), handlerCtx);
+		},
+	});
+
+	// /label <text> [--context <ctx>] — create a timestamped annotation
+	pi.registerCommand("label", {
+		description: "Label this EXG moment · /label <text> [--context <ctx>]",
+		handler: async (args, handlerCtx) => {
+			const text = args.trim();
+			if (!text) {
+				handlerCtx.ui.notify("Usage: /label <text> [--context <context>]", "warning");
+				return;
+			}
+			// Pass the whole arg string through shell-style so --context works
+			const parts = args.trim().split(/\s+/).filter(Boolean);
+			await neuroCmd(["label", ...parts], `⬡ Label`, handlerCtx);
+		},
+	});
+
+	// /labels <query> — semantic search over EXG annotations
+	pi.registerCommand("labels", {
+		description: "Search labels · /labels <query> [--k <n>]",
+		handler: async (args, handlerCtx) => {
+			const parts = args.trim().split(/\s+/).filter(Boolean);
+			if (!parts.length) {
+				handlerCtx.ui.notify("Usage: /labels <search query> [--k <n>]", "warning");
+				return;
+			}
+			await neuroCmd(["search-labels", ...parts], "🔍 Labels", handlerCtx);
+		},
+	});
+
+	// /hooks [sub] — proactive hook rules
+	pi.registerCommand("hooks", {
+		description: "Hooks · /hooks [list|add|remove|enable|disable|update|suggest|log]",
+		handler: async (args, handlerCtx) => {
+			const parts = args.trim().split(/\s+/).filter(Boolean);
+			await neuroCmd(["hooks", ...parts], "🪝 Hooks", handlerCtx);
+		},
+	});
+
+	// /dnd [on|off] — Do Not Disturb
+	pi.registerCommand("dnd", {
+		description: "Do Not Disturb · /dnd [on|off]",
+		handler: async (args, handlerCtx) => {
+			const parts = args.trim().split(/\s+/).filter(Boolean);
+			await neuroCmd(["dnd", ...parts], "🔕 DND", handlerCtx);
+		},
+	});
+
+	// /say <text> — speak aloud via on-device TTS
+	pi.registerCommand("say", {
+		description: "Speak text aloud · /say <text> [--voice <name>]",
+		handler: async (args, handlerCtx) => {
+			const text = args.trim();
+			if (!text) {
+				handlerCtx.ui.notify("Usage: /say <text> [--voice <name>]", "warning");
+				return;
+			}
+			const parts = args.trim().split(/\s+/).filter(Boolean);
+			const result = await runNeuroSkill(["say", ...parts]);
+			if (result.ok) {
+				handlerCtx.ui.notify("🔊 Speaking …", "info");
+			} else {
+				handlerCtx.ui.notify(result.error ?? "TTS failed", "error");
+			}
+		},
+	});
+
+	// /notify <title> [body] — send an OS notification
+	pi.registerCommand("notify", {
+		description: "OS notification · /notify <title> [body]",
+		handler: async (args, handlerCtx) => {
+			const text = args.trim();
+			if (!text) {
+				handlerCtx.ui.notify("Usage: /notify <title> [body]", "warning");
+				return;
+			}
+			const parts = args.trim().split(/\s+/).filter(Boolean);
+			const result = await runNeuroSkill(["notify", ...parts]);
+			if (result.ok) {
+				handlerCtx.ui.notify("📬 Notification sent", "info");
+			} else {
+				handlerCtx.ui.notify(result.error ?? "notify failed", "error");
+			}
+		},
+	});
+
+	// /calibrate — start calibration
+	pi.registerCommand("calibrate", {
+		description: "Start EXG calibration sequence",
+		handler: async (_args, handlerCtx) => {
+			await neuroCmd(["calibrate"], "🎯 Calibration", handlerCtx);
+		},
+	});
+
+	// /llm [sub] — on-device LLM management
+	pi.registerCommand("llm", {
+		description: "On-device LLM · /llm [status|start|stop|catalog|select|chat …]",
+		handler: async (args, handlerCtx) => {
+			const parts = args.trim().split(/\s+/).filter(Boolean);
+			if (!parts.length) parts.push("status");
+			await neuroCmd(["llm", ...parts], "🤖 LLM" + (parts.length ? ` — ${parts[0]}` : ""), handlerCtx);
+		},
+	});
+
+	// /screenshots [query] — search screenshots
+	pi.registerCommand("screenshots", {
+		description: "Search screenshots · /screenshots [query | --by-image <path>]",
+		handler: async (args, handlerCtx) => {
+			const parts = args.trim().split(/\s+/).filter(Boolean);
+			if (!parts.length) {
+				// Default: screenshots for current EEG session
+				await neuroCmd(["screenshots-for-eeg"], "📸 Screenshots (EEG session)", handlerCtx);
+			} else {
+				await neuroCmd(["search-images", ...parts], "📸 Screenshots", handlerCtx);
+			}
+		},
+	});
+
+	// /timer — start focus timer
+	pi.registerCommand("timer", {
+		description: "Start focus timer",
+		handler: async (_args, handlerCtx) => {
+			await neuroCmd(["timer"], "⏱️ Timer", handlerCtx);
+		},
+	});
+
+	// /umap — 3D UMAP projection
+	pi.registerCommand("umap", {
+		description: "3D UMAP projection of EXG data",
+		handler: async (_args, handlerCtx) => {
+			await neuroCmd(["umap"], "🗺️ UMAP", handlerCtx);
+		},
+	});
+
+	// /listen [--seconds <n>] — stream broadcast events
+	pi.registerCommand("listen", {
+		description: "Stream live EXG events · /listen [--seconds <n>]",
+		handler: async (args, handlerCtx) => {
+			const parts = args.trim().split(/\s+/).filter(Boolean);
+			await neuroCmd(["listen", ...parts], "📡 Live Stream", handlerCtx);
 		},
 	});
 

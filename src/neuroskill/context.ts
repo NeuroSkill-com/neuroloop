@@ -14,10 +14,12 @@ import { fileURLToPath } from "node:url";
 import { runNeuroSkill } from "./run.ts";
 import { detectSignals } from "./signals.ts";
 
-const PROTOCOLS_SKILL_PATH = join(
+const SKILLS_DIR = join(
 	dirname(fileURLToPath(import.meta.url)),
-	"..", "..", "skills", "neuroskill-protocols", "SKILL.md",
+	"..", "..", "skills", "skills",
 );
+
+const PROTOCOLS_SKILL_PATH = join(SKILLS_DIR, "neuroskill-protocols", "SKILL.md");
 
 interface TaskDef {
 	label: string;
@@ -108,6 +110,8 @@ export async function selectContextualData(prompt: string): Promise<string[]> {
 	// ─────────────────────────────────────────────────────────────────────────
 	if (s.sleep) {
 		enqueue("Sleep Staging (last 24 h)", "sleep");
+		enqueue("Sleep Schedule", "sleep-schedule");
+		enqueue("HealthKit Sleep", "health", "sleep");
 		searchLabels(
 			"Past Sleep Labels",
 			"sleep tired rest deep sleep rem restoration drowsy",
@@ -235,6 +239,9 @@ export async function selectContextualData(prompt: string): Promise<string[]> {
 	// 13. SPORTS & EXERCISE
 	// ─────────────────────────────────────────────────────────────────────────
 	if (s.sport) {
+		enqueue("HealthKit Workouts", "health", "workouts");
+		enqueue("HealthKit Steps", "health", "steps");
+		enqueue("HealthKit Heart Rate", "health", "hr");
 		searchLabels(
 			"Past Exercise & Sport Labels",
 			"exercise workout training sport running gym fitness athletic cardio strength",
@@ -275,6 +282,7 @@ export async function selectContextualData(prompt: string): Promise<string[]> {
 	// 17. RECOVERY & REST DAYS
 	// ─────────────────────────────────────────────────────────────────────────
 	if (s.recovery) {
+		enqueue("HealthKit Summary", "health");
 		searchLabels(
 			"Past Recovery & Rest Labels",
 			"recovery rest restoration recharge refresh downtime rejuvenate unwind",
@@ -399,6 +407,7 @@ export async function selectContextualData(prompt: string): Promise<string[]> {
 	// ─────────────────────────────────────────────────────────────────────────
 	if (s.hrv) {
 		enqueue("Current Session Metrics", "session", "0");
+		enqueue("HealthKit Heart Rate", "health", "hr");
 		searchLabels(
 			"Past HRV & Cardiac Labels",
 			"heart rate HRV palpitation breathing chest autonomic cardiac coherence calm vagal",
@@ -512,6 +521,47 @@ export async function selectContextualData(prompt: string): Promise<string[]> {
 			"Past Identity & Self-Discovery Labels",
 			"identity authentic self-concept who am I true self mask persona values-alignment self-expression discovery",
 		);
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// 39. HEALTH & HEALTHKIT (general)
+	//     Triggered when the user asks about health data not covered by a
+	//     specific domain above (workouts, steps, HR are already pulled by
+	//     sport/hrv). Provides the 24-hour HealthKit summary.
+	// ─────────────────────────────────────────────────────────────────────────
+	if (s.health) {
+		enqueue("HealthKit Summary (24 h)", "health");
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// 40. SCREENSHOTS & VISUAL MEMORY
+	//     Triggered when the user asks about screen captures, visual history,
+	//     or what was on-screen at a particular time.
+	// ─────────────────────────────────────────────────────────────────────────
+	if (s.screenshots) {
+		enqueue("Recent Screenshots for EEG", "screenshots-for-eeg");
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// 41. HOOKS & PROACTIVE ALERTS
+	//     Triggered when the user asks about hooks, triggers, or automations.
+	// ─────────────────────────────────────────────────────────────────────────
+	if (s.hooks) {
+		enqueue("Proactive Hooks", "hooks");
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// 42. DO NOT DISTURB
+	// ─────────────────────────────────────────────────────────────────────────
+	if (s.dnd) {
+		enqueue("DND Status", "dnd");
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// 43. ON-DEVICE LLM
+	// ─────────────────────────────────────────────────────────────────────────
+	if (s.llm) {
+		enqueue("LLM Status", "llm", "status");
 	}
 
 	// ─────────────────────────────────────────────────────────────────────────

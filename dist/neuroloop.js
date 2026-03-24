@@ -3,7 +3,7 @@
 // src/main.ts
 import { existsSync as existsSync4, readdirSync, readFileSync as readFileSync4 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
-import { basename, dirname as dirname4, join as join4, relative } from "node:path";
+import { basename, dirname as dirname4, join as join4 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 import {
   AuthStorage,
@@ -516,6 +516,64 @@ function detectSignals(lp) {
       /\bcharacter\b.{0,15}(build|grow|true|who|define)|defining.{0,10}(who|myself)/
     ),
     /**
+     * Health / HealthKit — general health queries, vitals, Apple Health data,
+     * medical metrics beyond what sport/hrv/sleep already cover.
+     */
+    health: any(
+      lp,
+      /\bhealth\b.{0,15}(data|kit|summary|report|stats?|metric|check)/,
+      /\bhealthkit\b|\bapple.?health\b|\bhealth.?app\b/,
+      /\bvitals?\b|\bbiometric\b|\bblood.?pressure\b|\bspo2\b|\boxygen\b/,
+      /\bvo2.?max\b|\bresting.?heart\b|\bhealth.?score\b/,
+      /\bmedical\b.{0,15}(data|metric|history|record)/,
+      /\bwellness\b.{0,15}(data|score|metric|report|summary)/
+    ),
+    /**
+     * Screenshots & visual memory — screen captures, what was on screen,
+     * OCR search, visual history, CLIP image search.
+     */
+    screenshots: any(
+      lp,
+      /\bscreenshot(s)?\b|\bscreen.?capture\b|\bscreen.?grab\b/,
+      /what.{0,15}(was|were).{0,15}(on|at).{0,10}screen/,
+      /\bocr\b|\bscreen.?text\b|\bvisual.?history\b|\bvisual.?memory\b/,
+      /\bclip\b.{0,15}(search|image|embed|similar)/,
+      /what.{0,10}(was|were).{0,10}(i|you).{0,10}(looking|viewing|reading|watching)/,
+      /screen.{0,15}(at|around|during|near).{0,15}(time|moment|session)/
+    ),
+    /**
+     * Proactive hooks — hook rules, triggers, automations, alerts, scenarios.
+     */
+    hooks: any(
+      lp,
+      /\bhook(s)?\b.{0,15}(rule|trigger|list|add|remove|creat|enabl|disabl|updat|suggest|log)/,
+      /\bproactive\b.{0,15}(hook|alert|trigger|rule|automation)/,
+      /\bhook\b.{0,15}(scenario|keyword|threshold)/,
+      /\btrigger\b.{0,15}(rule|alert|hook|automation|when|if)/,
+      /\bautomat(e|ion|ic)\b.{0,15}(alert|hook|trigger|notif)/
+    ),
+    /**
+     * Do Not Disturb — DND state, focus modes, interruption blocking.
+     */
+    dnd: any(
+      lp,
+      /\bdnd\b|\bdo.?not.?disturb\b/,
+      /\bfocus.?mode\b.{0,15}(on|off|status|enable|disable|block)/,
+      /\bsilence\b.{0,15}(notif|alert|interrupt)/,
+      /block.{0,15}(notif|interrupt|distract)/
+    ),
+    /**
+     * On-device LLM — local model management, inference, chat, downloads.
+     */
+    llm: any(
+      lp,
+      /\bllm\b.{0,15}(status|start|stop|model|catalog|download|chat|log|fit)/,
+      /\blocal\b.{0,15}(model|llm|inference|ai)/,
+      /\bon.?device\b.{0,15}(model|llm|ai|inference)/,
+      /\bgguf\b|\bmodel\b.{0,15}(download|catalog|select|delete|load)/,
+      /\bvision\b.{0,15}(projector|mmproj|model)/
+    ),
+    /**
      * Protocol intent — user is asking for a guided practice, exercise, or routine,
      * or describes a context where a structured protocol is likely to be helpful.
      * Triggers loading of the full protocol repertoire skill.
@@ -588,14 +646,14 @@ function detectSignals(lp) {
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-var PROTOCOLS_SKILL_PATH = join(
+var SKILLS_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
   "..",
   "..",
   "skills",
-  "neuroskill-protocols",
-  "SKILL.md"
+  "skills"
 );
+var PROTOCOLS_SKILL_PATH = join(SKILLS_DIR, "neuroskill-protocols", "SKILL.md");
 var COMPARE_CACHE_TTL_MS = 10 * 60 * 1e3;
 var compareCache = {};
 function getFreshCompare() {
@@ -633,6 +691,8 @@ ${skillContent}`);
   const searchLabels = (label2, query, k = "5") => enqueue(label2, "search-labels", query, "--k", k);
   if (s.sleep) {
     enqueue("Sleep Staging (last 24 h)", "sleep");
+    enqueue("Sleep Schedule", "sleep-schedule");
+    enqueue("HealthKit Sleep", "health", "sleep");
     searchLabels(
       "Past Sleep Labels",
       "sleep tired rest deep sleep rem restoration drowsy"
@@ -692,6 +752,9 @@ ${skillContent}`);
     );
   }
   if (s.sport) {
+    enqueue("HealthKit Workouts", "health", "workouts");
+    enqueue("HealthKit Steps", "health", "steps");
+    enqueue("HealthKit Heart Rate", "health", "hr");
     searchLabels(
       "Past Exercise & Sport Labels",
       "exercise workout training sport running gym fitness athletic cardio strength"
@@ -716,6 +779,7 @@ ${skillContent}`);
     );
   }
   if (s.recovery) {
+    enqueue("HealthKit Summary", "health");
     searchLabels(
       "Past Recovery & Rest Labels",
       "recovery rest restoration recharge refresh downtime rejuvenate unwind"
@@ -790,6 +854,7 @@ ${skillContent}`);
   }
   if (s.hrv) {
     enqueue("Current Session Metrics", "session", "0");
+    enqueue("HealthKit Heart Rate", "health", "hr");
     searchLabels(
       "Past HRV & Cardiac Labels",
       "heart rate HRV palpitation breathing chest autonomic cardiac coherence calm vagal"
@@ -857,6 +922,21 @@ ${skillContent}`);
       "Past Identity & Self-Discovery Labels",
       "identity authentic self-concept who am I true self mask persona values-alignment self-expression discovery"
     );
+  }
+  if (s.health) {
+    enqueue("HealthKit Summary (24 h)", "health");
+  }
+  if (s.screenshots) {
+    enqueue("Recent Screenshots for EEG", "screenshots-for-eeg");
+  }
+  if (s.hooks) {
+    enqueue("Proactive Hooks", "hooks");
+  }
+  if (s.dnd) {
+    enqueue("DND Status", "dnd");
+  }
+  if (s.llm) {
+    enqueue("LLM Status", "llm", "status");
   }
   const MAX_LABEL_SEARCHES = 5;
   const seen = /* @__PURE__ */ new Set();
@@ -1443,7 +1523,7 @@ ${step.instruction}`);
 };
 
 // src/neuroloop.ts
-var _pkgVersion = (true ? "0.0.8" : void 0) ?? JSON.parse(readFileSync3(join3(dirname3(fileURLToPath2(import.meta.url)), "../package.json"), "utf8")).version;
+var _pkgVersion = (true ? "0.0.9" : void 0) ?? JSON.parse(readFileSync3(join3(dirname3(fileURLToPath2(import.meta.url)), "../package.json"), "utf8")).version;
 var AGENT_DIR = join3(homedir2(), ".neuroskill");
 var NEUROLOOP_DIR = join3(dirname3(fileURLToPath2(import.meta.url)), "..");
 var NEUROLOOP_MD_PATH = join3(NEUROLOOP_DIR, "NEUROLOOP.md");
@@ -1713,14 +1793,57 @@ Available commands and typical args:
   status                             \u2192 full device/session/scores snapshot
   session [index]                    \u2192 session metrics + trends (0=latest)
   sessions                           \u2192 list all recorded sessions
+  say "text" [--voice <name>]        \u2192 speak text aloud via on-device TTS
+  notify "title" ["body"]            \u2192 show a native OS notification
+  label <text> [--context <ctx>]     \u2192 create a timestamped annotation
   search-labels <query>              \u2192 semantic search over EXG annotations
+  search-images <query>              \u2192 search screenshots by OCR text
+  search-images --by-image <path>    \u2192 search screenshots by visual similarity (CLIP)
+  screenshots-around --at <utc>      \u2192 find screenshots near a timestamp (\xB1window)
+  screenshots-for-eeg                \u2192 find screenshots captured during an EEG session
+  eeg-for-screenshots <query>        \u2192 find EEG data & labels near screenshot matches
   interactive <keyword>              \u2192 4-layer cross-modal graph search
-  label <text>                       \u2192 create a timestamped annotation
   search [--k <n>]                   \u2192 ANN EXG-similarity search
-  compare                            \u2192 \u26A0 EXPENSIVE (~60 s, heavy compute). Avoid unless the user explicitly asks to compare sessions. Prefer session/sessions for trend questions. Use the prewarm tool first when compare will be needed soon.
+  compare                            \u2192 \u26A0 EXPENSIVE (~60 s). Avoid unless explicitly asked. Use the prewarm tool first.
   sleep [index]                      \u2192 sleep staging summary
+  sleep-schedule                     \u2192 show current sleep schedule
+  sleep-schedule set [--bedtime HH:MM] [--wake HH:MM] [--preset <id>] \u2192 update sleep schedule
+  calibrate                          \u2192 open calibration window and start
+  calibrations                       \u2192 list all calibration profiles
+  calibrations create "name" --actions "L1:20,L2:20" [--loops N] [--break N]
+  calibrations update <id-or-name> [--name ...] [--actions ...] [--loops N]
+  calibrations delete <id-or-name>   \u2192 delete a calibration profile
+  timer                              \u2192 open focus-timer and start work phase
   umap                               \u2192 3D UMAP projection
   listen [--seconds <n>]             \u2192 stream broadcast events
+  hooks                              \u2192 list proactive hook rules + metadata
+  hooks list                         \u2192 list raw hook rules
+  hooks add <name> --keywords "..." --scenario <s> --threshold <n>
+  hooks remove <name>                \u2192 delete a hook
+  hooks enable <name> / disable <name> \u2192 toggle a hook
+  hooks update <name> [--keywords ...] [--threshold ...]
+  hooks suggest "kw1,kw2"            \u2192 suggest threshold from real data
+  hooks log [--limit N --offset M]   \u2192 paginated hook trigger log
+  health                             \u2192 HealthKit summary (last 24h)
+  health summary [--start --end]     \u2192 aggregate counts for a time range
+  health sleep [--start --end]       \u2192 Apple Health sleep samples
+  health workouts [--start --end]    \u2192 workout sessions
+  health hr [--start --end]          \u2192 heart rate samples
+  health steps [--start --end]       \u2192 step counts
+  health metrics --metric-type <t>   \u2192 scalar health metrics (hrv, vo2Max, \u2026)
+  health metric-types                \u2192 list all stored metric types
+  dnd                                \u2192 DND automation status
+  dnd on / dnd off                   \u2192 force-enable/disable DND
+  llm status                         \u2192 LLM server status
+  llm start / llm stop               \u2192 load/unload model
+  llm catalog                        \u2192 model catalog with download states
+  llm add <repo> <filename> [--mmproj <file>] \u2192 add external model
+  llm select <filename>              \u2192 set active text model
+  llm mmproj <filename|none>         \u2192 set active vision projector
+  llm download/pause/resume/cancel/delete <filename>
+  llm downloads                      \u2192 list all downloads with progress
+  llm fit                            \u2192 check which models fit in RAM/VRAM
+  llm chat "message" [--image a.jpg] \u2192 single-shot LLM chat (supports vision)
   raw <json>                         \u2192 send arbitrary JSON to the server`,
     parameters: Type4.Object({
       command: Type4.String({ description: "The neuroskill subcommand to run." }),
@@ -1867,6 +1990,8 @@ Available commands and typical args:
       ["ctrl+o", "tools"],
       ["/key", "api key"],
       ["/exg", "exg"],
+      ["/session", "metrics"],
+      ["/sleep", "sleep"],
       ["!", "shell"]
     ];
     return {
@@ -2236,6 +2361,171 @@ ${result.text}
       }
     }
   });
+  async function neuroCmd(cmdArgs, title, handlerCtx) {
+    const result = await runNeuroSkill(cmdArgs);
+    if (result.ok && result.text) {
+      pi.sendMessage({
+        customType: NEUROSKILL_STATUS_TYPE,
+        content: `## ${title}
+\`\`\`
+${result.text}
+\`\`\``,
+        display: true,
+        details: void 0
+      });
+    } else {
+      handlerCtx.ui.notify(result.error ?? "neuroskill command failed", "error");
+    }
+  }
+  pi.registerCommand("session", {
+    description: "Session metrics \xB7 /session [index]  (0 = latest)",
+    handler: async (args, handlerCtx) => {
+      const idx = args.trim() || "0";
+      await neuroCmd(["session", idx], `\u{1F4CA} Session ${idx}`, handlerCtx);
+    }
+  });
+  pi.registerCommand("sessions", {
+    description: "List all recorded EXG sessions",
+    handler: async (_args, handlerCtx) => {
+      await neuroCmd(["sessions"], "\u{1F4CB} Sessions", handlerCtx);
+    }
+  });
+  pi.registerCommand("sleep", {
+    description: "Sleep staging \xB7 /sleep [index]",
+    handler: async (args, handlerCtx) => {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      await neuroCmd(["sleep", ...parts], "\u{1F634} Sleep", handlerCtx);
+    }
+  });
+  pi.registerCommand("compare", {
+    description: "Compare last two sessions (slow ~60 s, uses cache)",
+    handler: async (_args, handlerCtx) => {
+      handlerCtx.ui.notify("Running compare \u2014 this may take up to 60 s \u2026", "info");
+      await neuroCmd(["compare"], "\u{1F500} Session Comparison", handlerCtx);
+    }
+  });
+  pi.registerCommand("health", {
+    description: "HealthKit \xB7 /health [sleep|workouts|hr|steps|summary|metrics \u2026]",
+    handler: async (args, handlerCtx) => {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      await neuroCmd(["health", ...parts], "\u{1F3E5} Health" + (parts.length ? ` \u2014 ${parts[0]}` : ""), handlerCtx);
+    }
+  });
+  pi.registerCommand("label", {
+    description: "Label this EXG moment \xB7 /label <text> [--context <ctx>]",
+    handler: async (args, handlerCtx) => {
+      const text = args.trim();
+      if (!text) {
+        handlerCtx.ui.notify("Usage: /label <text> [--context <context>]", "warning");
+        return;
+      }
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      await neuroCmd(["label", ...parts], `\u2B21 Label`, handlerCtx);
+    }
+  });
+  pi.registerCommand("labels", {
+    description: "Search labels \xB7 /labels <query> [--k <n>]",
+    handler: async (args, handlerCtx) => {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) {
+        handlerCtx.ui.notify("Usage: /labels <search query> [--k <n>]", "warning");
+        return;
+      }
+      await neuroCmd(["search-labels", ...parts], "\u{1F50D} Labels", handlerCtx);
+    }
+  });
+  pi.registerCommand("hooks", {
+    description: "Hooks \xB7 /hooks [list|add|remove|enable|disable|update|suggest|log]",
+    handler: async (args, handlerCtx) => {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      await neuroCmd(["hooks", ...parts], "\u{1FA9D} Hooks", handlerCtx);
+    }
+  });
+  pi.registerCommand("dnd", {
+    description: "Do Not Disturb \xB7 /dnd [on|off]",
+    handler: async (args, handlerCtx) => {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      await neuroCmd(["dnd", ...parts], "\u{1F515} DND", handlerCtx);
+    }
+  });
+  pi.registerCommand("say", {
+    description: "Speak text aloud \xB7 /say <text> [--voice <name>]",
+    handler: async (args, handlerCtx) => {
+      const text = args.trim();
+      if (!text) {
+        handlerCtx.ui.notify("Usage: /say <text> [--voice <name>]", "warning");
+        return;
+      }
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      const result = await runNeuroSkill(["say", ...parts]);
+      if (result.ok) {
+        handlerCtx.ui.notify("\u{1F50A} Speaking \u2026", "info");
+      } else {
+        handlerCtx.ui.notify(result.error ?? "TTS failed", "error");
+      }
+    }
+  });
+  pi.registerCommand("notify", {
+    description: "OS notification \xB7 /notify <title> [body]",
+    handler: async (args, handlerCtx) => {
+      const text = args.trim();
+      if (!text) {
+        handlerCtx.ui.notify("Usage: /notify <title> [body]", "warning");
+        return;
+      }
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      const result = await runNeuroSkill(["notify", ...parts]);
+      if (result.ok) {
+        handlerCtx.ui.notify("\u{1F4EC} Notification sent", "info");
+      } else {
+        handlerCtx.ui.notify(result.error ?? "notify failed", "error");
+      }
+    }
+  });
+  pi.registerCommand("calibrate", {
+    description: "Start EXG calibration sequence",
+    handler: async (_args, handlerCtx) => {
+      await neuroCmd(["calibrate"], "\u{1F3AF} Calibration", handlerCtx);
+    }
+  });
+  pi.registerCommand("llm", {
+    description: "On-device LLM \xB7 /llm [status|start|stop|catalog|select|chat \u2026]",
+    handler: async (args, handlerCtx) => {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) parts.push("status");
+      await neuroCmd(["llm", ...parts], "\u{1F916} LLM" + (parts.length ? ` \u2014 ${parts[0]}` : ""), handlerCtx);
+    }
+  });
+  pi.registerCommand("screenshots", {
+    description: "Search screenshots \xB7 /screenshots [query | --by-image <path>]",
+    handler: async (args, handlerCtx) => {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) {
+        await neuroCmd(["screenshots-for-eeg"], "\u{1F4F8} Screenshots (EEG session)", handlerCtx);
+      } else {
+        await neuroCmd(["search-images", ...parts], "\u{1F4F8} Screenshots", handlerCtx);
+      }
+    }
+  });
+  pi.registerCommand("timer", {
+    description: "Start focus timer",
+    handler: async (_args, handlerCtx) => {
+      await neuroCmd(["timer"], "\u23F1\uFE0F Timer", handlerCtx);
+    }
+  });
+  pi.registerCommand("umap", {
+    description: "3D UMAP projection of EXG data",
+    handler: async (_args, handlerCtx) => {
+      await neuroCmd(["umap"], "\u{1F5FA}\uFE0F UMAP", handlerCtx);
+    }
+  });
+  pi.registerCommand("listen", {
+    description: "Stream live EXG events \xB7 /listen [--seconds <n>]",
+    handler: async (args, handlerCtx) => {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      await neuroCmd(["listen", ...parts], "\u{1F4E1} Live Stream", handlerCtx);
+    }
+  });
   pi.registerShortcut("ctrl+shift+e", {
     description: "Show live EXG snapshot in chat",
     handler: async (handlerCtx) => {
@@ -2261,7 +2551,7 @@ var MAIN_FILE = fileURLToPath3(import.meta.url);
 var SRC_DIR = dirname4(MAIN_FILE);
 var NEUROLOOP_DIR2 = join4(SRC_DIR, "..");
 var AGENT_DIR2 = join4(homedir3(), ".neuroloop");
-var SKILLS_DIR = join4(NEUROLOOP_DIR2, "skills");
+var SKILLS_DIR2 = join4(NEUROLOOP_DIR2, "skills");
 var METRICS_MD_PATH = join4(NEUROLOOP_DIR2, "METRICS.md");
 var authStorage = AuthStorage.create(join4(AGENT_DIR2, "auth.json"));
 var modelRegistry = new ModelRegistry(authStorage, join4(AGENT_DIR2, "models.json"));
@@ -2322,10 +2612,10 @@ var loader = new DefaultResourceLoader({
   // Load individual skills from ./skills/<name>/SKILL.md + METRICS.md
   skillsOverride: (base) => {
     const extra = [];
-    if (existsSync4(SKILLS_DIR)) {
-      for (const entry of readdirSync(SKILLS_DIR, { withFileTypes: true })) {
+    if (existsSync4(SKILLS_DIR2)) {
+      for (const entry of readdirSync(SKILLS_DIR2, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue;
-        const skillFile = join4(SKILLS_DIR, entry.name, "SKILL.md");
+        const skillFile = join4(SKILLS_DIR2, entry.name, "SKILL.md");
         if (!existsSync4(skillFile)) continue;
         const content = readFileSync4(skillFile, "utf8");
         const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
@@ -2339,8 +2629,8 @@ var loader = new DefaultResourceLoader({
           description: descMatch[1].trim(),
           // Package-relative path: "neuroloop/skills/…/SKILL.md"
           // Consistent regardless of cwd or where npm installed the package.
-          filePath: `${basename(NEUROLOOP_DIR2)}/${relative(NEUROLOOP_DIR2, skillFile)}`,
-          baseDir: join4(SKILLS_DIR, entry.name),
+          filePath: skillFile,
+          baseDir: join4(SKILLS_DIR2, entry.name),
           source: "path",
           disableModelInvocation: false
         });
@@ -2350,7 +2640,7 @@ var loader = new DefaultResourceLoader({
       extra.push({
         name: "neuroskill-metrics",
         description: "NeuroSkill EXG metrics reference \u2014 all indices, band powers, scores, and their scientific basis.",
-        filePath: `${basename(NEUROLOOP_DIR2)}/${relative(NEUROLOOP_DIR2, METRICS_MD_PATH)}`,
+        filePath: METRICS_MD_PATH,
         baseDir: NEUROLOOP_DIR2,
         source: "path",
         disableModelInvocation: false
@@ -2368,7 +2658,7 @@ var loader = new DefaultResourceLoader({
       "assistant message before every turn. Use the `neuroskill_run` tool to query",
       "any other neuroskill command.",
       "",
-      `Skills dir: ${SKILLS_DIR}`,
+      `Skills dir: ${SKILLS_DIR2}`,
       `METRICS.md: ${METRICS_MD_PATH}`
     ].join("\n");
     return {

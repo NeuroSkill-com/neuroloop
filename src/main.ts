@@ -160,7 +160,7 @@ const loader = new DefaultResourceLoader({
 					description: descMatch[1].trim(),
 						// Package-relative path: "neuroloop/skills/…/SKILL.md"
 					// Consistent regardless of cwd or where npm installed the package.
-					filePath: `${basename(NEUROLOOP_DIR)}/${relative(NEUROLOOP_DIR, skillFile)}`,
+					filePath: skillFile,
 					baseDir: join(SKILLS_DIR, entry.name),
 					source: "path",
 					disableModelInvocation: false,
@@ -173,7 +173,7 @@ const loader = new DefaultResourceLoader({
 			extra.push({
 				name: "neuroskill-metrics",
 				description: "NeuroSkill EXG metrics reference — all indices, band powers, scores, and their scientific basis.",
-				filePath: `${basename(NEUROLOOP_DIR)}/${relative(NEUROLOOP_DIR, METRICS_MD_PATH)}`,
+				filePath: METRICS_MD_PATH,
 				baseDir: NEUROLOOP_DIR,
 				source: "path",
 				disableModelInvocation: false,

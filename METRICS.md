@@ -9,8 +9,8 @@
 
 1. [Hardware — Muse Headset & Electrode Positions](#1-hardware--muse-headset--electrode-positions)
 2. [Signal Acquisition & Preprocessing](#2-signal-acquisition--preprocessing)
-3. [EXG Frequency Bands](#3-EXG-frequency-bands)
-4. [EXG Indices](#4-EXG-indices)
+3. [EXG Frequency Bands](#3-eeg-frequency-bands)
+4. [EXG Indices](#4-eeg-indices)
    - 4.1 [TAR — Theta/Alpha Ratio](#41-tar--thetaalpha-ratio)
    - 4.2 [BAR — Beta/Alpha Ratio](#42-bar--betaalpha-ratio)
    - 4.3 [DTR — Delta/Theta Ratio](#43-dtr--deltatheta-ratio)
@@ -58,9 +58,9 @@
     - 10.1 [Blink Detection](#101-blink-detection)
     - 10.2 [Jaw Clench Detection](#102-jaw-clench-detection)
     - 10.3 [Head Pose (Pitch / Roll / Stillness / Nods / Shakes)](#103-head-pose-pitch--roll--stillness--nods--shakes)
-11. [Sleep Staging Hypnogram](#12-sleep-staging-hypnogram)
-12. [ZUNA Embeddings & HNSW Search](#13-zuna-embeddings--hnsw-search)
-13. [Validated Reference List](#14-validated-reference-list)
+12. [Sleep Staging Hypnogram](#12-sleep-staging-hypnogram)
+12. [EXG Embedding Models & HNSW Search](#12-eeg-embedding-models--hnsw-search)
+13. [Validated Reference List](#13-validated-reference-list)
 
 ---
 
@@ -684,7 +684,7 @@ Alpha power is **inversely related** to cortical activity (alpha decreases when 
 - **FAA < 0** (left alpha > right alpha → right hemisphere more active → withdrawal motivation / negative affect tendency)
 - **FAA ≈ 0** → hemispheric balance
 
-FAA is a relatively stable **trait marker** (individual differences in resting FAA predict dispositional affect), but also shows **state-level** fluctuations in response to emotional stimuli, stress, and mindfulness practice. It is stored in the `EXG.sqlite` database alongside every 5-second embedding epoch.
+FAA is a relatively stable **trait marker** (individual differences in resting FAA predict dispositional affect), but also shows **state-level** fluctuations in response to emotional stimuli, stress, and mindfulness practice. It is stored in the `eeg.sqlite` database alongside every 5-second embedding epoch.
 
 **Electrode sites:** AF7 (left frontal) ↔ AF8 (right frontal).
 
@@ -1094,19 +1094,51 @@ For sessions ≥ 30 minutes, NeuroSkill automatically generates a **hypnogram** 
 
 ---
 
-## 12. ZUNA Embeddings & HNSW Search
+## 12. EXG Embedding Models & HNSW Search
 
-### ZUNA Neural Encoder
+NeuroSkill supports two GPU-accelerated EXG foundation models for converting raw epochs into dense vector embeddings. Both run entirely on the local GPU using the `burn` deep learning framework with a `wgpu` backend. The active model is selectable in the EXG Model settings tab and persisted in `model_config.json`.
 
-ZUNA is a GPU-accelerated deep neural encoder that converts each 5-second EXG epoch (4 channels × 1280 samples at 256 Hz) into a **128-dimensional vector** representation. It runs entirely on the local GPU using the `burn` deep learning framework with a `wgpu` backend.
+### 12.1 ZUNA Neural Encoder
+
+ZUNA converts each 5-second EXG epoch (4 channels × 1280 samples at 256 Hz) into a **128-dimensional vector** representation.
 
 The embedding captures the holistic spatiotemporal pattern of the EXG epoch — not just band-power statistics, but the full time-frequency structure including transients, cross-channel relationships, and phase information. Similar brain states produce nearby vectors in the 128-D embedding space.
 
 **Source:** [github.com/eugenehp/zuna-rs](https://github.com/eugenehp/zuna-rs)
 
-### HNSW Similarity Search
+### 12.2 LUNA Foundation Model
 
-Embeddings are indexed in a **Hierarchical Navigable Small World (HNSW)** graph (fast-hnsw library) for approximate nearest-neighbor search. HNSW enables sub-millisecond search over millions of embeddings with high recall. Each daily `EXG.sqlite` database stores the raw embeddings; the HNSW index is rebuilt from them.
+LUNA is a topology-agnostic EXG foundation model that produces dense embeddings from arbitrary electrode configurations. Unlike ZUNA (which is fixed to 4-channel Muse input), LUNA uses a learned channel vocabulary that maps electrode names to token positions, making it compatible with any EXG montage. Channel names are normalised to uppercase before lookup.
+
+LUNA is available in three size variants:
+
+| Variant | Embed Dim | Queries | Depth | Heads | Weights File |
+|---------|-----------|---------|-------|-------|--------------|
+| **base** | 64 | 4 | 8 | 2 | `LUNA_base.safetensors` |
+| **large** | 96 | 6 | 10 | 2 | `LUNA_large.safetensors` |
+| **huge** | 128 | 8 | 24 | 2 | `LUNA_huge.safetensors` |
+
+Weights are downloaded on demand from HuggingFace ([PulpBio/LUNA](https://huggingface.co/PulpBio/LUNA)). The selected variant is stored in `model_config.json` alongside the backend choice.
+
+**Source:** [huggingface.co/PulpBio/LUNA](https://huggingface.co/PulpBio/LUNA) · [crates.io/crates/luna-rs](https://crates.io/crates/luna-rs)
+
+### 12.3 Model Provenance & Per-Model HNSW Indices
+
+Each embedding row in the daily `eeg.sqlite` database records which model backend (`zuna` or `luna`) produced it via the `model_backend` TEXT column. Historical rows without the column are auto-migrated on open.
+
+Each model backend gets its own HNSW index file:
+- **ZUNA:** `eeg_embeddings.hnsw` (daily), `eeg_global.hnsw` (global)
+- **LUNA:** `eeg_embeddings_luna.hnsw` (daily), `eeg_global_luna.hnsw` (global)
+
+This prevents dimension mismatches when switching backends and allows side-by-side nearest-neighbor search. Search APIs accept an optional model backend parameter to load the correct index.
+
+### 12.4 Re-Embedding
+
+Existing sessions can be re-embedded with a different model via the `estimate_reembed` and `trigger_reembed` commands. The re-embed worker reads raw EXG samples from session CSV files, chunks data into 5-second epochs with 50 % overlap, resamples to the model's input size, runs the selected encoder on the GPU, and writes new embedding rows to SQLite. Per-model HNSW indices are rebuilt per day and globally. Progress is streamed to the frontend via the `reembed-progress` event.
+
+### 12.5 HNSW Similarity Search
+
+Embeddings are indexed in a **Hierarchical Navigable Small World (HNSW)** graph (fast-hnsw library) for approximate nearest-neighbor search. HNSW enables sub-millisecond search over millions of embeddings with high recall. Each daily `eeg.sqlite` database stores the raw embeddings; the HNSW index is rebuilt from them.
 
 Distances are computed as **cosine distances** (1 − cosine similarity): 0 = identical, 1 = orthogonal, 2 = antipodal. Nearby points in the HNSW graph represent similar brain states.
 
@@ -1200,5 +1232,7 @@ All DOIs below have been verified via the CrossRef API (`api.crossref.org`) and 
 | 74 | Zulfikar, Protyasha, Kosmyna et al. | Analyzing Speech Motor Movement using Surface EMG in Adults with ASD | arXiv | 2024 | [arXiv:2407.08877](https://arxiv.org/abs/2407.08877) |
 
 ---
+
+*All 74 references verified via CrossRef API (api.crossref.org) and doi.org — February 2026.*
 
 *© NeuroSkill — For non-commercial research and educational use only.*
