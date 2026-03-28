@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 // src/main.ts
-import { existsSync as existsSync4, readdirSync, readFileSync as readFileSync4 } from "node:fs";
-import { homedir as homedir3 } from "node:os";
-import { basename, dirname as dirname4, join as join4 } from "node:path";
+import { existsSync as existsSync5, readdirSync, readFileSync as readFileSync5 } from "node:fs";
+import { homedir as homedir4 } from "node:os";
+import { basename, dirname as dirname4, join as join5 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 import {
   AuthStorage,
@@ -16,10 +16,9 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 // src/neuroloop.ts
-import { existsSync as existsSync3, readFileSync as readFileSync3, writeFileSync as writeFileSync2 } from "node:fs";
-import { homedir as homedir2 } from "node:os";
-import { dirname as dirname3, join as join3 } from "node:path";
-import { exec } from "node:child_process";
+import { existsSync as existsSync4, readFileSync as readFileSync4, writeFileSync as writeFileSync3 } from "node:fs";
+import { homedir as homedir3 } from "node:os";
+import { dirname as dirname3, join as join4 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import { Container, Markdown, Spacer } from "@mariozechner/pi-tui";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
@@ -29,14 +28,113 @@ import WS from "ws";
 
 // src/neuroskill/run.ts
 import { execFile } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { promisify } from "node:util";
 var execFileAsync = promisify(execFile);
-var NEUROSKILL_TIMEOUT_MS = 1e4;
+var NEUROSKILL_TIMEOUT_MS = 3e4;
+var AGENT_DIR = join(homedir(), ".neuroloop");
+var PORT_FILE = join(AGENT_DIR, "neuroskill_port.json");
+var _port = 8375;
+function loadPort() {
+  try {
+    if (existsSync(PORT_FILE)) {
+      const { port } = JSON.parse(readFileSync(PORT_FILE, "utf8"));
+      if (typeof port === "number" && port > 0 && port <= 65535) return port;
+    }
+  } catch {
+  }
+  return 8375;
+}
+function savePort(port) {
+  try {
+    if (!existsSync(AGENT_DIR)) mkdirSync(AGENT_DIR, { recursive: true, mode: 448 });
+    writeFileSync(PORT_FILE, JSON.stringify({ port }), { encoding: "utf8", mode: 384 });
+  } catch {
+  }
+}
+_port = loadPort();
+function getSkillPort() {
+  return _port;
+}
+function setSkillPort(port) {
+  _port = port;
+  savePort(port);
+}
+async function probeSkillServer(port = _port) {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/health`, {
+      signal: AbortSignal.timeout(2e3)
+    });
+    if (!res.ok) return false;
+    const body = await res.json();
+    return typeof body.status === "string";
+  } catch {
+    return false;
+  }
+}
+async function discoverSkillServer() {
+  if (await probeSkillServer(_port)) return _port;
+  for (const p of [8375, 8376, 8377]) {
+    if (p === _port) continue;
+    if (await probeSkillServer(p)) {
+      setSkillPort(p);
+      return p;
+    }
+  }
+  if (process.platform !== "win32") {
+    const { exec } = await import("node:child_process");
+    const discoveredPort = await new Promise((resolve) => {
+      exec(
+        "lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | grep -iE 'skill|neuroskill' | head -5",
+        (_, stdout) => {
+          if (!stdout) {
+            resolve(null);
+            return;
+          }
+          for (const line of stdout.split("\n")) {
+            const m = line.match(/:(\d{4,5})\s/);
+            if (m) {
+              resolve(parseInt(m[1], 10));
+              return;
+            }
+          }
+          resolve(null);
+        }
+      );
+    });
+    if (discoveredPort && await probeSkillServer(discoveredPort)) {
+      setSkillPort(discoveredPort);
+      return discoveredPort;
+    }
+  }
+  return null;
+}
+var IS_WINDOWS = process.platform === "win32";
+var MAX_BUFFER = 8 * 1024 * 1024;
+function escapeArg(arg) {
+  if (!IS_WINDOWS) return arg;
+  if (/^[a-zA-Z0-9_./:=@-]+$/.test(arg)) return arg;
+  const escaped = arg.replace(/%/g, "%%").replace(/"/g, '\\"');
+  return `"${escaped}"`;
+}
 async function runNeuroSkill(args) {
   try {
-    const { stdout } = await execFileAsync("npx", ["neuroskill", ...args], {
+    const cliArgs = [
+      "neuroskill",
+      "--port",
+      String(_port),
+      ...args.map(escapeArg)
+    ];
+    const { stdout } = await execFileAsync("npx", cliArgs, {
       timeout: NEUROSKILL_TIMEOUT_MS,
-      env: { ...process.env }
+      maxBuffer: MAX_BUFFER,
+      env: { ...process.env },
+      // Windows: npx is a .cmd batch file — must run through cmd.exe
+      shell: IS_WINDOWS,
+      // Windows: hide the transient cmd.exe window
+      ...IS_WINDOWS && { windowsHide: true }
     });
     const text = stdout.trim();
     if (!text) return { ok: false, error: "empty response" };
@@ -643,17 +741,17 @@ function detectSignals(lp) {
 }
 
 // src/neuroskill/context.ts
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync as existsSync2, readFileSync as readFileSync2 } from "node:fs";
+import { dirname, join as join2 } from "node:path";
 import { fileURLToPath } from "node:url";
-var SKILLS_DIR = join(
+var SKILLS_DIR = join2(
   dirname(fileURLToPath(import.meta.url)),
   "..",
   "..",
   "skills",
   "skills"
 );
-var PROTOCOLS_SKILL_PATH = join(SKILLS_DIR, "neuroskill-protocols", "SKILL.md");
+var PROTOCOLS_SKILL_PATH = join2(SKILLS_DIR, "neuroskill-protocols", "SKILL.md");
 var COMPARE_CACHE_TTL_MS = 10 * 60 * 1e3;
 var compareCache = {};
 function getFreshCompare() {
@@ -678,9 +776,9 @@ async function selectContextualData(prompt) {
   const lp = prompt.toLowerCase();
   const s = detectSignals(lp);
   const extras = [];
-  if (s.protocols && existsSync(PROTOCOLS_SKILL_PATH)) {
+  if (s.protocols && existsSync2(PROTOCOLS_SKILL_PATH)) {
     try {
-      const skillContent = readFileSync(PROTOCOLS_SKILL_PATH, "utf8");
+      const skillContent = readFileSync2(PROTOCOLS_SKILL_PATH, "utf8");
       extras.push(`## \u{1F9D8} Protocol Repertoire
 ${skillContent}`);
     } catch {
@@ -966,28 +1064,46 @@ ${r.text}` : null);
 }
 
 // src/memory.ts
-import { existsSync as existsSync2, mkdirSync, readFileSync as readFileSync2, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname as dirname2, join as join2 } from "node:path";
-var MEMORY_PATH = join2(homedir(), ".neuroskill", "memory.md");
+import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3, writeFileSync as writeFileSync2 } from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import { dirname as dirname2, join as join3 } from "node:path";
+var MEMORY_PATH = join3(homedir2(), ".neuroskill", "memory.md");
 function readMemory(path = MEMORY_PATH) {
-  if (!existsSync2(path)) return void 0;
-  return readFileSync2(path, "utf-8").trim() || void 0;
+  if (!existsSync3(path)) return void 0;
+  return readFileSync3(path, "utf-8").trim() || void 0;
 }
+var MAX_MEMORY_BYTES = 512 * 1024;
 function writeMemory(content, mode2, path = MEMORY_PATH) {
-  mkdirSync(dirname2(path), { recursive: true });
+  mkdirSync2(dirname2(path), { recursive: true, mode: 448 });
   if (mode2 === "append") {
-    const existing = existsSync2(path) ? readFileSync2(path, "utf-8") : "";
+    const existing = existsSync3(path) ? readFileSync3(path, "utf-8") : "";
     const sep = existing && !existing.endsWith("\n") ? "\n" : "";
-    writeFileSync(path, existing + sep + content, "utf-8");
+    const combined = existing + sep + content;
+    if (Buffer.byteLength(combined, "utf-8") > MAX_MEMORY_BYTES) {
+      throw new Error(`Memory file would exceed ${MAX_MEMORY_BYTES / 1024} KB limit. Use mode "overwrite" to replace, or trim old entries first.`);
+    }
+    writeFileSync2(path, combined, { encoding: "utf-8", mode: 384 });
   } else {
-    writeFileSync(path, content, "utf-8");
+    const trimmed = Buffer.byteLength(content, "utf-8") > MAX_MEMORY_BYTES ? content.slice(0, MAX_MEMORY_BYTES) : content;
+    writeFileSync2(path, trimmed, { encoding: "utf-8", mode: 384 });
   }
 }
 
 // src/tools/web-fetch.ts
 import { Type } from "@sinclair/typebox";
 var DEFAULT_MAX_CHARS = 12e3;
+function isPrivateUrl(urlStr) {
+  try {
+    const u = new URL(urlStr);
+    const host = u.hostname;
+    if (host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "0.0.0.0" || host.endsWith(".local") || host.startsWith("10.") || host.startsWith("192.168.") || /^172\.(1[6-9]|2\d|3[01])\./.test(host) || host.startsWith("169.254.") || u.protocol === "file:") {
+      return true;
+    }
+  } catch {
+    return true;
+  }
+  return false;
+}
 function stripHtml(html) {
   return html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<noscript[\s\S]*?<\/noscript>/gi, "").replace(/<svg[\s\S]*?<\/svg>/gi, "").replace(/<!--[\s\S]*?-->/g, "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 }
@@ -1005,11 +1121,20 @@ var webFetchTool = {
   }),
   async execute(_id, params, signal, _onUpdate, _ctx) {
     const limit = params.maxChars ?? DEFAULT_MAX_CHARS;
+    if (isPrivateUrl(params.url)) {
+      return {
+        content: [{ type: "text", text: "Blocked: cannot fetch private/internal URLs." }],
+        details: { url: params.url, error: "private_url_blocked", ok: false }
+      };
+    }
     let text;
     let status;
     try {
+      const timeout = AbortSignal.timeout(3e4);
+      const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
       const res = await fetch(params.url, {
-        signal,
+        signal: combined,
+        redirect: "follow",
         headers: {
           "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           Accept: "text/html,application/xhtml+xml,application/json,text/plain,*/*",
@@ -1459,7 +1584,13 @@ DURATION GUIDELINES:
     })
   }),
   execute: async (_id, params, signal, onUpdate, _ctx) => {
-    const { title, intro, steps } = params;
+    const { title, intro } = params;
+    const MAX_STEPS = 200;
+    const MAX_STEP_DURATION = 300;
+    const steps = (params.steps ?? []).slice(0, MAX_STEPS).map((s) => ({
+      ...s,
+      duration_secs: Math.max(0, Math.min(s.duration_secs ?? 0, MAX_STEP_DURATION))
+    }));
     const log = [];
     const emit = (line) => {
       log.push(line);
@@ -1523,17 +1654,17 @@ ${step.instruction}`);
 };
 
 // src/neuroloop.ts
-var _pkgVersion = (true ? "0.0.9" : void 0) ?? JSON.parse(readFileSync3(join3(dirname3(fileURLToPath2(import.meta.url)), "../package.json"), "utf8")).version;
-var AGENT_DIR = join3(homedir2(), ".neuroskill");
-var NEUROLOOP_DIR = join3(dirname3(fileURLToPath2(import.meta.url)), "..");
-var NEUROLOOP_MD_PATH = join3(NEUROLOOP_DIR, "NEUROLOOP.md");
+var _pkgVersion = (true ? "0.0.10" : void 0) ?? JSON.parse(readFileSync4(join4(dirname3(fileURLToPath2(import.meta.url)), "../package.json"), "utf8")).version;
+var AGENT_DIR2 = join4(homedir3(), ".neuroskill");
+var NEUROLOOP_DIR = join4(dirname3(fileURLToPath2(import.meta.url)), "..");
+var NEUROLOOP_MD_PATH = join4(NEUROLOOP_DIR, "NEUROLOOP.md");
 var NEUROSKILL_STATUS_TYPE = "neuroskill-status";
-var CALIBRATION_PROMPT_STATE_PATH = join3(AGENT_DIR, "last_calibration_prompt.json");
+var CALIBRATION_PROMPT_STATE_PATH = join4(AGENT_DIR2, "last_calibration_prompt.json");
 var CALIBRATION_PROMPT_INTERVAL_MS = 24 * 60 * 60 * 1e3;
 function shouldNudgeCalibration() {
   try {
-    if (existsSync3(CALIBRATION_PROMPT_STATE_PATH)) {
-      const raw = readFileSync3(CALIBRATION_PROMPT_STATE_PATH, "utf8");
+    if (existsSync4(CALIBRATION_PROMPT_STATE_PATH)) {
+      const raw = readFileSync4(CALIBRATION_PROMPT_STATE_PATH, "utf8");
       const { lastPromptedAt } = JSON.parse(raw);
       if (Date.now() - lastPromptedAt < CALIBRATION_PROMPT_INTERVAL_MS) {
         return false;
@@ -1545,10 +1676,10 @@ function shouldNudgeCalibration() {
 }
 function markCalibrationNudgeSent() {
   try {
-    writeFileSync2(
+    writeFileSync3(
       CALIBRATION_PROMPT_STATE_PATH,
       JSON.stringify({ lastPromptedAt: Date.now() }),
-      "utf8"
+      { encoding: "utf8", mode: 384 }
     );
   } catch {
   }
@@ -1689,11 +1820,11 @@ ${memory}`;
     const systemBody = systemSections.join("\n\n---\n\n");
     let skillIndex = "";
     try {
-      if (existsSync3(NEUROLOOP_MD_PATH)) {
+      if (existsSync4(NEUROLOOP_MD_PATH)) {
         skillIndex = `
 
 ## \u{1F4D6} NeuroLoop Capabilities
-${readFileSync3(NEUROLOOP_MD_PATH, "utf8")}`;
+${readFileSync4(NEUROLOOP_MD_PATH, "utf8")}`;
       }
     } catch {
     }
@@ -2008,16 +2139,9 @@ Available commands and typical args:
       }
     };
   }
-  function discoverExgPort() {
-    return new Promise((resolve) => {
-      exec(
-        "lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | grep -i neuroskill | head -1",
-        (_, stdout) => {
-          const m = stdout.match(/:(\d{4,5})\s/);
-          resolve(m ? parseInt(m[1], 10) : 8375);
-        }
-      );
-    });
+  async function discoverExgPort() {
+    const port = await discoverSkillServer();
+    return port ?? getSkillPort();
   }
   function connectExgWs() {
     if (!exgEnabled) return;
@@ -2307,8 +2431,9 @@ Switch to a ${provider.displayName} model with /model or Ctrl+L.`,
         }
         disconnectExgWs();
         exgWsPort = port;
+        setSkillPort(port);
         connectExgWs();
-        handlerCtx.ui.notify(`EXG connecting on port ${port}`, "info");
+        handlerCtx.ui.notify(`EXG connecting on port ${port} (saved)`, "info");
         return;
       }
       const secs = parseFloat(arg);
@@ -2489,11 +2614,129 @@ ${result.text}
     }
   });
   pi.registerCommand("llm", {
-    description: "On-device LLM \xB7 /llm [status|start|stop|catalog|select|chat \u2026]",
+    description: "On-device LLM \xB7 /llm [status|start|stop|list|add|remove|select|download|fit|chat \u2026]",
     handler: async (args, handlerCtx) => {
       const parts = args.trim().split(/\s+/).filter(Boolean);
-      if (!parts.length) parts.push("status");
-      await neuroCmd(["llm", ...parts], "\u{1F916} LLM" + (parts.length ? ` \u2014 ${parts[0]}` : ""), handlerCtx);
+      const sub = (parts[0] ?? "status").toLowerCase();
+      if (sub === "status" || parts.length === 0) {
+        const result = await runNeuroSkill(["llm", "status"]);
+        if (result.ok) {
+          const data = result.data;
+          const status = data?.status ?? "unknown";
+          const model = data?.model_name ?? data?.model ?? "\u2013";
+          const nCtx = data?.n_ctx ?? "\u2013";
+          const vision = data?.supports_vision ? "yes" : "no";
+          const lines = [
+            `**Status:** ${status}`,
+            `**Model:** ${model}`,
+            `**Context:** ${nCtx} tokens`,
+            `**Vision:** ${vision}`
+          ];
+          pi.sendMessage({
+            customType: NEUROSKILL_STATUS_TYPE,
+            content: `## \u{1F916} LLM Server
+${lines.join("\n")}`,
+            display: true,
+            details: void 0
+          });
+        } else {
+          handlerCtx.ui.notify(result.error ?? "LLM status failed", "error");
+        }
+        return;
+      }
+      if (sub === "start") {
+        handlerCtx.ui.notify("Starting LLM server \u2014 loading model \u2026", "info");
+        await neuroCmd(["llm", "start"], "\u{1F916} LLM \u2014 start", handlerCtx);
+        return;
+      }
+      if (sub === "stop") {
+        await neuroCmd(["llm", "stop"], "\u{1F916} LLM \u2014 stop", handlerCtx);
+        return;
+      }
+      if (sub === "list" || sub === "catalog") {
+        const result = await runNeuroSkill(["llm", "catalog"]);
+        if (result.ok) {
+          const data = result.data;
+          const entries = data?.entries ?? [];
+          const active = data?.active_model ?? "\u2013";
+          const mmproj = data?.active_mmproj ?? "\u2013";
+          if (!entries.length) {
+            handlerCtx.ui.notify("Model catalog is empty. Use /llm add to add a model.", "warning");
+            return;
+          }
+          const lines = entries.map((e) => {
+            const mark = e.filename === active ? "\u25B6 " : "  ";
+            const state = e.state ?? e.status ?? "";
+            const size = e.size_gb ? `${e.size_gb} GB` : "";
+            const quant = e.quant ?? "";
+            return `${mark}**${e.filename}**  ${quant}  ${size}  \`${state}\``;
+          });
+          const header = `Active: **${active}** \xB7 mmproj: **${mmproj}**`;
+          pi.sendMessage({
+            customType: NEUROSKILL_STATUS_TYPE,
+            content: `## \u{1F916} LLM Catalog
+${header}
+
+${lines.join("\n")}`,
+            display: true,
+            details: void 0
+          });
+        } else {
+          handlerCtx.ui.notify(result.error ?? "LLM catalog failed", "error");
+        }
+        return;
+      }
+      if (sub === "add") {
+        if (parts.length < 2) {
+          handlerCtx.ui.notify(
+            "Usage: /llm add <repo> <filename> [--mmproj <file>]\n   or: /llm add <hf-url>",
+            "warning"
+          );
+          return;
+        }
+        await neuroCmd(["llm", ...parts], "\u{1F916} LLM \u2014 add", handlerCtx);
+        return;
+      }
+      if (sub === "remove" || sub === "delete") {
+        const filename = parts[1];
+        if (!filename) {
+          handlerCtx.ui.notify("Usage: /llm remove <filename>", "warning");
+          return;
+        }
+        await neuroCmd(["llm", "delete", filename], "\u{1F916} LLM \u2014 delete", handlerCtx);
+        return;
+      }
+      if (sub === "select") {
+        const filename = parts[1];
+        if (!filename) {
+          handlerCtx.ui.notify("Usage: /llm select <filename>", "warning");
+          return;
+        }
+        await neuroCmd(["llm", "select", filename], "\u{1F916} LLM \u2014 select", handlerCtx);
+        return;
+      }
+      if (sub === "download") {
+        const filename = parts[1];
+        if (!filename) {
+          handlerCtx.ui.notify("Usage: /llm download <filename>", "warning");
+          return;
+        }
+        handlerCtx.ui.notify(`Downloading ${filename} \u2014 poll /llm list for progress`, "info");
+        await neuroCmd(["llm", "download", filename], "\u{1F916} LLM \u2014 download", handlerCtx);
+        return;
+      }
+      if (sub === "edit") {
+        handlerCtx.ui.notify(
+          "Model editing is managed from the Skill app UI (Settings \u2192 LLM).\nUse /llm select <filename> to change the active model,\nor /llm add / /llm remove to manage the catalog.",
+          "info"
+        );
+        return;
+      }
+      if (sub === "fit") {
+        await neuroCmd(["llm", "fit"], "\u{1F916} LLM \u2014 hardware fit", handlerCtx);
+        return;
+      }
+      await neuroCmd(["llm", ...parts], "\u{1F916} LLM" + (parts.length ? ` \u2014 ${sub}` : ""), handlerCtx);
     }
   });
   pi.registerCommand("screenshots", {
@@ -2547,15 +2790,83 @@ ${result.text}`,
 
 // src/main.ts
 process.env.PI_SKIP_VERSION_CHECK = "1";
+var [major] = process.versions.node.split(".").map(Number);
+if (major < 20) {
+  console.error(`neuroloop requires Node.js >= 20 (running ${process.version})`);
+  process.exit(1);
+}
 var MAIN_FILE = fileURLToPath3(import.meta.url);
 var SRC_DIR = dirname4(MAIN_FILE);
-var NEUROLOOP_DIR2 = join4(SRC_DIR, "..");
-var AGENT_DIR2 = join4(homedir3(), ".neuroloop");
-var SKILLS_DIR2 = join4(NEUROLOOP_DIR2, "skills");
-var METRICS_MD_PATH = join4(NEUROLOOP_DIR2, "METRICS.md");
-var authStorage = AuthStorage.create(join4(AGENT_DIR2, "auth.json"));
-var modelRegistry = new ModelRegistry(authStorage, join4(AGENT_DIR2, "models.json"));
-var settingsManager = SettingsManager.create(process.cwd(), AGENT_DIR2);
+var NEUROLOOP_DIR2 = join5(SRC_DIR, "..");
+var AGENT_DIR3 = join5(homedir4(), ".neuroloop");
+var SKILLS_DIR2 = join5(NEUROLOOP_DIR2, "skills");
+var METRICS_MD_PATH = join5(NEUROLOOP_DIR2, "METRICS.md");
+var authStorage = AuthStorage.create(join5(AGENT_DIR3, "auth.json"));
+var modelRegistry = new ModelRegistry(authStorage, join5(AGENT_DIR3, "models.json"));
+var settingsManager = SettingsManager.create(process.cwd(), AGENT_DIR3);
+function localModelEntry(id, opts = {}) {
+  return {
+    id,
+    name: id,
+    reasoning: false,
+    input: opts.supportsVision ? ["text", "image"] : ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: opts.contextWindow ?? 32768,
+    maxTokens: 8192,
+    compat: {
+      supportsStore: false,
+      supportsReasoningEffort: false,
+      supportsDeveloperRole: false,
+      requiresToolResultName: false,
+      supportsStrictMode: false
+    }
+  };
+}
+async function registerSkillLlm() {
+  try {
+    const discoveredPort = await discoverSkillServer();
+    if (!discoveredPort) return false;
+    const baseUrl = `http://127.0.0.1:${discoveredPort}`;
+    const res = await fetch(`${baseUrl}/llm/status`, {
+      signal: AbortSignal.timeout(2e3)
+    });
+    if (!res.ok) return false;
+    const status = await res.json();
+    if (status.status !== "running" && status.status !== "ok") return false;
+    const modelName = status.model_name ?? status.model;
+    if (!modelName) return false;
+    const models = [
+      localModelEntry(modelName, {
+        contextWindow: status.n_ctx ?? 32768,
+        supportsVision: status.supports_vision ?? false
+      })
+    ];
+    try {
+      const modelsRes = await fetch(`${baseUrl}/v1/models`, {
+        signal: AbortSignal.timeout(1500)
+      });
+      if (modelsRes.ok) {
+        const body = await modelsRes.json();
+        for (const m of body.data ?? []) {
+          if (m.id && m.id !== modelName) {
+            models.push(localModelEntry(m.id));
+          }
+        }
+      }
+    } catch {
+    }
+    modelRegistry.registerProvider("skill-llm", {
+      baseUrl: `${baseUrl}/v1`,
+      apiKey: "SKILL_LLM_API_KEY",
+      api: "openai-completions",
+      models
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+var skillLlmRegistered = await registerSkillLlm();
 var DEFAULT_OLLAMA_MODEL = "gpt-oss:20b";
 function ollamaModelEntry(id, paramSize = "") {
   const bigModel = /\b(70b|72b|110b|180b)\b/i.test(paramSize);
@@ -2607,17 +2918,17 @@ await registerOllamaModels();
 var loadedSkills = [];
 var loader = new DefaultResourceLoader({
   cwd: process.cwd(),
-  agentDir: AGENT_DIR2,
+  agentDir: AGENT_DIR3,
   settingsManager,
   // Load individual skills from ./skills/<name>/SKILL.md + METRICS.md
   skillsOverride: (base) => {
     const extra = [];
-    if (existsSync4(SKILLS_DIR2)) {
+    if (existsSync5(SKILLS_DIR2)) {
       for (const entry of readdirSync(SKILLS_DIR2, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue;
-        const skillFile = join4(SKILLS_DIR2, entry.name, "SKILL.md");
-        if (!existsSync4(skillFile)) continue;
-        const content = readFileSync4(skillFile, "utf8");
+        const skillFile = join5(SKILLS_DIR2, entry.name, "SKILL.md");
+        if (!existsSync5(skillFile)) continue;
+        const content = readFileSync5(skillFile, "utf8");
         const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
         if (!fmMatch) continue;
         const fm = fmMatch[1];
@@ -2630,13 +2941,13 @@ var loader = new DefaultResourceLoader({
           // Package-relative path: "neuroloop/skills/…/SKILL.md"
           // Consistent regardless of cwd or where npm installed the package.
           filePath: skillFile,
-          baseDir: join4(SKILLS_DIR2, entry.name),
+          baseDir: join5(SKILLS_DIR2, entry.name),
           source: "path",
           disableModelInvocation: false
         });
       }
     }
-    if (existsSync4(METRICS_MD_PATH)) {
+    if (existsSync5(METRICS_MD_PATH)) {
       extra.push({
         name: "neuroskill-metrics",
         description: "NeuroSkill EXG metrics reference \u2014 all indices, band powers, scores, and their scientific basis.",
@@ -2674,11 +2985,11 @@ var loader = new DefaultResourceLoader({
 await loader.reload();
 var { session, modelFallbackMessage } = await createAgentSession({
   cwd: process.cwd(),
-  agentDir: AGENT_DIR2,
+  agentDir: AGENT_DIR3,
   authStorage,
   modelRegistry,
   resourceLoader: loader,
-  sessionManager: SessionManager.create(process.cwd(), join4(AGENT_DIR2, "sessions")),
+  sessionManager: SessionManager.create(process.cwd(), join5(AGENT_DIR3, "sessions")),
   settingsManager
   // No explicit model — let findInitialModel choose:
   //   built-in providers win if they have API keys / OAuth tokens,

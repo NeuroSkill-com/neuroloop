@@ -1,7 +1,10 @@
 # NeuroLoop Skill Index
 
-NeuroLoop is a biometric AI companion powered by a real-time EXG device (Muse, OpenBCI Ganglion, Neurable MW75 Neuro, Hermes V1).
+NeuroLoop is a biometric AI companion powered by real-time consumer EXG devices.
 It reads brainwaves and physiology continuously, and uses that data to inform every response.
+
+Supported devices: Muse (2016/2/S/Athena), Neurable MW75 Neuro, OpenBCI (Ganglion/Cyton/Cyton+Daisy/Galea),
+Emotiv (EPOC X/Insight/Flex/MN8), IDUN Guardian, RE-AK Nucleus Hermes, and Mendi (fNIRS).
 
 NeuroSkill exposes the EXG analysis API through a local WebSocket server and HTTP tunnel.
 The `npx neuroskill <command>` script is the fastest way to query it from a terminal, shell

@@ -1,8 +1,20 @@
 # NeuroLoop
 
-**NeuroLoop** is an BCI-aware AI coding and life companion powered by a real-time consumer BCI device. It reads brainwaves and physiology continuously and uses that live biometric data to inform every response — adapting its tone, offering guided protocols, and labelling meaningful mental states as they happen.
+**NeuroLoop** is a BCI-aware AI coding and life companion powered by real-time consumer EXG devices. It reads brainwaves and physiology continuously and uses that live biometric data to inform every response — adapting its tone, offering guided protocols, and labelling meaningful mental states as they happen.
 
 NeuroLoop™ runs on top of the [pi coding agent](https://github.com/mariozechner/pi-coding-agent) framework and communicates with the [NeuroSkill™](https://neuroskill.com) State of Mind BCI server, which exposes a local WebSocket API for real-time neural data.
+
+### Supported Devices
+
+| Company | Device | Channels | Sample Rate |
+|---------|--------|----------|-------------|
+| **Muse** | Muse (2016), Muse 2, Muse S, Muse S (Athena) | 4 (TP9/AF7/AF8/TP10) | 256 Hz |
+| **Neurable** | MW75 Neuro | 12 | 500 Hz |
+| **OpenBCI** | Ganglion (4ch), Cyton (8ch), Cyton+Daisy (16ch), Galea | 4–16 | 200–250 Hz |
+| **Emotiv** | EPOC X (14ch), Insight (5ch), Flex Saline (32ch), MN8 | 5–32 | 128–256 Hz |
+| **IDUN** | Guardian (in-ear EEG earbud) | 1 | 250 Hz |
+| **RE-AK** | Nucleus Hermes | 8 | 250 Hz |
+| **Mendi** | Mendi (fNIRS headband) | fNIRS optical | — |
 
 [Paper](https://arxiv.org/abs/2603.03212)
 
@@ -22,7 +34,9 @@ NeuroLoop™ runs on top of the [pi coding agent](https://github.com/mariozechne
 - 🌐 **Web tools** — `web_fetch` and `web_search` available to the agent
 - 📅 **Daily calibration nudge** — reminds the user to run a calibration sequence at most once every 24 hours
 - 🔑 **In-app API key management** — add, list, or remove provider API keys at runtime with `/key` (no file editing required); keys are stored securely in `~/.neuroloop/auth.json`
-- 🤖 **Multi-provider model support** — Anthropic, OpenAI, Gemini, and all Ollama models (including `gpt-oss:20b` as the default local model)
+- 🤖 **Multi-provider model support** — Anthropic, OpenAI, Gemini, Skill app local LLM (auto-discovered), and all Ollama models (including `gpt-oss:20b` as the default local model)
+- 🛡️ **Cross-platform** — works on macOS, Linux, and Windows (cross-platform port discovery, shell escaping, file permissions)
+- 🔒 **Safety hardened** — SSRF protection on web tools, shell injection prevention, bounded memory/protocol limits, restrictive file permissions, Node ≥ 20 enforced at startup
 
 ---
 
@@ -32,7 +46,7 @@ NeuroLoop™ runs on top of the [pi coding agent](https://github.com/mariozechne
 npx neuroloop
 ```
 
-Requires Node.js ≥ 20. The NeuroSkill™ EXG server must be running and a Muse device connected for live biometric features.
+Requires Node.js ≥ 20 (enforced at startup). The NeuroSkill™ EXG server must be running and a supported EXG device connected for live biometric features (see [Supported Devices](#supported-devices) above).
 
 ---
 
@@ -84,7 +98,14 @@ NeuroLoop extends the pi TUI with:
 | `/say <text>` | Speak text aloud via on-device TTS (supports `--voice`) |
 | `/notify <title> [body]` | Send an OS notification |
 | `/calibrate` | Start EXG calibration sequence |
-| `/llm [sub]` | On-device LLM — `status`, `start`, `stop`, `catalog`, `select`, `chat` |
+| `/llm` | On-device LLM status (model, context, vision) |
+| `/llm start` / `/llm stop` | Start or stop the Skill LLM inference server |
+| `/llm list` | Show model catalog with active marker, quant, size, state |
+| `/llm add <repo> <file>` | Add external HuggingFace model (supports `--mmproj`) |
+| `/llm remove <file>` | Delete a locally-cached model |
+| `/llm select <file>` | Set the active text model |
+| `/llm download <file>` | Start downloading a model |
+| `/llm fit` | Check which models fit in available RAM/VRAM |
 | `/screenshots [query]` | Search screenshots (OCR / CLIP) or get EEG-session screenshots |
 | `/timer` | Start focus timer |
 | `/umap` | 3D UMAP projection of EXG data |
@@ -137,7 +158,7 @@ The following skill files are loaded from `skills/` and made available to the LL
 
 NeuroLoop exposes 40+ neuroscientific metrics derived from the Muse headset, including:
 
-- EEG band powers (δ, θ, α, β, γ) at TP9, AF7, AF8, TP10
+- EEG band powers (δ, θ, α, β, γ) across all available electrodes
 - Ratios and indices: TAR, BAR, TBR, DTR, PSE, APF, BPS, SNR, Coherence, PAC, FAA
 - Complexity measures: Permutation Entropy, Higuchi FD, DFA Exponent, Sample Entropy
 - Composite scores: Focus, Relaxation, Engagement, Meditation, Cognitive Load, Drowsiness
@@ -162,7 +183,7 @@ neuroloop/
 │   ├── memory.ts             # Persistent memory helpers (~/.neuroskill/memory.md)
 │   ├── neuroskill/
 │   │   ├── index.ts          # Public barrel
-│   │   ├── run.ts            # runNeuroSkill() — WebSocket command runner
+│   │   ├── run.ts            # runNeuroSkill() — CLI executor + cross-platform port discovery
 │   │   ├── signals.ts        # detectSignals() — prompt domain detection
 │   │   └── context.ts        # selectContextualData() — parallel data fetching + compare cache
 │   └── tools/
@@ -175,7 +196,21 @@ neuroloop/
 └── dist/                     # Compiled output (neuroloop.js)
 ```
 
-Agent data is stored under `~/.neuroloop/` (sessions, auth, settings, models).
+Agent data is stored under `~/.neuroloop/` (sessions, auth, settings, models, port config).
+
+---
+
+## Security
+
+- **File permissions** — `auth.json`, `memory.md`, port config, and calibration state are written with `0o600` (owner-only); directories with `0o700`
+- **SSRF protection** — `web_fetch` blocks requests to private/loopback/RFC-1918/link-local networks and `file://` URLs
+- **Shell injection prevention** — on Windows, all CLI arguments are escaped before passing to `cmd.exe` (`shell: true`); on Unix, `execFile` is used without a shell
+- **Bounded resources** — memory file capped at 512 KB; protocol steps capped at 200 with max 5 min/step; stdout buffer set to 8 MB
+- **Fetch timeout** — `web_fetch` has a hard 30s timeout via `AbortSignal.any()` in addition to the caller's cancellation signal
+- **Node version gate** — startup rejects Node < 20 with a clear error (required for `AbortSignal.any()`, `AbortSignal.timeout()`, global `fetch`)
+- **PID sanitization** — neuroskill's `lsof` fallback validates `pgrep` output is numeric before interpolating into shell commands
+- **Server identity validation** — port discovery probe checks the `/health` JSON response structure, not just HTTP 200
+- **Dependency auditing** — zero known vulnerabilities (`npm audit`)
 
 ---
 
@@ -225,11 +260,19 @@ Model selection order:
 1. Model saved in the current session
 2. Default from `~/.neuroloop/settings.json`
 3. First built-in provider with a valid API key or OAuth token
-4. First available Ollama model (`gpt-oss:20b` when none are listed first)
+4. **Skill app local LLM** — auto-discovered on port 8375 via direct HTTP (`/v1/chat/completions`)
+5. First available Ollama model (`gpt-oss:20b` when none are listed first)
+
+When the Skill app has a running LLM, it is registered as the `skill-llm` provider and connected to directly via the OpenAI-compatible HTTP API — no CLI overhead for inference. If the Skill app's LLM server has an API key configured, set the `SKILL_LLM_API_KEY` environment variable.
 
 ### NeuroSkill™ Server Port
 
-The agent auto-discovers the NeuroSkill™ server port via `lsof` and falls back to `8375`. You can override the port at runtime with `/exg port <n>`.
+The agent auto-discovers the NeuroSkill™ server port using a cross-platform strategy:
+1. Saved port from `~/.neuroloop/neuroskill_port.json`
+2. HTTP health-check probe on common ports (8375, 8376, 8377)
+3. `lsof` process scan (macOS/Linux)
+
+You can override the port at runtime with `/exg port <n>` — the chosen port is persisted for future sessions. The port is also passed to the neuroskill CLI via `--port` to skip mDNS discovery.
 
 ---
 

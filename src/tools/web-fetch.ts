@@ -8,6 +8,32 @@ import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
 
 const DEFAULT_MAX_CHARS = 12000;
 
+/** Block requests to private/internal networks to prevent SSRF. */
+function isPrivateUrl(urlStr: string): boolean {
+	try {
+		const u = new URL(urlStr);
+		const host = u.hostname;
+		// Block loopback, link-local, and RFC-1918 private ranges
+		if (
+			host === "localhost" ||
+			host === "127.0.0.1" ||
+			host === "[::1]" ||
+			host === "0.0.0.0" ||
+			host.endsWith(".local") ||
+			host.startsWith("10.") ||
+			host.startsWith("192.168.") ||
+			/^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+			host.startsWith("169.254.") ||
+			u.protocol === "file:"
+		) {
+			return true;
+		}
+	} catch {
+		return true; // unparseable → block
+	}
+	return false;
+}
+
 function stripHtml(html: string): string {
 	return html
 		.replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -43,12 +69,27 @@ export const webFetchTool: ToolDefinition = {
 
 	async execute(_id, params:any, signal, _onUpdate, _ctx) {
 		const limit = params.maxChars ?? DEFAULT_MAX_CHARS;
+
+		if (isPrivateUrl(params.url)) {
+			return {
+				content: [{ type: "text" as const, text: "Blocked: cannot fetch private/internal URLs." }],
+				details: { url: params.url, error: "private_url_blocked", ok: false },
+			};
+		}
+
 		let text: string;
 		let status: number;
 
 		try {
+			// Combine caller signal with a hard 30s timeout
+			const timeout = AbortSignal.timeout(30_000);
+			const combined = signal
+				? AbortSignal.any([signal, timeout])
+				: timeout;
+
 			const res = await fetch(params.url, {
-				signal,
+				signal: combined,
+				redirect: "follow",
 				headers: {
 					"User-Agent":
 						"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",

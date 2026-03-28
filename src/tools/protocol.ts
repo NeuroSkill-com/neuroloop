@@ -355,7 +355,14 @@ DURATION GUIDELINES:
 	}),
 
 	execute: async (_id, params:any, signal, onUpdate, _ctx) => {
-		const { title, intro, steps } = params;
+		const { title, intro } = params;
+		const MAX_STEPS = 200;
+		const MAX_STEP_DURATION = 300; // 5 minutes per step
+		const steps: Array<{ name: string; instruction: string; duration_secs: number }> =
+			(params.steps ?? []).slice(0, MAX_STEPS).map((s: any) => ({
+				...s,
+				duration_secs: Math.max(0, Math.min(s.duration_secs ?? 0, MAX_STEP_DURATION)),
+			}));
 		const log: string[] = [];
 
 		/** Append a line to the running log and push the full log to onUpdate. */

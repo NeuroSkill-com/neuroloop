@@ -6,7 +6,14 @@
  */
 
 export type { NeuroSkillResult } from "./run.ts";
-export { NEUROSKILL_TIMEOUT_MS, runNeuroSkill } from "./run.ts";
+export {
+	NEUROSKILL_TIMEOUT_MS,
+	runNeuroSkill,
+	getSkillPort,
+	setSkillPort,
+	probeSkillServer,
+	discoverSkillServer,
+} from "./run.ts";
 
 export type { Signals } from "./signals.ts";
 export { any, detectSignals } from "./signals.ts";

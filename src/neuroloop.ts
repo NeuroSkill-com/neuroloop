@@ -18,7 +18,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { exec } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
@@ -35,7 +34,7 @@ const _pkgVersion: string =
 	(JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../package.json"), "utf8")) as { version: string }).version;
 
 import WS from "ws";
-import { runNeuroSkill, selectContextualData, warmCompareInBackground } from "./neuroskill/index.ts";
+import { runNeuroSkill, selectContextualData, warmCompareInBackground, getSkillPort, setSkillPort, discoverSkillServer } from "./neuroskill/index.ts";
 import { MEMORY_PATH, readMemory, writeMemory } from "./memory.ts";
 import { webFetchTool } from "./tools/web-fetch.ts";
 import { webSearchTool } from "./tools/web-search.ts";
@@ -75,7 +74,7 @@ function markCalibrationNudgeSent(): void {
 		writeFileSync(
 			CALIBRATION_PROMPT_STATE_PATH,
 			JSON.stringify({ lastPromptedAt: Date.now() }),
-			"utf8",
+			{ encoding: "utf8", mode: 0o600 },
 		);
 	} catch {
 		// Non-fatal — worst case we nudge again next turn.
@@ -662,17 +661,10 @@ Available commands and typical args:
 
 	// ── 4b. WebSocket client ─────────────────────────────────────────────────
 
-	/** Discover the neuroskill server port via lsof; fall back to 8375. */
-	function discoverExgPort(): Promise<number> {
-		return new Promise((resolve) => {
-			exec(
-				"lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | grep -i neuroskill | head -1",
-				(_, stdout) => {
-					const m = stdout.match(/:(\d{4,5})\s/);
-					resolve(m ? parseInt(m[1], 10) : 8375);
-				},
-			);
-		});
+	/** Discover the neuroskill server port (cross-platform). */
+	async function discoverExgPort(): Promise<number> {
+		const port = await discoverSkillServer();
+		return port ?? getSkillPort();
 	}
 
 	function connectExgWs(): void {
@@ -1049,8 +1041,9 @@ Available commands and typical args:
 				}
 				disconnectExgWs();
 				exgWsPort = port;
+				setSkillPort(port); // persist for neuroskill CLI + next launch
 				connectExgWs();
-				handlerCtx.ui.notify(`EXG connecting on port ${port}`, "info");
+				handlerCtx.ui.notify(`EXG connecting on port ${port} (saved)`, "info");
 				return;
 			}
 
@@ -1267,13 +1260,166 @@ Available commands and typical args:
 		},
 	});
 
-	// /llm [sub] — on-device LLM management
+	// /llm [sub] — on-device LLM management (Skill app)
+	//
+	//  /llm                → status of the Skill LLM server
+	//  /llm status         → same as above
+	//  /llm start          → load active model and start inference server
+	//  /llm stop           → stop inference server and free GPU memory
+	//  /llm list           → list models in the catalog with download states
+	//  /llm add <repo> <filename> [--mmproj <file>]  → add an external HF model
+	//  /llm remove <filename>     → delete a locally-cached model
+	//  /llm select <filename>     → set active text model
+	//  /llm edit <filename> [key=value …] → (reserved / not yet implemented)
+	//  /llm download <filename>   → start downloading a model
+	//  /llm fit            → check which models fit in available RAM/VRAM
+	//  /llm chat "msg"     → single-shot LLM chat
+	//  /llm *              → pass through to neuroskill llm <sub>
 	pi.registerCommand("llm", {
-		description: "On-device LLM · /llm [status|start|stop|catalog|select|chat …]",
+		description: "On-device LLM · /llm [status|start|stop|list|add|remove|select|download|fit|chat …]",
 		handler: async (args, handlerCtx) => {
 			const parts = args.trim().split(/\s+/).filter(Boolean);
-			if (!parts.length) parts.push("status");
-			await neuroCmd(["llm", ...parts], "🤖 LLM" + (parts.length ? ` — ${parts[0]}` : ""), handlerCtx);
+			const sub = (parts[0] ?? "status").toLowerCase();
+
+			// ── status ───────────────────────────────────────────────
+			if (sub === "status" || parts.length === 0) {
+				const result = await runNeuroSkill(["llm", "status"]);
+				if (result.ok) {
+					const data = result.data as Record<string, unknown> | undefined;
+					const status  = data?.status ?? "unknown";
+					const model   = data?.model_name ?? data?.model ?? "–";
+					const nCtx    = data?.n_ctx ?? "–";
+					const vision  = data?.supports_vision ? "yes" : "no";
+					const lines = [
+						`**Status:** ${status}`,
+						`**Model:** ${model}`,
+						`**Context:** ${nCtx} tokens`,
+						`**Vision:** ${vision}`,
+					];
+					pi.sendMessage({
+						customType: NEUROSKILL_STATUS_TYPE,
+						content: `## 🤖 LLM Server\n${lines.join("\n")}`,
+						display: true,
+						details: undefined,
+					});
+				} else {
+					handlerCtx.ui.notify(result.error ?? "LLM status failed", "error");
+				}
+				return;
+			}
+
+			// ── start ────────────────────────────────────────────────
+			if (sub === "start") {
+				handlerCtx.ui.notify("Starting LLM server — loading model …", "info");
+				await neuroCmd(["llm", "start"], "🤖 LLM — start", handlerCtx);
+				return;
+			}
+
+			// ── stop ─────────────────────────────────────────────────
+			if (sub === "stop") {
+				await neuroCmd(["llm", "stop"], "🤖 LLM — stop", handlerCtx);
+				return;
+			}
+
+			// ── list (alias for catalog) ─────────────────────────────
+			if (sub === "list" || sub === "catalog") {
+				const result = await runNeuroSkill(["llm", "catalog"]);
+				if (result.ok) {
+					const data = result.data as Record<string, unknown> | undefined;
+					const entries = (data?.entries ?? []) as Array<Record<string, unknown>>;
+					const active  = data?.active_model ?? "–";
+					const mmproj  = data?.active_mmproj ?? "–";
+					if (!entries.length) {
+						handlerCtx.ui.notify("Model catalog is empty. Use /llm add to add a model.", "warning");
+						return;
+					}
+					const lines = entries.map((e) => {
+						const mark = e.filename === active ? "▶ " : "  ";
+						const state = e.state ?? e.status ?? "";
+						const size  = e.size_gb ? `${e.size_gb} GB` : "";
+						const quant = e.quant ?? "";
+						return `${mark}**${e.filename}**  ${quant}  ${size}  \`${state}\``;
+					});
+					const header = `Active: **${active}** · mmproj: **${mmproj}**`;
+					pi.sendMessage({
+						customType: NEUROSKILL_STATUS_TYPE,
+						content: `## 🤖 LLM Catalog\n${header}\n\n${lines.join("\n")}`,
+						display: true,
+						details: undefined,
+					});
+				} else {
+					handlerCtx.ui.notify(result.error ?? "LLM catalog failed", "error");
+				}
+				return;
+			}
+
+			// ── add <repo> <filename> [--mmproj <file>] ──────────────
+			if (sub === "add") {
+				if (parts.length < 2) {
+					handlerCtx.ui.notify(
+						"Usage: /llm add <repo> <filename> [--mmproj <file>]\n" +
+						"   or: /llm add <hf-url>",
+						"warning",
+					);
+					return;
+				}
+				await neuroCmd(["llm", ...parts], "🤖 LLM — add", handlerCtx);
+				return;
+			}
+
+			// ── remove / delete <filename> ───────────────────────────
+			if (sub === "remove" || sub === "delete") {
+				const filename = parts[1];
+				if (!filename) {
+					handlerCtx.ui.notify("Usage: /llm remove <filename>", "warning");
+					return;
+				}
+				await neuroCmd(["llm", "delete", filename], "🤖 LLM — delete", handlerCtx);
+				return;
+			}
+
+			// ── select <filename> ────────────────────────────────────
+			if (sub === "select") {
+				const filename = parts[1];
+				if (!filename) {
+					handlerCtx.ui.notify("Usage: /llm select <filename>", "warning");
+					return;
+				}
+				await neuroCmd(["llm", "select", filename], "🤖 LLM — select", handlerCtx);
+				return;
+			}
+
+			// ── download <filename> ──────────────────────────────────
+			if (sub === "download") {
+				const filename = parts[1];
+				if (!filename) {
+					handlerCtx.ui.notify("Usage: /llm download <filename>", "warning");
+					return;
+				}
+				handlerCtx.ui.notify(`Downloading ${filename} — poll /llm list for progress`, "info");
+				await neuroCmd(["llm", "download", filename], "🤖 LLM — download", handlerCtx);
+				return;
+			}
+
+			// ── edit (reserved — show help) ──────────────────────────
+			if (sub === "edit") {
+				handlerCtx.ui.notify(
+					"Model editing is managed from the Skill app UI (Settings → LLM).\n" +
+					"Use /llm select <filename> to change the active model,\n" +
+					"or /llm add / /llm remove to manage the catalog.",
+					"info",
+				);
+				return;
+			}
+
+			// ── fit ──────────────────────────────────────────────────
+			if (sub === "fit") {
+				await neuroCmd(["llm", "fit"], "🤖 LLM — hardware fit", handlerCtx);
+				return;
+			}
+
+			// ── fallthrough: pass any other sub-command to neuroskill ──
+			await neuroCmd(["llm", ...parts], "🤖 LLM" + (parts.length ? ` — ${sub}` : ""), handlerCtx);
 		},
 	});
 

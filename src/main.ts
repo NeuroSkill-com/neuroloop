@@ -1,6 +1,13 @@
 // Suppress the "Update Available" banner — version management is handled externally.
 process.env.PI_SKIP_VERSION_CHECK = "1";
 
+// Node ≥ 20 required for AbortSignal.any(), AbortSignal.timeout(), global fetch.
+const [major] = process.versions.node.split(".").map(Number);
+if (major < 20) {
+	console.error(`neuroloop requires Node.js >= 20 (running ${process.version})`);
+	process.exit(1);
+}
+
 /**
  * main.ts — NeuroLoop agent entry point.
  *
@@ -9,6 +16,7 @@ process.env.PI_SKIP_VERSION_CHECK = "1";
  * - ./skills/* + METRICS.md injected as individual skills
  * - neuroloopExtension factory (neuroskill status hook, custom tools)
  * - All built-in pi providers available (Anthropic, OpenAI, Gemini, …)
+ * - Skill app local LLM auto-discovered (port 8375, OpenAI-compatible /v1/*)
  * - All Ollama models auto-discovered; gpt-oss:20b always present as default
  * - Full interactive TUI via InteractiveMode
  *
@@ -16,7 +24,8 @@ process.env.PI_SKIP_VERSION_CHECK = "1";
  *   1. Model saved in session history
  *   2. Default from ~/.neuroloop/settings.json
  *   3. First built-in provider with a valid API key / OAuth token
- *   4. First Ollama model (gpt-oss:20b when no other Ollama model listed first)
+ *   4. Skill app local LLM (skill-llm provider — auto-discovered on port 8375)
+ *   5. First Ollama model (gpt-oss:20b when no other Ollama model listed first)
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -36,6 +45,7 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 import { neuroloopExtension } from "./neuroloop.ts";
+import { discoverSkillServer, getSkillPort } from "./neuroskill/index.ts";
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -55,6 +65,109 @@ const METRICS_MD_PATH = join(NEUROLOOP_DIR, "METRICS.md");
 const authStorage = AuthStorage.create(join(AGENT_DIR, "auth.json"));
 const modelRegistry = new ModelRegistry(authStorage, join(AGENT_DIR, "models.json"));
 const settingsManager = SettingsManager.create(process.cwd(), AGENT_DIR);
+
+// ---------------------------------------------------------------------------
+// Skill LLM — discover and register the local LLM running inside the Skill
+// app before falling back to Ollama.  The Skill app's WS+HTTP server
+// (default port 8375) exposes an OpenAI-compatible API at /v1/*.
+// ---------------------------------------------------------------------------
+
+// Port discovery is handled by the cross-platform neuroskill/run.ts module.
+// discoverSkillServer() tries the saved port, common alternatives, then
+// platform-specific discovery (lsof on macOS/Linux, netstat on Windows).
+
+/** Build a model entry for registerProvider. */
+function localModelEntry(
+	id: string,
+	opts: { contextWindow?: number; supportsVision?: boolean } = {},
+) {
+	return {
+		id,
+		name: id,
+		reasoning: false,
+		input: (opts.supportsVision ? ["text", "image"] : ["text"]) as ("text" | "image")[],
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		contextWindow: opts.contextWindow ?? 32768,
+		maxTokens: 8192,
+		compat: {
+			supportsStore: false,
+			supportsReasoningEffort: false,
+			supportsDeveloperRole: false,
+			requiresToolResultName: false,
+			supportsStrictMode: false,
+		},
+	};
+}
+
+/**
+ * Try to discover a running LLM inside the Skill app.
+ * Returns true if the provider was registered (server is running and has a model).
+ */
+async function registerSkillLlm(): Promise<boolean> {
+	try {
+		const discoveredPort = await discoverSkillServer();
+		if (!discoveredPort) return false;
+		const baseUrl = `http://127.0.0.1:${discoveredPort}`;
+
+		// Probe /llm/status — returns { status, model, n_ctx?, supports_vision? }
+		const res = await fetch(`${baseUrl}/llm/status`, {
+			signal: AbortSignal.timeout(2000),
+		});
+		if (!res.ok) return false;
+
+		const status = (await res.json()) as {
+			status: string;
+			model?: string;
+			model_name?: string;
+			n_ctx?: number;
+			supports_vision?: boolean;
+		};
+
+		if (status.status !== "running" && status.status !== "ok") return false;
+
+		const modelName = status.model_name ?? status.model;
+		if (!modelName) return false;
+
+		const models = [
+			localModelEntry(modelName, {
+				contextWindow: status.n_ctx ?? 32768,
+				supportsVision: status.supports_vision ?? false,
+			}),
+		];
+
+		// Also try to list additional models via /v1/models (may differ from active).
+		try {
+			const modelsRes = await fetch(`${baseUrl}/v1/models`, {
+				signal: AbortSignal.timeout(1500),
+			});
+			if (modelsRes.ok) {
+				const body = (await modelsRes.json()) as {
+					data?: Array<{ id: string }>;
+				};
+				for (const m of body.data ?? []) {
+					if (m.id && m.id !== modelName) {
+						models.push(localModelEntry(m.id));
+					}
+				}
+			}
+		} catch {
+			// Fine — we already have the active model.
+		}
+
+		modelRegistry.registerProvider("skill-llm", {
+			baseUrl: `${baseUrl}/v1`,
+			apiKey: "SKILL_LLM_API_KEY",
+			api: "openai-completions",
+			models,
+		});
+
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+const skillLlmRegistered = await registerSkillLlm();
 
 // ---------------------------------------------------------------------------
 // Ollama — auto-discover all available models, always include gpt-oss:20b.
