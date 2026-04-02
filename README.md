@@ -34,7 +34,9 @@ NeuroLoop™ runs on top of the [pi coding agent](https://github.com/mariozechne
 - 🌐 **Web tools** — `web_fetch` and `web_search` available to the agent
 - 📅 **Daily calibration nudge** — reminds the user to run a calibration sequence at most once every 24 hours
 - 🔑 **In-app API key management** — add, list, or remove provider API keys at runtime with `/key` (no file editing required); keys are stored securely in `~/.neuroloop/auth.json`
-- 🤖 **Multi-provider model support** — Anthropic, OpenAI, Gemini, Skill app local LLM (auto-discovered), and all Ollama models (including `gpt-oss:20b` as the default local model)
+- 🤖 **Multi-provider model support** — Anthropic, OpenAI, Gemini, Skill app local/remote LLM routes, and all Ollama models (including `gpt-oss:20b` as the default local model)
+- 🧩 **In-TUI model configuration** — create/update `~/.neuroloop/models.json` interactively (`/model-config add`) or open it in your system editor (`/model-config open`)
+- 🗂️ **Update visibility** — startup changelog card (shown once per version), `/changelog`, and live version route/status commands (`/version`, `/llm route`)
 - 🛡️ **Cross-platform** — works on macOS, Linux, and Windows (cross-platform port discovery, shell escaping, file permissions)
 - 🔒 **Safety hardened** — SSRF protection on web tools, shell injection prevention, bounded memory/protocol limits, restrictive file permissions, Node ≥ 20 enforced at startup
 
@@ -86,7 +88,7 @@ NeuroLoop extends the pi TUI with:
 | `/exg <seconds>` | Change the status poll interval (e.g. `/exg 0.5`) |
 | `/exg port <n>` | Connect to the NeuroSkill™ server on a different port |
 | `/neuro <cmd> [args…]` | Run any neuroskill subcommand directly (output shown in chat) |
-| `/session [index]` | Current or Nth session metrics (0 = latest) |
+| `/exg-session [index]` | Current or Nth session metrics (0 = latest) |
 | `/sessions` | List all recorded EXG sessions |
 | `/sleep [index]` | Sleep staging summary |
 | `/compare` | Compare last two sessions (~60 s, uses cache) |
@@ -98,7 +100,12 @@ NeuroLoop extends the pi TUI with:
 | `/say <text>` | Speak text aloud via on-device TTS (supports `--voice`) |
 | `/notify <title> [body]` | Send an OS notification |
 | `/calibrate` | Start EXG calibration sequence |
+| `/skills-update` | Force-refresh skills submodule from GitHub |
+| `/version [refresh]` | Show local/npm/GitHub version status |
+| `/changelog [all\|reset]` | Show unseen changelog updates, full changelog, or reset seen state |
 | `/llm` | On-device LLM status (model, context, vision) |
+| `/llm route` | Show active inference route and fallback chain |
+| `/llm connect [remote\|local\|auto]` | Start/connect Skill LLM via WS with local fallback |
 | `/llm start` / `/llm stop` | Start or stop the Skill LLM inference server |
 | `/llm list` | Show model catalog with active marker, quant, size, state |
 | `/llm add <repo> <file>` | Add external HuggingFace model (supports `--mmproj`) |
@@ -106,6 +113,7 @@ NeuroLoop extends the pi TUI with:
 | `/llm select <file>` | Set the active text model |
 | `/llm download <file>` | Start downloading a model |
 | `/llm fit` | Check which models fit in available RAM/VRAM |
+| `/model-config [add\|open\|path\|show]` | Manage `~/.neuroloop/models.json` from TUI or open in system editor |
 | `/screenshots [query]` | Search screenshots (OCR / CLIP) or get EEG-session screenshots |
 | `/timer` | Start focus timer |
 | `/umap` | 3D UMAP projection of EXG data |
@@ -181,6 +189,10 @@ neuroloop/
 │   ├── main.ts               # Entry point — session setup, skill loading, model registry
 │   ├── neuroloop.ts          # ExtensionFactory — tools, hooks, renderers, TUI, WebSocket
 │   ├── memory.ts             # Persistent memory helpers (~/.neuroskill/memory.md)
+│   ├── model-config.ts       # models.json helpers + system-open integration
+│   ├── runtime-updates.ts    # npm/GitHub version checks + runtime installs
+│   ├── skill-llm.ts          # Skill app LLM boot/connect/register helpers
+│   ├── skills-sync.ts        # skills submodule sync helpers
 │   ├── neuroskill/
 │   │   ├── index.ts          # Public barrel
 │   │   ├── run.ts            # runNeuroSkill() — CLI executor + cross-platform port discovery

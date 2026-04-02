@@ -15,7 +15,7 @@
  *     Groq, xAI, OpenRouter, Cerebras and any custom provider).
  */
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,14 +35,21 @@ const _pkgVersion: string =
 
 import WS from "ws";
 import { runNeuroSkill, selectContextualData, warmCompareInBackground, getSkillPort, setSkillPort, discoverSkillServer } from "./neuroskill/index.ts";
+import { syncSkillsFromGitHub } from "./skills-sync.ts";
+import { getRuntimeVersionState, refreshRuntimeVersions, type RuntimeVersionState } from "./runtime-updates.ts";
+import { registerSkillLlmProvider, startSkillLlmServer } from "./skill-llm.ts";
+import { MODEL_CONFIG_PATH, openModelsFileInSystem, readModelsFile, upsertProviderModel, writeModelsFile } from "./model-config.ts";
 import { MEMORY_PATH, readMemory, writeMemory } from "./memory.ts";
 import { webFetchTool } from "./tools/web-fetch.ts";
 import { webSearchTool } from "./tools/web-search.ts";
 import { runProtocolTool } from "./tools/protocol.ts";
 
 const AGENT_DIR = join(homedir(), ".neuroskill");
+const VERSION_STATE_DIR = join(homedir(), ".neuroloop");
 const NEUROLOOP_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 const NEUROLOOP_MD_PATH = join(NEUROLOOP_DIR, "NEUROLOOP.md");
+const CHANGELOG_PATH = join(NEUROLOOP_DIR, "CHANGELOG.md");
+const CHANGELOG_STATE_PATH = join(VERSION_STATE_DIR, "changelog_state.json");
 
 const NEUROSKILL_STATUS_TYPE = "neuroskill-status";
 
@@ -51,6 +58,64 @@ const NEUROSKILL_STATUS_TYPE = "neuroskill-status";
 // ---------------------------------------------------------------------------
 const CALIBRATION_PROMPT_STATE_PATH = join(AGENT_DIR, "last_calibration_prompt.json");
 const CALIBRATION_PROMPT_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+interface ChangelogState {
+	lastShownVersion?: string;
+}
+
+function readChangelogState(): ChangelogState {
+	try {
+		if (!existsSync(CHANGELOG_STATE_PATH)) return {};
+		return JSON.parse(readFileSync(CHANGELOG_STATE_PATH, "utf8")) as ChangelogState;
+	} catch {
+		return {};
+	}
+}
+
+function writeChangelogState(state: ChangelogState): void {
+	try {
+		if (!existsSync(VERSION_STATE_DIR)) {
+			mkdirSync(VERSION_STATE_DIR, { recursive: true, mode: 0o700 });
+		}
+		writeFileSync(CHANGELOG_STATE_PATH, JSON.stringify(state), { encoding: "utf8", mode: 0o600 });
+	} catch {
+		// non-fatal
+	}
+}
+
+function changelogSinceLastShown(currentVersion: string): string | null {
+	if (!existsSync(CHANGELOG_PATH)) return null;
+	const content = readFileSync(CHANGELOG_PATH, "utf8");
+	const state = readChangelogState();
+	if (state.lastShownVersion === currentVersion) return null;
+
+	const matches = [...content.matchAll(/^## \[(.+?)\].*$/gm)];
+	if (!matches.length) return null;
+
+	const sections = matches.map((m, i) => {
+		const version = m[1].trim();
+		const start = m.index ?? 0;
+		const end = i + 1 < matches.length ? (matches[i + 1].index ?? content.length) : content.length;
+		return { version, body: content.slice(start, end).trim() };
+	});
+
+	const currentIdx = sections.findIndex((s) => s.version === currentVersion);
+	const lastIdx = state.lastShownVersion
+		? sections.findIndex((s) => s.version === state.lastShownVersion)
+		: -1;
+
+	const startRange = 0;
+	const endRange = currentIdx >= 0 ? currentIdx + 1 : 1;
+	let selected = sections.slice(startRange, endRange);
+
+	if (lastIdx >= 0) {
+		selected = selected.slice(0, Math.max(0, lastIdx - startRange));
+	}
+
+	if (!selected.length) return null;
+	const block = selected.map((s) => s.body).join("\n\n---\n\n");
+	return `## 🆕 What changed since your last update\n\n${block}`;
+}
 
 /** Returns true if we should inject a calibration nudge this turn. */
 function shouldNudgeCalibration(): boolean {
@@ -490,6 +555,8 @@ Available commands and typical args:
 
 	// ── Runtime state ─────────────────────────────────────────────────────────
 	let exgEnabled    = true;
+	let runtimeVersions: RuntimeVersionState | null = getRuntimeVersionState();
+	let runtimeVersionsLoading = false;
 	let exgOnline     = false;
 	let exgMetrics: ExgMetrics | null = null;
 	let exgUpdatedAt: number | null   = null;
@@ -620,6 +687,27 @@ Available commands and typical args:
 	// ── 4a. Custom header ────────────────────────────────────────────────────
 
 	function buildHeader(_tui: TUI, theme: Theme) {
+		const versionLine = () => {
+			if (runtimeVersionsLoading) return theme.fg("dim", " versions: checking npm/github …");
+			if (!runtimeVersions) return theme.fg("dim", " versions: unavailable");
+			const nl = runtimeVersions.neuroloop;
+			const ns = runtimeVersions.neuroskill;
+			const gh = runtimeVersions.github;
+			const nlStatus = nl.npmLatest
+				? (nl.upToDate ? theme.fg("success", "latest") : theme.fg("warning", "update available"))
+				: theme.fg("dim", "npm ?");
+			const nsStatus = ns.npmLatest
+				? (ns.upToDate ? theme.fg("success", "latest") : theme.fg("warning", "updating"))
+				: theme.fg("dim", "npm ?");
+			const ghCommit = gh.latestCommit ? gh.latestCommit : "?";
+			const ghTag = gh.latestTag ?? "?";
+			return " "
+				+ theme.fg("dim", `neuroloop v${nl.local}`)
+				+ theme.fg("dim", " · npm ") + theme.fg("muted", `v${nl.npmLatest ?? "?"}`) + theme.fg("dim", " (") + nlStatus + theme.fg("dim", ")")
+				+ theme.fg("dim", " · neuroskill local ") + theme.fg("muted", `v${ns.localInstalled ?? "none"}`)
+				+ theme.fg("dim", " / npm ") + theme.fg("muted", `v${ns.npmLatest ?? "?"}`) + theme.fg("dim", " (") + nsStatus + theme.fg("dim", ")")
+				+ theme.fg("dim", ` · github ${ghCommit} · release ${ghTag}`);
+		};
 		// Only the essential shortcuts — keeps the hint row under ~120 chars.
 		const hints: [string, string][] = [
 			["esc",       "stop"],
@@ -643,15 +731,16 @@ Available commands and typical args:
 				const logo = theme.fg("accent", "◆") + " " + theme.bold("neuroloop")
 					+ theme.fg("dim", ` v${_pkgVersion}`);
 				lines.push(truncateToWidth(logo, width));
+				lines.push(truncateToWidth(versionLine(), width));
 
-				// ── row 2: keybinding hints ─────────────────────────────────
+				// ── row 3: keybinding hints ─────────────────────────────────
 				const hintStr = hints
 					.map(([k, a]) =>
 						theme.fg("dim", "[") + theme.fg("muted", k) + theme.fg("dim", "] ") + theme.fg("dim", a))
 					.join(theme.fg("dim", "  "));
 				lines.push(truncateToWidth(" " + hintStr, width));
 
-				// ── row 3: separator ────────────────────────────────────────
+				// ── row 4: separator ────────────────────────────────────────
 				lines.push(sep(theme, width));
 
 				return lines;
@@ -773,6 +862,29 @@ Available commands and typical args:
 	// ── 4c. session_start ─────────────────────────────────────────────────────
 
 	pi.on("session_start", (_event, ctx) => {
+		const changelog = changelogSinceLastShown(_pkgVersion);
+		if (changelog) {
+			pi.sendMessage({
+				customType: NEUROSKILL_STATUS_TYPE,
+				content: changelog,
+				display: true,
+				details: undefined,
+			});
+			writeChangelogState({ lastShownVersion: _pkgVersion });
+		}
+
+		if (!runtimeVersions && !runtimeVersionsLoading) {
+			runtimeVersionsLoading = true;
+			refreshRuntimeVersions(_pkgVersion)
+				.then((state) => {
+					runtimeVersions = state;
+					uiTui?.requestRender();
+				})
+				.finally(() => {
+					runtimeVersionsLoading = false;
+					uiTui?.requestRender();
+				});
+		}
 		ctx.ui.setHeader((tui, theme) => {
 			uiTui = tui;
 			// Discover port once, then open WebSocket (reconnects automatically).
@@ -1002,14 +1114,79 @@ Available commands and typical args:
 		},
 	});
 
-	// ── 4f. /exg — snapshot or live-panel control ─────────────────────────────
-	//
-	//  /exg              → show full snapshot in chat
-	//  /exg on           → re-enable live panel + reconnect WS
-	//  /exg off          → disable live panel + disconnect WS
-	//  /exg <n>          → set poll interval to n seconds (e.g. /exg 0.5)
-	//  /exg port <n>     → change server port and reconnect
+	// /model-config — add/open custom models.json from TUI
+	pi.registerCommand("model-config", {
+		description: "Manage custom model config · /model-config [add|open|path|show]",
+		handler: async (args, handlerCtx) => {
+			const sub = args.trim().toLowerCase();
 
+			if (sub === "path") {
+				handlerCtx.ui.notify(`models.json path: ${MODEL_CONFIG_PATH}`, "info");
+				return;
+			}
+
+			if (sub === "show") {
+				const file = readModelsFile();
+				pi.sendMessage({
+					customType: NEUROSKILL_STATUS_TYPE,
+					content: `## models.json\n\n\`\`\`json\n${JSON.stringify(file, null, 2)}\n\`\`\``,
+					display: true,
+					details: undefined,
+				});
+				return;
+			}
+
+			if (sub === "open") {
+				try {
+					writeModelsFile(readModelsFile());
+					await openModelsFileInSystem();
+					handlerCtx.ui.notify("Opened models.json in your system editor.", "info");
+				} catch (err) {
+					handlerCtx.ui.notify(err instanceof Error ? err.message : String(err), "error");
+				}
+				return;
+			}
+
+			if (sub && sub !== "add") {
+				handlerCtx.ui.notify("Usage: /model-config [add|open|path|show]", "warning");
+				return;
+			}
+
+			const provider = (await handlerCtx.ui.input("Provider id", "e.g. openrouter, lmstudio, vllm"))?.trim();
+			if (!provider) return;
+			const baseUrl = (await handlerCtx.ui.input("Base URL", "e.g. http://localhost:1234/v1"))?.trim();
+			if (!baseUrl) return;
+			const api = (await handlerCtx.ui.select("API type", ["openai-completions", "openai-responses", "anthropic-messages", "google-generative-ai"]))?.trim();
+			if (!api) return;
+			const apiKey = ((await handlerCtx.ui.input("API key value / env var name", "e.g. OPENROUTER_API_KEY")) ?? "").trim() || "DUMMY_KEY";
+			const modelId = (await handlerCtx.ui.input("Model id", "e.g. gpt-4o-mini"))?.trim();
+			if (!modelId) return;
+			const modelName = (await handlerCtx.ui.input("Model display name (optional)", "leave blank to use id"))?.trim();
+			const reasoning = ((await handlerCtx.ui.select("Reasoning model?", ["no", "yes"])) ?? "no") === "yes";
+			const supportsVision = ((await handlerCtx.ui.select("Supports image input?", ["no", "yes"])) ?? "no") === "yes";
+			const contextWindow = Number((await handlerCtx.ui.input("Context window", "128000")) ?? "128000");
+			const maxTokens = Number((await handlerCtx.ui.input("Max output tokens", "16384")) ?? "16384");
+
+			upsertProviderModel({
+				provider,
+				baseUrl,
+				api,
+				apiKey,
+				authHeader: true,
+				modelId,
+				modelName,
+				reasoning,
+				supportsVision,
+				contextWindow: Number.isFinite(contextWindow) && contextWindow > 0 ? contextWindow : 128000,
+				maxTokens: Number.isFinite(maxTokens) && maxTokens > 0 ? maxTokens : 16384,
+			});
+
+			handlerCtx.modelRegistry.refresh();
+			handlerCtx.ui.notify(`Saved ${provider}/${modelId} to models.json. Open /model to use it.`, "info");
+		},
+	});
+
+	// ── 4f. /exg — snapshot or live-panel control ─────────────────────────────
 	pi.registerCommand("exg", {
 		description: "EXG panel · /exg [on|off|<seconds>|port <n>]",
 		handler: async (args, handlerCtx) => {
@@ -1100,6 +1277,118 @@ Available commands and typical args:
 		},
 	});
 
+	// /skills-update — force refresh skills from GitHub immediately
+	pi.registerCommand("skills-update", {
+		description: "Force update skill files from GitHub",
+		handler: async (_args, handlerCtx) => {
+			handlerCtx.ui.notify("Syncing skills from GitHub …", "info");
+			const result = await syncSkillsFromGitHub({ force: true });
+			if (!result.ok) {
+				handlerCtx.ui.notify(
+					result.error ? `${result.message}\n${result.error}` : result.message,
+					"error",
+				);
+				return;
+			}
+
+			handlerCtx.ui.notify(result.message, "info");
+			if (result.updated) {
+				handlerCtx.ui.notify(
+					"Skills updated. Changes to loaded skill index apply fully after restarting neuroloop.",
+					"info",
+				);
+			}
+		},
+	});
+
+	// /version — show neuroloop/neuroskill/npm/github version status
+	pi.registerCommand("version", {
+		description: "Show local, npm, and GitHub version status · /version [refresh]",
+		handler: async (args, handlerCtx) => {
+			const shouldRefresh = args.trim().toLowerCase() === "refresh";
+			if (shouldRefresh || !runtimeVersions) {
+				runtimeVersionsLoading = true;
+				uiTui?.requestRender();
+				try {
+					runtimeVersions = await refreshRuntimeVersions(_pkgVersion);
+				} finally {
+					runtimeVersionsLoading = false;
+					uiTui?.requestRender();
+				}
+			}
+
+			const s = runtimeVersions;
+			if (!s) {
+				handlerCtx.ui.notify("Version status unavailable.", "warning");
+				return;
+			}
+
+			const nl = s.neuroloop;
+			const ns = s.neuroskill;
+			const gh = s.github;
+			const lines = [
+				"## 📦 Version Status",
+				`- neuroloop local: **v${nl.local}**`,
+				`- neuroloop npm latest: **v${nl.npmLatest ?? "?"}** (${nl.upToDate ? "latest" : "update available"})`,
+				`- neuroskill local runtime: **v${ns.localInstalled ?? "none"}**`,
+				`- neuroskill npm latest: **v${ns.npmLatest ?? "?"}** (${ns.upToDate ? "latest" : "update available"})`,
+				`- github latest commit: **${gh.latestCommit ?? "?"}**`,
+				`- github latest release: **${gh.latestTag ?? "?"}**`,
+			];
+			if (nl.updateError) lines.push(`- neuroloop auto-update error: \`${nl.updateError}\``);
+			if (ns.installError) lines.push(`- neuroskill local install error: \`${ns.installError}\``);
+
+			pi.sendMessage({
+				customType: NEUROSKILL_STATUS_TYPE,
+				content: lines.join("\n"),
+				display: true,
+				details: undefined,
+			});
+		},
+	});
+
+	// /changelog — show unseen changelog entries in TUI
+	pi.registerCommand("changelog", {
+		description: "Show changelog updates in chat · /changelog [all|reset]",
+		handler: async (args, handlerCtx) => {
+			const sub = args.trim().toLowerCase();
+			if (sub === "reset") {
+				writeChangelogState({});
+				handlerCtx.ui.notify("Changelog state reset. New updates will be shown on next launch.", "info");
+				return;
+			}
+
+			if (!existsSync(CHANGELOG_PATH)) {
+				handlerCtx.ui.notify("CHANGELOG.md not found.", "warning");
+				return;
+			}
+
+			if (sub === "all") {
+				pi.sendMessage({
+					customType: NEUROSKILL_STATUS_TYPE,
+					content: readFileSync(CHANGELOG_PATH, "utf8"),
+					display: true,
+					details: undefined,
+				});
+				return;
+			}
+
+			const unseen = changelogSinceLastShown(_pkgVersion);
+			if (!unseen) {
+				handlerCtx.ui.notify("No unseen changelog updates.", "info");
+				return;
+			}
+
+			pi.sendMessage({
+				customType: NEUROSKILL_STATUS_TYPE,
+				content: unseen,
+				display: true,
+				details: undefined,
+			});
+			writeChangelogState({ lastShownVersion: _pkgVersion });
+		},
+	});
+
 	// ── 4g′. Convenience neuroskill commands ──────────────────────────────────
 	//
 	// Thin wrappers around common neuroskill subcommands so users don't have to
@@ -1109,7 +1398,7 @@ Available commands and typical args:
 	async function neuroCmd(
 		cmdArgs: string[],
 		title: string,
-		handlerCtx: { ui: { notify(msg: string, level: string): void } },
+		handlerCtx: { ui: { notify(msg: string, level?: "error" | "warning" | "info"): void } },
 	): Promise<void> {
 		const result = await runNeuroSkill(cmdArgs);
 		if (result.ok && result.text) {
@@ -1264,6 +1553,7 @@ Available commands and typical args:
 	//
 	//  /llm                → status of the Skill LLM server
 	//  /llm status         → same as above
+	//  /llm route          → show active inference route + fallbacks
 	//  /llm start          → load active model and start inference server
 	//  /llm stop           → stop inference server and free GPU memory
 	//  /llm list           → list models in the catalog with download states
@@ -1274,12 +1564,59 @@ Available commands and typical args:
 	//  /llm download <filename>   → start downloading a model
 	//  /llm fit            → check which models fit in available RAM/VRAM
 	//  /llm chat "msg"     → single-shot LLM chat
+	//  /llm connect [remote|local|auto] → start skill LLM via WS and register provider, then fallback
 	//  /llm *              → pass through to neuroskill llm <sub>
 	pi.registerCommand("llm", {
-		description: "On-device LLM · /llm [status|start|stop|list|add|remove|select|download|fit|chat …]",
+		description: "LLM control · /llm [status|route|connect|start|stop|list|add|remove|select|download|fit|chat …]",
 		handler: async (args, handlerCtx) => {
 			const parts = args.trim().split(/\s+/).filter(Boolean);
 			const sub = (parts[0] ?? "status").toLowerCase();
+
+			// ── route ────────────────────────────────────────────────
+			if (sub === "route") {
+				const llmStatus = await runNeuroSkill(["llm", "status"]);
+				let skillRoute: string | null = null;
+				if (llmStatus.ok && llmStatus.data) {
+					const data = llmStatus.data as Record<string, unknown>;
+					const status = String(data.status ?? "").toLowerCase();
+					if (status === "running" || status === "ok") {
+						const mode = typeof data.mode === "string"
+							? data.mode
+							: (typeof data.backend === "string"
+								? data.backend
+								: (typeof data.remote === "boolean" ? (data.remote ? "remote" : "local") : ""));
+						skillRoute = `skill-llm${mode ? ` (${mode})` : ""}`;
+					}
+				}
+
+				const authStorage = handlerCtx.modelRegistry.authStorage;
+				const cloudProviders = KEY_PROVIDERS
+					.filter((p) => authStorage.has(p.id) || !!process.env[p.envVar])
+					.map((p) => p.id);
+
+				let ollamaOnline = false;
+				try {
+					const res = await fetch("http://localhost:11434/api/tags", { signal: AbortSignal.timeout(1200) });
+					ollamaOnline = res.ok;
+				} catch {
+					ollamaOnline = false;
+				}
+
+				const active = skillRoute ?? cloudProviders[0] ?? (ollamaOnline ? "ollama" : "none detected");
+				const fallbacks = [
+					...cloudProviders.filter((p) => p !== active),
+					...(ollamaOnline && active !== "ollama" ? ["ollama"] : []),
+					...(active !== "skill-llm (local)" ? ["skill-llm(local)"] : []),
+				].join(" → ") || "none";
+
+				pi.sendMessage({
+					customType: NEUROSKILL_STATUS_TYPE,
+					content: `## 🧭 LLM Route\nactive: **${active}**\nfallbacks: ${fallbacks}`,
+					display: true,
+					details: undefined,
+				});
+				return;
+			}
 
 			// ── status ───────────────────────────────────────────────
 			if (sub === "status" || parts.length === 0) {
@@ -1304,6 +1641,28 @@ Available commands and typical args:
 					});
 				} else {
 					handlerCtx.ui.notify(result.error ?? "LLM status failed", "error");
+				}
+				return;
+			}
+
+			// ── connect [remote|local|auto] ─────────────────────────
+			if (sub === "connect") {
+				const modeArg = (parts[1] ?? "auto").toLowerCase();
+				const mode = (modeArg === "remote" || modeArg === "local" || modeArg === "auto")
+					? modeArg
+					: "auto";
+				handlerCtx.ui.notify(`Connecting Skill LLM (${mode}) …`, "info");
+				const started = await startSkillLlmServer(mode);
+				if (!started.ok) {
+					handlerCtx.ui.notify(started.message, "error");
+					return;
+				}
+				const registered = await registerSkillLlmProvider(handlerCtx.modelRegistry as unknown as { registerProvider: (id: string, cfg: unknown) => void });
+				handlerCtx.ui.notify(started.message, "info");
+				if (registered) {
+					handlerCtx.ui.notify("Skill LLM provider connected. Select it with /model (Ctrl+L).", "info");
+				} else {
+					handlerCtx.ui.notify("LLM server started but provider registration failed. Check /llm status.", "warning");
 				}
 				return;
 			}

@@ -1,25 +1,26 @@
 #!/usr/bin/env node
 
 // src/main.ts
-import { existsSync as existsSync5, readdirSync, readFileSync as readFileSync5 } from "node:fs";
-import { homedir as homedir4 } from "node:os";
-import { basename, dirname as dirname4, join as join5 } from "node:path";
-import { fileURLToPath as fileURLToPath3 } from "node:url";
+import { existsSync as existsSync8, readdirSync, readFileSync as readFileSync7 } from "node:fs";
+import { homedir as homedir6 } from "node:os";
+import { basename, dirname as dirname5, join as join8 } from "node:path";
+import { fileURLToPath as fileURLToPath4 } from "node:url";
 import {
   AuthStorage,
   createAgentSession,
   DefaultResourceLoader,
   InteractiveMode,
   ModelRegistry,
+  createSyntheticSourceInfo,
   SessionManager,
   SettingsManager
 } from "@mariozechner/pi-coding-agent";
 
 // src/neuroloop.ts
-import { existsSync as existsSync4, readFileSync as readFileSync4, writeFileSync as writeFileSync3 } from "node:fs";
-import { homedir as homedir3 } from "node:os";
-import { dirname as dirname3, join as join4 } from "node:path";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
+import { existsSync as existsSync7, mkdirSync as mkdirSync5, readFileSync as readFileSync6, writeFileSync as writeFileSync4 } from "node:fs";
+import { homedir as homedir5 } from "node:os";
+import { dirname as dirname4, join as join7 } from "node:path";
+import { fileURLToPath as fileURLToPath3 } from "node:url";
 import { Container, Markdown, Spacer } from "@mariozechner/pi-tui";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { Type as Type4 } from "@sinclair/typebox";
@@ -27,20 +28,164 @@ import { getMarkdownTheme } from "@mariozechner/pi-coding-agent";
 import WS from "ws";
 
 // src/neuroskill/run.ts
+import { execFile as execFile2 } from "node:child_process";
+import { existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync2, writeFileSync } from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import { join as join2 } from "node:path";
+import { promisify as promisify2 } from "node:util";
+
+// src/runtime-updates.ts
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 var execFileAsync = promisify(execFile);
-var NEUROSKILL_TIMEOUT_MS = 3e4;
 var AGENT_DIR = join(homedir(), ".neuroloop");
-var PORT_FILE = join(AGENT_DIR, "neuroskill_port.json");
+var RUNTIME_PREFIX = join(AGENT_DIR, "runtime");
+var RUNTIME_NODE_MODULES = join(RUNTIME_PREFIX, "node_modules");
+var IS_WINDOWS = process.platform === "win32";
+var runtimeState = null;
+function parseSemver(v) {
+  const [core] = v.trim().split("-");
+  return core.split(".").map((n) => parseInt(n, 10) || 0);
+}
+function compareSemver(a, b) {
+  const av = parseSemver(a);
+  const bv = parseSemver(b);
+  const max = Math.max(av.length, bv.length);
+  for (let i = 0; i < max; i++) {
+    const ai = av[i] ?? 0;
+    const bi = bv[i] ?? 0;
+    if (ai > bi) return 1;
+    if (ai < bi) return -1;
+  }
+  return 0;
+}
+async function fetchJson(url, timeoutMs = 5e3) {
+  const res = await fetch(url, {
+    headers: {
+      "accept": "application/json",
+      "user-agent": "neuroloop-version-check"
+    },
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  return await res.json();
+}
+async function getNpmLatestVersion(pkg) {
+  try {
+    const data = await fetchJson(`https://registry.npmjs.org/${pkg}/latest`, 6e3);
+    return data.version;
+  } catch {
+    return void 0;
+  }
+}
+function getInstalledRuntimeVersion(pkg) {
+  try {
+    const p = join(RUNTIME_NODE_MODULES, pkg, "package.json");
+    if (!existsSync(p)) return void 0;
+    const data = JSON.parse(readFileSync(p, "utf8"));
+    return data.version;
+  } catch {
+    return void 0;
+  }
+}
+function getLocalNeuroSkillBinPath() {
+  return join(RUNTIME_NODE_MODULES, ".bin", IS_WINDOWS ? "neuroskill.cmd" : "neuroskill");
+}
+async function installRuntimePackage(pkg, version) {
+  if (!existsSync(RUNTIME_PREFIX)) mkdirSync(RUNTIME_PREFIX, { recursive: true, mode: 448 });
+  await execFileAsync("npm", ["install", "--prefix", RUNTIME_PREFIX, "--no-save", `${pkg}@${version}`], {
+    timeout: 18e4,
+    maxBuffer: 4 * 1024 * 1024,
+    env: { ...process.env },
+    ...IS_WINDOWS ? { shell: true, windowsHide: true } : {}
+  });
+}
+async function tryUpdateGlobalNeuroloop(version) {
+  try {
+    await execFileAsync("npm", ["install", "-g", `neuroloop@${version}`], {
+      timeout: 18e4,
+      maxBuffer: 4 * 1024 * 1024,
+      env: { ...process.env },
+      ...IS_WINDOWS ? { shell: true, windowsHide: true } : {}
+    });
+    return void 0;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
+async function refreshRuntimeVersions(localNeuroloopVersion) {
+  const state = {
+    checkedAt: Date.now(),
+    neuroloop: { local: localNeuroloopVersion },
+    neuroskill: {},
+    github: {}
+  };
+  const [npmNeuroloop, npmNeuroskill] = await Promise.all([
+    getNpmLatestVersion("neuroloop"),
+    getNpmLatestVersion("neuroskill")
+  ]);
+  state.neuroloop.npmLatest = npmNeuroloop;
+  if (npmNeuroloop) {
+    state.neuroloop.upToDate = compareSemver(localNeuroloopVersion, npmNeuroloop) >= 0;
+    if (!state.neuroloop.upToDate) {
+      state.neuroloop.updateError = await tryUpdateGlobalNeuroloop(npmNeuroloop);
+      state.neuroloop.updated = !state.neuroloop.updateError;
+    }
+  }
+  state.neuroskill.npmLatest = npmNeuroskill;
+  const installed = getInstalledRuntimeVersion("neuroskill");
+  state.neuroskill.localInstalled = installed;
+  if (npmNeuroskill) {
+    const upToDate = installed ? compareSemver(installed, npmNeuroskill) >= 0 : false;
+    state.neuroskill.upToDate = upToDate;
+    if (!upToDate) {
+      try {
+        await installRuntimePackage("neuroskill", npmNeuroskill);
+        state.neuroskill.localInstalled = getInstalledRuntimeVersion("neuroskill") ?? npmNeuroskill;
+        state.neuroskill.installedNow = true;
+        state.neuroskill.upToDate = true;
+      } catch (err) {
+        state.neuroskill.installError = err instanceof Error ? err.message : String(err);
+      }
+    }
+  }
+  try {
+    const commit = await fetchJson(
+      "https://api.github.com/repos/NeuroSkill-com/neuroloop/commits/main",
+      6e3
+    );
+    state.github.latestCommit = commit.sha?.slice(0, 7);
+  } catch (err) {
+    state.github.error = err instanceof Error ? err.message : String(err);
+  }
+  try {
+    const rel = await fetchJson(
+      "https://api.github.com/repos/NeuroSkill-com/neuroloop/releases/latest",
+      6e3
+    );
+    state.github.latestTag = rel.tag_name;
+  } catch {
+  }
+  runtimeState = state;
+  return state;
+}
+function getRuntimeVersionState() {
+  return runtimeState;
+}
+
+// src/neuroskill/run.ts
+var execFileAsync2 = promisify2(execFile2);
+var NEUROSKILL_TIMEOUT_MS = 3e4;
+var AGENT_DIR2 = join2(homedir2(), ".neuroloop");
+var PORT_FILE = join2(AGENT_DIR2, "neuroskill_port.json");
 var _port = 8375;
 function loadPort() {
   try {
-    if (existsSync(PORT_FILE)) {
-      const { port } = JSON.parse(readFileSync(PORT_FILE, "utf8"));
+    if (existsSync2(PORT_FILE)) {
+      const { port } = JSON.parse(readFileSync2(PORT_FILE, "utf8"));
       if (typeof port === "number" && port > 0 && port <= 65535) return port;
     }
   } catch {
@@ -49,7 +194,7 @@ function loadPort() {
 }
 function savePort(port) {
   try {
-    if (!existsSync(AGENT_DIR)) mkdirSync(AGENT_DIR, { recursive: true, mode: 448 });
+    if (!existsSync2(AGENT_DIR2)) mkdirSync2(AGENT_DIR2, { recursive: true, mode: 448 });
     writeFileSync(PORT_FILE, JSON.stringify({ port }), { encoding: "utf8", mode: 384 });
   } catch {
   }
@@ -111,30 +256,27 @@ async function discoverSkillServer() {
   }
   return null;
 }
-var IS_WINDOWS = process.platform === "win32";
+var IS_WINDOWS2 = process.platform === "win32";
 var MAX_BUFFER = 8 * 1024 * 1024;
 function escapeArg(arg) {
-  if (!IS_WINDOWS) return arg;
+  if (!IS_WINDOWS2) return arg;
   if (/^[a-zA-Z0-9_./:=@-]+$/.test(arg)) return arg;
   const escaped = arg.replace(/%/g, "%%").replace(/"/g, '\\"');
   return `"${escaped}"`;
 }
 async function runNeuroSkill(args) {
   try {
-    const cliArgs = [
-      "neuroskill",
-      "--port",
-      String(_port),
-      ...args.map(escapeArg)
-    ];
-    const { stdout } = await execFileAsync("npx", cliArgs, {
+    const localBin = getLocalNeuroSkillBinPath();
+    const hasLocalBin = existsSync2(localBin);
+    const cliArgs = ["--port", String(_port), ...args.map(escapeArg)];
+    const { stdout } = await execFileAsync2(hasLocalBin ? localBin : "npx", hasLocalBin ? cliArgs : ["neuroskill", ...cliArgs], {
       timeout: NEUROSKILL_TIMEOUT_MS,
       maxBuffer: MAX_BUFFER,
       env: { ...process.env },
       // Windows: npx is a .cmd batch file — must run through cmd.exe
-      shell: IS_WINDOWS,
+      shell: IS_WINDOWS2,
       // Windows: hide the transient cmd.exe window
-      ...IS_WINDOWS && { windowsHide: true }
+      ...IS_WINDOWS2 && { windowsHide: true }
     });
     const text = stdout.trim();
     if (!text) return { ok: false, error: "empty response" };
@@ -741,17 +883,17 @@ function detectSignals(lp) {
 }
 
 // src/neuroskill/context.ts
-import { existsSync as existsSync2, readFileSync as readFileSync2 } from "node:fs";
-import { dirname, join as join2 } from "node:path";
+import { existsSync as existsSync3, readFileSync as readFileSync3 } from "node:fs";
+import { dirname, join as join3 } from "node:path";
 import { fileURLToPath } from "node:url";
-var SKILLS_DIR = join2(
+var SKILLS_DIR = join3(
   dirname(fileURLToPath(import.meta.url)),
   "..",
   "..",
   "skills",
   "skills"
 );
-var PROTOCOLS_SKILL_PATH = join2(SKILLS_DIR, "neuroskill-protocols", "SKILL.md");
+var PROTOCOLS_SKILL_PATH = join3(SKILLS_DIR, "neuroskill-protocols", "SKILL.md");
 var COMPARE_CACHE_TTL_MS = 10 * 60 * 1e3;
 var compareCache = {};
 function getFreshCompare() {
@@ -776,9 +918,9 @@ async function selectContextualData(prompt) {
   const lp = prompt.toLowerCase();
   const s = detectSignals(lp);
   const extras = [];
-  if (s.protocols && existsSync2(PROTOCOLS_SKILL_PATH)) {
+  if (s.protocols && existsSync3(PROTOCOLS_SKILL_PATH)) {
     try {
-      const skillContent = readFileSync2(PROTOCOLS_SKILL_PATH, "utf8");
+      const skillContent = readFileSync3(PROTOCOLS_SKILL_PATH, "utf8");
       extras.push(`## \u{1F9D8} Protocol Repertoire
 ${skillContent}`);
     } catch {
@@ -1063,29 +1205,261 @@ ${r.text}` : null);
   return [...extras, ...results.filter((r) => r !== null)];
 }
 
+// src/skills-sync.ts
+import { existsSync as existsSync4 } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { dirname as dirname2, join as join4 } from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
+var SRC_DIR = dirname2(fileURLToPath2(import.meta.url));
+var NEUROLOOP_DIR = join4(SRC_DIR, "..");
+var SKILLS_DIR2 = join4(NEUROLOOP_DIR, "skills");
+function git(args, cwd) {
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  }).trim();
+}
+function maybeRev(cwd) {
+  try {
+    return git(["rev-parse", "HEAD"], cwd);
+  } catch {
+    return void 0;
+  }
+}
+async function syncSkillsFromGitHub(opts = {}) {
+  const force = opts.force ?? false;
+  if (!existsSync4(join4(NEUROLOOP_DIR, ".git"))) {
+    return {
+      ok: true,
+      updated: false,
+      skipped: true,
+      message: "Git checkout not found; skipping skills sync."
+    };
+  }
+  if (!existsSync4(SKILLS_DIR2)) {
+    return {
+      ok: true,
+      updated: false,
+      skipped: true,
+      message: "skills/ directory not found; skipping skills sync."
+    };
+  }
+  try {
+    git(["submodule", "update", "--init", "--", "skills"], NEUROLOOP_DIR);
+    const before = maybeRev(SKILLS_DIR2);
+    const args = ["submodule", "update", "--init", "--remote"];
+    if (force) args.push("--force");
+    args.push("--", "skills");
+    git(args, NEUROLOOP_DIR);
+    const after = maybeRev(SKILLS_DIR2);
+    const updated = !!after && before !== after;
+    return {
+      ok: true,
+      updated,
+      skipped: false,
+      before,
+      after,
+      message: updated ? `Skills updated from GitHub (${before?.slice(0, 7) ?? "none"} \u2192 ${after.slice(0, 7)}).` : "No new skills update yet; waiting for the next GitHub update."
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      updated: false,
+      skipped: false,
+      message: "Failed to sync skills from GitHub.",
+      error: message
+    };
+  }
+}
+
+// src/skill-llm.ts
+function localModelEntry(id, opts = {}) {
+  return {
+    id,
+    name: id,
+    reasoning: false,
+    input: opts.supportsVision ? ["text", "image"] : ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: opts.contextWindow ?? 32768,
+    maxTokens: 8192,
+    compat: {
+      supportsStore: false,
+      supportsReasoningEffort: false,
+      supportsDeveloperRole: false,
+      requiresToolResultName: false,
+      supportsStrictMode: false
+    }
+  };
+}
+async function registerSkillLlmProvider(modelRegistry2) {
+  try {
+    const discoveredPort = await discoverSkillServer();
+    if (!discoveredPort) return false;
+    const baseUrl = `http://127.0.0.1:${discoveredPort}`;
+    const res = await fetch(`${baseUrl}/llm/status`, {
+      signal: AbortSignal.timeout(2e3)
+    });
+    if (!res.ok) return false;
+    const status = await res.json();
+    if (status.status !== "running" && status.status !== "ok") return false;
+    const modelName = status.model_name ?? status.model;
+    if (!modelName) return false;
+    const models = [
+      localModelEntry(modelName, {
+        contextWindow: status.n_ctx ?? 32768,
+        supportsVision: status.supports_vision ?? false
+      })
+    ];
+    try {
+      const modelsRes = await fetch(`${baseUrl}/v1/models`, {
+        signal: AbortSignal.timeout(1500)
+      });
+      if (modelsRes.ok) {
+        const body = await modelsRes.json();
+        for (const m of body.data ?? []) {
+          if (m.id && m.id !== modelName) models.push(localModelEntry(m.id));
+        }
+      }
+    } catch {
+    }
+    modelRegistry2.registerProvider("skill-llm", {
+      baseUrl: `${baseUrl}/v1`,
+      apiKey: "SKILL_LLM_API_KEY",
+      api: "openai-completions",
+      models
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function startSkillLlmServer(mode2 = "auto") {
+  const localStart = async () => runNeuroSkill(["llm", "start"]);
+  const remoteAttempts = [
+    { command: "llm_start", args: { mode: "remote" } },
+    { command: "llm_start", args: { remote: true } },
+    { command: "llm_start", args: { backend: "remote" } }
+  ];
+  const tryRemote = async () => {
+    for (const payload of remoteAttempts) {
+      const r = await runNeuroSkill(["raw", JSON.stringify(payload)]);
+      if (r.ok) return r;
+    }
+    return { ok: false, error: "remote llm_start ws command not supported" };
+  };
+  if (mode2 === "local") {
+    const r = await localStart();
+    return { ok: r.ok, message: r.ok ? "Skill LLM local server started." : r.error ?? "Failed to start local server" };
+  }
+  if (mode2 === "remote") {
+    const r = await tryRemote();
+    if (r.ok) return { ok: true, message: "Skill LLM remote server started via WS." };
+    return { ok: false, message: r.error ?? "Failed to start remote server" };
+  }
+  const remote = await tryRemote();
+  if (remote.ok) return { ok: true, message: "Skill LLM remote server started via WS." };
+  const local = await localStart();
+  if (local.ok) return { ok: true, message: "Remote start unavailable; local llama.cpp server started." };
+  return { ok: false, message: local.error ?? "Failed to start Skill LLM server" };
+}
+async function autoBootSkillLlmIfConfigured() {
+  const raw = (process.env.NEUROLOOP_SKILL_LLM_BOOT ?? "off").toLowerCase();
+  const mode2 = raw === "remote" || raw === "local" || raw === "auto" ? raw : "off";
+  if (mode2 === "off") return;
+  await startSkillLlmServer(mode2);
+}
+
+// src/model-config.ts
+import { execFile as execFile3 } from "node:child_process";
+import { existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync2 } from "node:fs";
+import { homedir as homedir3 } from "node:os";
+import { join as join5 } from "node:path";
+import { promisify as promisify3 } from "node:util";
+var execFileAsync3 = promisify3(execFile3);
+var MODEL_CONFIG_PATH = join5(homedir3(), ".neuroloop", "models.json");
+function defaultModelsFile() {
+  return { providers: {} };
+}
+function readModelsFile() {
+  try {
+    if (!existsSync5(MODEL_CONFIG_PATH)) return defaultModelsFile();
+    const parsed = JSON.parse(readFileSync4(MODEL_CONFIG_PATH, "utf8"));
+    if (!parsed.providers || typeof parsed.providers !== "object") return defaultModelsFile();
+    return parsed;
+  } catch {
+    return defaultModelsFile();
+  }
+}
+function writeModelsFile(file) {
+  const dir = join5(homedir3(), ".neuroloop");
+  if (!existsSync5(dir)) mkdirSync3(dir, { recursive: true, mode: 448 });
+  writeFileSync2(MODEL_CONFIG_PATH, JSON.stringify(file, null, 2) + "\n", {
+    encoding: "utf8",
+    mode: 384
+  });
+}
+function upsertProviderModel(params) {
+  const file = readModelsFile();
+  const provider = file.providers[params.provider] ?? {};
+  provider.baseUrl = params.baseUrl;
+  provider.api = params.api;
+  provider.apiKey = params.apiKey;
+  provider.authHeader = params.authHeader;
+  const models = provider.models ?? [];
+  const idx = models.findIndex((m) => m.id === params.modelId);
+  const model = {
+    id: params.modelId,
+    name: params.modelName?.trim() || void 0,
+    reasoning: params.reasoning,
+    input: params.supportsVision ? ["text", "image"] : ["text"],
+    contextWindow: params.contextWindow,
+    maxTokens: params.maxTokens,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+  };
+  if (idx >= 0) models[idx] = { ...models[idx], ...model };
+  else models.push(model);
+  provider.models = models;
+  file.providers[params.provider] = provider;
+  writeModelsFile(file);
+}
+async function openModelsFileInSystem() {
+  const path = MODEL_CONFIG_PATH;
+  if (process.platform === "darwin") {
+    await execFileAsync3("open", [path]);
+    return;
+  }
+  if (process.platform === "win32") {
+    await execFileAsync3("cmd", ["/c", "start", "", path], { shell: true, windowsHide: true });
+    return;
+  }
+  await execFileAsync3("xdg-open", [path]);
+}
+
 // src/memory.ts
-import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3, writeFileSync as writeFileSync2 } from "node:fs";
-import { homedir as homedir2 } from "node:os";
-import { dirname as dirname2, join as join3 } from "node:path";
-var MEMORY_PATH = join3(homedir2(), ".neuroskill", "memory.md");
+import { existsSync as existsSync6, mkdirSync as mkdirSync4, readFileSync as readFileSync5, writeFileSync as writeFileSync3 } from "node:fs";
+import { homedir as homedir4 } from "node:os";
+import { dirname as dirname3, join as join6 } from "node:path";
+var MEMORY_PATH = join6(homedir4(), ".neuroskill", "memory.md");
 function readMemory(path = MEMORY_PATH) {
-  if (!existsSync3(path)) return void 0;
-  return readFileSync3(path, "utf-8").trim() || void 0;
+  if (!existsSync6(path)) return void 0;
+  return readFileSync5(path, "utf-8").trim() || void 0;
 }
 var MAX_MEMORY_BYTES = 512 * 1024;
 function writeMemory(content, mode2, path = MEMORY_PATH) {
-  mkdirSync2(dirname2(path), { recursive: true, mode: 448 });
+  mkdirSync4(dirname3(path), { recursive: true, mode: 448 });
   if (mode2 === "append") {
-    const existing = existsSync3(path) ? readFileSync3(path, "utf-8") : "";
+    const existing = existsSync6(path) ? readFileSync5(path, "utf-8") : "";
     const sep = existing && !existing.endsWith("\n") ? "\n" : "";
     const combined = existing + sep + content;
     if (Buffer.byteLength(combined, "utf-8") > MAX_MEMORY_BYTES) {
       throw new Error(`Memory file would exceed ${MAX_MEMORY_BYTES / 1024} KB limit. Use mode "overwrite" to replace, or trim old entries first.`);
     }
-    writeFileSync2(path, combined, { encoding: "utf-8", mode: 384 });
+    writeFileSync3(path, combined, { encoding: "utf-8", mode: 384 });
   } else {
     const trimmed = Buffer.byteLength(content, "utf-8") > MAX_MEMORY_BYTES ? content.slice(0, MAX_MEMORY_BYTES) : content;
-    writeFileSync2(path, trimmed, { encoding: "utf-8", mode: 384 });
+    writeFileSync3(path, trimmed, { encoding: "utf-8", mode: 384 });
   }
 }
 
@@ -1654,17 +2028,64 @@ ${step.instruction}`);
 };
 
 // src/neuroloop.ts
-var _pkgVersion = (true ? "0.0.10" : void 0) ?? JSON.parse(readFileSync4(join4(dirname3(fileURLToPath2(import.meta.url)), "../package.json"), "utf8")).version;
-var AGENT_DIR2 = join4(homedir3(), ".neuroskill");
-var NEUROLOOP_DIR = join4(dirname3(fileURLToPath2(import.meta.url)), "..");
-var NEUROLOOP_MD_PATH = join4(NEUROLOOP_DIR, "NEUROLOOP.md");
+var _pkgVersion = (true ? "0.0.11" : void 0) ?? JSON.parse(readFileSync6(join7(dirname4(fileURLToPath3(import.meta.url)), "../package.json"), "utf8")).version;
+var AGENT_DIR3 = join7(homedir5(), ".neuroskill");
+var VERSION_STATE_DIR = join7(homedir5(), ".neuroloop");
+var NEUROLOOP_DIR2 = join7(dirname4(fileURLToPath3(import.meta.url)), "..");
+var NEUROLOOP_MD_PATH = join7(NEUROLOOP_DIR2, "NEUROLOOP.md");
+var CHANGELOG_PATH = join7(NEUROLOOP_DIR2, "CHANGELOG.md");
+var CHANGELOG_STATE_PATH = join7(VERSION_STATE_DIR, "changelog_state.json");
 var NEUROSKILL_STATUS_TYPE = "neuroskill-status";
-var CALIBRATION_PROMPT_STATE_PATH = join4(AGENT_DIR2, "last_calibration_prompt.json");
+var CALIBRATION_PROMPT_STATE_PATH = join7(AGENT_DIR3, "last_calibration_prompt.json");
 var CALIBRATION_PROMPT_INTERVAL_MS = 24 * 60 * 60 * 1e3;
+function readChangelogState() {
+  try {
+    if (!existsSync7(CHANGELOG_STATE_PATH)) return {};
+    return JSON.parse(readFileSync6(CHANGELOG_STATE_PATH, "utf8"));
+  } catch {
+    return {};
+  }
+}
+function writeChangelogState(state) {
+  try {
+    if (!existsSync7(VERSION_STATE_DIR)) {
+      mkdirSync5(VERSION_STATE_DIR, { recursive: true, mode: 448 });
+    }
+    writeFileSync4(CHANGELOG_STATE_PATH, JSON.stringify(state), { encoding: "utf8", mode: 384 });
+  } catch {
+  }
+}
+function changelogSinceLastShown(currentVersion) {
+  if (!existsSync7(CHANGELOG_PATH)) return null;
+  const content = readFileSync6(CHANGELOG_PATH, "utf8");
+  const state = readChangelogState();
+  if (state.lastShownVersion === currentVersion) return null;
+  const matches = [...content.matchAll(/^## \[(.+?)\].*$/gm)];
+  if (!matches.length) return null;
+  const sections = matches.map((m, i) => {
+    const version = m[1].trim();
+    const start = m.index ?? 0;
+    const end = i + 1 < matches.length ? matches[i + 1].index ?? content.length : content.length;
+    return { version, body: content.slice(start, end).trim() };
+  });
+  const currentIdx = sections.findIndex((s) => s.version === currentVersion);
+  const lastIdx = state.lastShownVersion ? sections.findIndex((s) => s.version === state.lastShownVersion) : -1;
+  const startRange = 0;
+  const endRange = currentIdx >= 0 ? currentIdx + 1 : 1;
+  let selected = sections.slice(startRange, endRange);
+  if (lastIdx >= 0) {
+    selected = selected.slice(0, Math.max(0, lastIdx - startRange));
+  }
+  if (!selected.length) return null;
+  const block = selected.map((s) => s.body).join("\n\n---\n\n");
+  return `## \u{1F195} What changed since your last update
+
+${block}`;
+}
 function shouldNudgeCalibration() {
   try {
-    if (existsSync4(CALIBRATION_PROMPT_STATE_PATH)) {
-      const raw = readFileSync4(CALIBRATION_PROMPT_STATE_PATH, "utf8");
+    if (existsSync7(CALIBRATION_PROMPT_STATE_PATH)) {
+      const raw = readFileSync6(CALIBRATION_PROMPT_STATE_PATH, "utf8");
       const { lastPromptedAt } = JSON.parse(raw);
       if (Date.now() - lastPromptedAt < CALIBRATION_PROMPT_INTERVAL_MS) {
         return false;
@@ -1676,7 +2097,7 @@ function shouldNudgeCalibration() {
 }
 function markCalibrationNudgeSent() {
   try {
-    writeFileSync3(
+    writeFileSync4(
       CALIBRATION_PROMPT_STATE_PATH,
       JSON.stringify({ lastPromptedAt: Date.now() }),
       { encoding: "utf8", mode: 384 }
@@ -1820,11 +2241,11 @@ ${memory}`;
     const systemBody = systemSections.join("\n\n---\n\n");
     let skillIndex = "";
     try {
-      if (existsSync4(NEUROLOOP_MD_PATH)) {
+      if (existsSync7(NEUROLOOP_MD_PATH)) {
         skillIndex = `
 
 ## \u{1F4D6} NeuroLoop Capabilities
-${readFileSync4(NEUROLOOP_MD_PATH, "utf8")}`;
+${readFileSync6(NEUROLOOP_MD_PATH, "utf8")}`;
       }
     } catch {
     }
@@ -2014,6 +2435,8 @@ Available commands and typical args:
     }
   });
   let exgEnabled = true;
+  let runtimeVersions = getRuntimeVersionState();
+  let runtimeVersionsLoading = false;
   let exgOnline = false;
   let exgMetrics = null;
   let exgUpdatedAt = null;
@@ -2113,6 +2536,18 @@ Available commands and typical args:
     // teal   — high cognition
   };
   function buildHeader(_tui, theme) {
+    const versionLine = () => {
+      if (runtimeVersionsLoading) return theme.fg("dim", " versions: checking npm/github \u2026");
+      if (!runtimeVersions) return theme.fg("dim", " versions: unavailable");
+      const nl = runtimeVersions.neuroloop;
+      const ns = runtimeVersions.neuroskill;
+      const gh = runtimeVersions.github;
+      const nlStatus = nl.npmLatest ? nl.upToDate ? theme.fg("success", "latest") : theme.fg("warning", "update available") : theme.fg("dim", "npm ?");
+      const nsStatus = ns.npmLatest ? ns.upToDate ? theme.fg("success", "latest") : theme.fg("warning", "updating") : theme.fg("dim", "npm ?");
+      const ghCommit = gh.latestCommit ? gh.latestCommit : "?";
+      const ghTag = gh.latestTag ?? "?";
+      return " " + theme.fg("dim", `neuroloop v${nl.local}`) + theme.fg("dim", " \xB7 npm ") + theme.fg("muted", `v${nl.npmLatest ?? "?"}`) + theme.fg("dim", " (") + nlStatus + theme.fg("dim", ")") + theme.fg("dim", " \xB7 neuroskill local ") + theme.fg("muted", `v${ns.localInstalled ?? "none"}`) + theme.fg("dim", " / npm ") + theme.fg("muted", `v${ns.npmLatest ?? "?"}`) + theme.fg("dim", " (") + nsStatus + theme.fg("dim", ")") + theme.fg("dim", ` \xB7 github ${ghCommit} \xB7 release ${ghTag}`);
+    };
     const hints = [
       ["esc", "stop"],
       ["ctrl+d", "quit"],
@@ -2132,6 +2567,7 @@ Available commands and typical args:
         const lines = [];
         const logo = theme.fg("accent", "\u25C6") + " " + theme.bold("neuroloop") + theme.fg("dim", ` v${_pkgVersion}`);
         lines.push(truncateToWidth(logo, width));
+        lines.push(truncateToWidth(versionLine(), width));
         const hintStr = hints.map(([k, a]) => theme.fg("dim", "[") + theme.fg("muted", k) + theme.fg("dim", "] ") + theme.fg("dim", a)).join(theme.fg("dim", "  "));
         lines.push(truncateToWidth(" " + hintStr, width));
         lines.push(sep(theme, width));
@@ -2241,6 +2677,26 @@ Available commands and typical args:
     exgWs = null;
   }
   pi.on("session_start", (_event, ctx) => {
+    const changelog = changelogSinceLastShown(_pkgVersion);
+    if (changelog) {
+      pi.sendMessage({
+        customType: NEUROSKILL_STATUS_TYPE,
+        content: changelog,
+        display: true,
+        details: void 0
+      });
+      writeChangelogState({ lastShownVersion: _pkgVersion });
+    }
+    if (!runtimeVersions && !runtimeVersionsLoading) {
+      runtimeVersionsLoading = true;
+      refreshRuntimeVersions(_pkgVersion).then((state) => {
+        runtimeVersions = state;
+        uiTui?.requestRender();
+      }).finally(() => {
+        runtimeVersionsLoading = false;
+        uiTui?.requestRender();
+      });
+    }
     ctx.ui.setHeader((tui, theme) => {
       uiTui = tui;
       discoverExgPort().then((port) => {
@@ -2403,6 +2859,73 @@ Switch to a ${provider.displayName} model with /model or Ctrl+L.`,
       );
     }
   });
+  pi.registerCommand("model-config", {
+    description: "Manage custom model config \xB7 /model-config [add|open|path|show]",
+    handler: async (args, handlerCtx) => {
+      const sub = args.trim().toLowerCase();
+      if (sub === "path") {
+        handlerCtx.ui.notify(`models.json path: ${MODEL_CONFIG_PATH}`, "info");
+        return;
+      }
+      if (sub === "show") {
+        const file = readModelsFile();
+        pi.sendMessage({
+          customType: NEUROSKILL_STATUS_TYPE,
+          content: `## models.json
+
+\`\`\`json
+${JSON.stringify(file, null, 2)}
+\`\`\``,
+          display: true,
+          details: void 0
+        });
+        return;
+      }
+      if (sub === "open") {
+        try {
+          writeModelsFile(readModelsFile());
+          await openModelsFileInSystem();
+          handlerCtx.ui.notify("Opened models.json in your system editor.", "info");
+        } catch (err) {
+          handlerCtx.ui.notify(err instanceof Error ? err.message : String(err), "error");
+        }
+        return;
+      }
+      if (sub && sub !== "add") {
+        handlerCtx.ui.notify("Usage: /model-config [add|open|path|show]", "warning");
+        return;
+      }
+      const provider = (await handlerCtx.ui.input("Provider id", "e.g. openrouter, lmstudio, vllm"))?.trim();
+      if (!provider) return;
+      const baseUrl = (await handlerCtx.ui.input("Base URL", "e.g. http://localhost:1234/v1"))?.trim();
+      if (!baseUrl) return;
+      const api = (await handlerCtx.ui.select("API type", ["openai-completions", "openai-responses", "anthropic-messages", "google-generative-ai"]))?.trim();
+      if (!api) return;
+      const apiKey = (await handlerCtx.ui.input("API key value / env var name", "e.g. OPENROUTER_API_KEY") ?? "").trim() || "DUMMY_KEY";
+      const modelId = (await handlerCtx.ui.input("Model id", "e.g. gpt-4o-mini"))?.trim();
+      if (!modelId) return;
+      const modelName = (await handlerCtx.ui.input("Model display name (optional)", "leave blank to use id"))?.trim();
+      const reasoning = (await handlerCtx.ui.select("Reasoning model?", ["no", "yes"]) ?? "no") === "yes";
+      const supportsVision = (await handlerCtx.ui.select("Supports image input?", ["no", "yes"]) ?? "no") === "yes";
+      const contextWindow = Number(await handlerCtx.ui.input("Context window", "128000") ?? "128000");
+      const maxTokens = Number(await handlerCtx.ui.input("Max output tokens", "16384") ?? "16384");
+      upsertProviderModel({
+        provider,
+        baseUrl,
+        api,
+        apiKey,
+        authHeader: true,
+        modelId,
+        modelName,
+        reasoning,
+        supportsVision,
+        contextWindow: Number.isFinite(contextWindow) && contextWindow > 0 ? contextWindow : 128e3,
+        maxTokens: Number.isFinite(maxTokens) && maxTokens > 0 ? maxTokens : 16384
+      });
+      handlerCtx.modelRegistry.refresh();
+      handlerCtx.ui.notify(`Saved ${provider}/${modelId} to models.json. Open /model to use it.`, "info");
+    }
+  });
   pi.registerCommand("exg", {
     description: "EXG panel \xB7 /exg [on|off|<seconds>|port <n>]",
     handler: async (args, handlerCtx) => {
@@ -2484,6 +3007,105 @@ ${result.text}
       } else {
         handlerCtx.ui.notify(result.text || "neuroskill command failed", "error");
       }
+    }
+  });
+  pi.registerCommand("skills-update", {
+    description: "Force update skill files from GitHub",
+    handler: async (_args, handlerCtx) => {
+      handlerCtx.ui.notify("Syncing skills from GitHub \u2026", "info");
+      const result = await syncSkillsFromGitHub({ force: true });
+      if (!result.ok) {
+        handlerCtx.ui.notify(
+          result.error ? `${result.message}
+${result.error}` : result.message,
+          "error"
+        );
+        return;
+      }
+      handlerCtx.ui.notify(result.message, "info");
+      if (result.updated) {
+        handlerCtx.ui.notify(
+          "Skills updated. Changes to loaded skill index apply fully after restarting neuroloop.",
+          "info"
+        );
+      }
+    }
+  });
+  pi.registerCommand("version", {
+    description: "Show local, npm, and GitHub version status \xB7 /version [refresh]",
+    handler: async (args, handlerCtx) => {
+      const shouldRefresh = args.trim().toLowerCase() === "refresh";
+      if (shouldRefresh || !runtimeVersions) {
+        runtimeVersionsLoading = true;
+        uiTui?.requestRender();
+        try {
+          runtimeVersions = await refreshRuntimeVersions(_pkgVersion);
+        } finally {
+          runtimeVersionsLoading = false;
+          uiTui?.requestRender();
+        }
+      }
+      const s = runtimeVersions;
+      if (!s) {
+        handlerCtx.ui.notify("Version status unavailable.", "warning");
+        return;
+      }
+      const nl = s.neuroloop;
+      const ns = s.neuroskill;
+      const gh = s.github;
+      const lines = [
+        "## \u{1F4E6} Version Status",
+        `- neuroloop local: **v${nl.local}**`,
+        `- neuroloop npm latest: **v${nl.npmLatest ?? "?"}** (${nl.upToDate ? "latest" : "update available"})`,
+        `- neuroskill local runtime: **v${ns.localInstalled ?? "none"}**`,
+        `- neuroskill npm latest: **v${ns.npmLatest ?? "?"}** (${ns.upToDate ? "latest" : "update available"})`,
+        `- github latest commit: **${gh.latestCommit ?? "?"}**`,
+        `- github latest release: **${gh.latestTag ?? "?"}**`
+      ];
+      if (nl.updateError) lines.push(`- neuroloop auto-update error: \`${nl.updateError}\``);
+      if (ns.installError) lines.push(`- neuroskill local install error: \`${ns.installError}\``);
+      pi.sendMessage({
+        customType: NEUROSKILL_STATUS_TYPE,
+        content: lines.join("\n"),
+        display: true,
+        details: void 0
+      });
+    }
+  });
+  pi.registerCommand("changelog", {
+    description: "Show changelog updates in chat \xB7 /changelog [all|reset]",
+    handler: async (args, handlerCtx) => {
+      const sub = args.trim().toLowerCase();
+      if (sub === "reset") {
+        writeChangelogState({});
+        handlerCtx.ui.notify("Changelog state reset. New updates will be shown on next launch.", "info");
+        return;
+      }
+      if (!existsSync7(CHANGELOG_PATH)) {
+        handlerCtx.ui.notify("CHANGELOG.md not found.", "warning");
+        return;
+      }
+      if (sub === "all") {
+        pi.sendMessage({
+          customType: NEUROSKILL_STATUS_TYPE,
+          content: readFileSync6(CHANGELOG_PATH, "utf8"),
+          display: true,
+          details: void 0
+        });
+        return;
+      }
+      const unseen = changelogSinceLastShown(_pkgVersion);
+      if (!unseen) {
+        handlerCtx.ui.notify("No unseen changelog updates.", "info");
+        return;
+      }
+      pi.sendMessage({
+        customType: NEUROSKILL_STATUS_TYPE,
+        content: unseen,
+        display: true,
+        details: void 0
+      });
+      writeChangelogState({ lastShownVersion: _pkgVersion });
     }
   });
   async function neuroCmd(cmdArgs, title, handlerCtx) {
@@ -2614,10 +3236,46 @@ ${result.text}
     }
   });
   pi.registerCommand("llm", {
-    description: "On-device LLM \xB7 /llm [status|start|stop|list|add|remove|select|download|fit|chat \u2026]",
+    description: "LLM control \xB7 /llm [status|route|connect|start|stop|list|add|remove|select|download|fit|chat \u2026]",
     handler: async (args, handlerCtx) => {
       const parts = args.trim().split(/\s+/).filter(Boolean);
       const sub = (parts[0] ?? "status").toLowerCase();
+      if (sub === "route") {
+        const llmStatus = await runNeuroSkill(["llm", "status"]);
+        let skillRoute = null;
+        if (llmStatus.ok && llmStatus.data) {
+          const data = llmStatus.data;
+          const status = String(data.status ?? "").toLowerCase();
+          if (status === "running" || status === "ok") {
+            const mode2 = typeof data.mode === "string" ? data.mode : typeof data.backend === "string" ? data.backend : typeof data.remote === "boolean" ? data.remote ? "remote" : "local" : "";
+            skillRoute = `skill-llm${mode2 ? ` (${mode2})` : ""}`;
+          }
+        }
+        const authStorage2 = handlerCtx.modelRegistry.authStorage;
+        const cloudProviders = KEY_PROVIDERS.filter((p) => authStorage2.has(p.id) || !!process.env[p.envVar]).map((p) => p.id);
+        let ollamaOnline = false;
+        try {
+          const res = await fetch("http://localhost:11434/api/tags", { signal: AbortSignal.timeout(1200) });
+          ollamaOnline = res.ok;
+        } catch {
+          ollamaOnline = false;
+        }
+        const active = skillRoute ?? cloudProviders[0] ?? (ollamaOnline ? "ollama" : "none detected");
+        const fallbacks = [
+          ...cloudProviders.filter((p) => p !== active),
+          ...ollamaOnline && active !== "ollama" ? ["ollama"] : [],
+          ...active !== "skill-llm (local)" ? ["skill-llm(local)"] : []
+        ].join(" \u2192 ") || "none";
+        pi.sendMessage({
+          customType: NEUROSKILL_STATUS_TYPE,
+          content: `## \u{1F9ED} LLM Route
+active: **${active}**
+fallbacks: ${fallbacks}`,
+          display: true,
+          details: void 0
+        });
+        return;
+      }
       if (sub === "status" || parts.length === 0) {
         const result = await runNeuroSkill(["llm", "status"]);
         if (result.ok) {
@@ -2641,6 +3299,24 @@ ${lines.join("\n")}`,
           });
         } else {
           handlerCtx.ui.notify(result.error ?? "LLM status failed", "error");
+        }
+        return;
+      }
+      if (sub === "connect") {
+        const modeArg = (parts[1] ?? "auto").toLowerCase();
+        const mode2 = modeArg === "remote" || modeArg === "local" || modeArg === "auto" ? modeArg : "auto";
+        handlerCtx.ui.notify(`Connecting Skill LLM (${mode2}) \u2026`, "info");
+        const started = await startSkillLlmServer(mode2);
+        if (!started.ok) {
+          handlerCtx.ui.notify(started.message, "error");
+          return;
+        }
+        const registered = await registerSkillLlmProvider(handlerCtx.modelRegistry);
+        handlerCtx.ui.notify(started.message, "info");
+        if (registered) {
+          handlerCtx.ui.notify("Skill LLM provider connected. Select it with /model (Ctrl+L).", "info");
+        } else {
+          handlerCtx.ui.notify("LLM server started but provider registration failed. Check /llm status.", "warning");
         }
         return;
       }
@@ -2795,78 +3471,46 @@ if (major < 20) {
   console.error(`neuroloop requires Node.js >= 20 (running ${process.version})`);
   process.exit(1);
 }
-var MAIN_FILE = fileURLToPath3(import.meta.url);
-var SRC_DIR = dirname4(MAIN_FILE);
-var NEUROLOOP_DIR2 = join5(SRC_DIR, "..");
-var AGENT_DIR3 = join5(homedir4(), ".neuroloop");
-var SKILLS_DIR2 = join5(NEUROLOOP_DIR2, "skills");
-var METRICS_MD_PATH = join5(NEUROLOOP_DIR2, "METRICS.md");
-var authStorage = AuthStorage.create(join5(AGENT_DIR3, "auth.json"));
-var modelRegistry = new ModelRegistry(authStorage, join5(AGENT_DIR3, "models.json"));
-var settingsManager = SettingsManager.create(process.cwd(), AGENT_DIR3);
-function localModelEntry(id, opts = {}) {
-  return {
-    id,
-    name: id,
-    reasoning: false,
-    input: opts.supportsVision ? ["text", "image"] : ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: opts.contextWindow ?? 32768,
-    maxTokens: 8192,
-    compat: {
-      supportsStore: false,
-      supportsReasoningEffort: false,
-      supportsDeveloperRole: false,
-      requiresToolResultName: false,
-      supportsStrictMode: false
-    }
-  };
+var MAIN_FILE = fileURLToPath4(import.meta.url);
+var SRC_DIR2 = dirname5(MAIN_FILE);
+var NEUROLOOP_DIR3 = join8(SRC_DIR2, "..");
+var AGENT_DIR4 = join8(homedir6(), ".neuroloop");
+var SKILLS_DIR3 = join8(NEUROLOOP_DIR3, "skills");
+var METRICS_MD_PATH = join8(NEUROLOOP_DIR3, "METRICS.md");
+var LOCAL_NEUROLOOP_VERSION = JSON.parse(readFileSync7(join8(NEUROLOOP_DIR3, "package.json"), "utf8")).version;
+var runtime = await refreshRuntimeVersions(LOCAL_NEUROLOOP_VERSION);
+if (runtime.neuroloop.npmLatest) {
+  const badge = runtime.neuroloop.upToDate ? "up-to-date" : "update available";
+  console.log(`neuroloop: v${runtime.neuroloop.local} (npm latest: v${runtime.neuroloop.npmLatest}, ${badge})`);
 }
-async function registerSkillLlm() {
-  try {
-    const discoveredPort = await discoverSkillServer();
-    if (!discoveredPort) return false;
-    const baseUrl = `http://127.0.0.1:${discoveredPort}`;
-    const res = await fetch(`${baseUrl}/llm/status`, {
-      signal: AbortSignal.timeout(2e3)
-    });
-    if (!res.ok) return false;
-    const status = await res.json();
-    if (status.status !== "running" && status.status !== "ok") return false;
-    const modelName = status.model_name ?? status.model;
-    if (!modelName) return false;
-    const models = [
-      localModelEntry(modelName, {
-        contextWindow: status.n_ctx ?? 32768,
-        supportsVision: status.supports_vision ?? false
-      })
-    ];
-    try {
-      const modelsRes = await fetch(`${baseUrl}/v1/models`, {
-        signal: AbortSignal.timeout(1500)
-      });
-      if (modelsRes.ok) {
-        const body = await modelsRes.json();
-        for (const m of body.data ?? []) {
-          if (m.id && m.id !== modelName) {
-            models.push(localModelEntry(m.id));
-          }
-        }
-      }
-    } catch {
-    }
-    modelRegistry.registerProvider("skill-llm", {
-      baseUrl: `${baseUrl}/v1`,
-      apiKey: "SKILL_LLM_API_KEY",
-      api: "openai-completions",
-      models
-    });
-    return true;
-  } catch {
-    return false;
+if (runtime.neuroloop.updated) {
+  console.log("neuroloop: updated globally from npm.");
+} else if (runtime.neuroloop.updateError) {
+  console.warn(`neuroloop: global update failed (${runtime.neuroloop.updateError})`);
+}
+if (runtime.neuroskill.npmLatest) {
+  console.log(
+    `neuroskill: local ${runtime.neuroskill.localInstalled ?? "none"} (npm latest: ${runtime.neuroskill.npmLatest})`
+  );
+  if (runtime.neuroskill.installedNow) {
+    console.log("neuroskill: local runtime CLI updated.");
+  }
+  if (runtime.neuroskill.installError) {
+    console.warn(`neuroskill: local install failed (${runtime.neuroskill.installError})`);
   }
 }
-var skillLlmRegistered = await registerSkillLlm();
+var skillsSync = await syncSkillsFromGitHub();
+if (!skillsSync.skipped) {
+  console.log(`skills: ${skillsSync.message}`);
+  if (!skillsSync.ok && skillsSync.error) {
+    console.warn(`skills: ${skillsSync.error}`);
+  }
+}
+var authStorage = AuthStorage.create(join8(AGENT_DIR4, "auth.json"));
+var modelRegistry = ModelRegistry.create(authStorage, join8(AGENT_DIR4, "models.json"));
+var settingsManager = SettingsManager.create(process.cwd(), AGENT_DIR4);
+await autoBootSkillLlmIfConfigured();
+await registerSkillLlmProvider(modelRegistry);
 var DEFAULT_OLLAMA_MODEL = "gpt-oss:20b";
 function ollamaModelEntry(id, paramSize = "") {
   const bigModel = /\b(70b|72b|110b|180b)\b/i.test(paramSize);
@@ -2918,17 +3562,17 @@ await registerOllamaModels();
 var loadedSkills = [];
 var loader = new DefaultResourceLoader({
   cwd: process.cwd(),
-  agentDir: AGENT_DIR3,
+  agentDir: AGENT_DIR4,
   settingsManager,
   // Load individual skills from ./skills/<name>/SKILL.md + METRICS.md
   skillsOverride: (base) => {
     const extra = [];
-    if (existsSync5(SKILLS_DIR2)) {
-      for (const entry of readdirSync(SKILLS_DIR2, { withFileTypes: true })) {
+    if (existsSync8(SKILLS_DIR3)) {
+      for (const entry of readdirSync(SKILLS_DIR3, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue;
-        const skillFile = join5(SKILLS_DIR2, entry.name, "SKILL.md");
-        if (!existsSync5(skillFile)) continue;
-        const content = readFileSync5(skillFile, "utf8");
+        const skillFile = join8(SKILLS_DIR3, entry.name, "SKILL.md");
+        if (!existsSync8(skillFile)) continue;
+        const content = readFileSync7(skillFile, "utf8");
         const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
         if (!fmMatch) continue;
         const fm = fmMatch[1];
@@ -2941,19 +3585,29 @@ var loader = new DefaultResourceLoader({
           // Package-relative path: "neuroloop/skills/…/SKILL.md"
           // Consistent regardless of cwd or where npm installed the package.
           filePath: skillFile,
-          baseDir: join5(SKILLS_DIR2, entry.name),
-          source: "path",
+          baseDir: join8(SKILLS_DIR3, entry.name),
+          sourceInfo: createSyntheticSourceInfo(skillFile, {
+            source: "neuroloop/skills",
+            scope: "project",
+            origin: "top-level",
+            baseDir: join8(SKILLS_DIR3, entry.name)
+          }),
           disableModelInvocation: false
         });
       }
     }
-    if (existsSync5(METRICS_MD_PATH)) {
+    if (existsSync8(METRICS_MD_PATH)) {
       extra.push({
         name: "neuroskill-metrics",
         description: "NeuroSkill EXG metrics reference \u2014 all indices, band powers, scores, and their scientific basis.",
         filePath: METRICS_MD_PATH,
-        baseDir: NEUROLOOP_DIR2,
-        source: "path",
+        baseDir: NEUROLOOP_DIR3,
+        sourceInfo: createSyntheticSourceInfo(METRICS_MD_PATH, {
+          source: "neuroloop",
+          scope: "project",
+          origin: "top-level",
+          baseDir: NEUROLOOP_DIR3
+        }),
         disableModelInvocation: false
       });
     }
@@ -2969,13 +3623,13 @@ var loader = new DefaultResourceLoader({
       "assistant message before every turn. Use the `neuroskill_run` tool to query",
       "any other neuroskill command.",
       "",
-      `Skills dir: ${SKILLS_DIR2}`,
+      `Skills dir: ${SKILLS_DIR3}`,
       `METRICS.md: ${METRICS_MD_PATH}`
     ].join("\n");
     return {
       agentsFiles: [
         ...base.agentsFiles,
-        { path: `${basename(NEUROLOOP_DIR2)}/NEUROLOOP.md`, content: note }
+        { path: `${basename(NEUROLOOP_DIR3)}/NEUROLOOP.md`, content: note }
       ]
     };
   },
@@ -2985,11 +3639,11 @@ var loader = new DefaultResourceLoader({
 await loader.reload();
 var { session, modelFallbackMessage } = await createAgentSession({
   cwd: process.cwd(),
-  agentDir: AGENT_DIR3,
+  agentDir: AGENT_DIR4,
   authStorage,
   modelRegistry,
   resourceLoader: loader,
-  sessionManager: SessionManager.create(process.cwd(), join5(AGENT_DIR3, "sessions")),
+  sessionManager: SessionManager.create(process.cwd(), join8(AGENT_DIR4, "sessions")),
   settingsManager
   // No explicit model — let findInitialModel choose:
   //   built-in providers win if they have API keys / OAuth tokens,

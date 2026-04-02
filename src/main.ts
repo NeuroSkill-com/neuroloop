@@ -39,13 +39,16 @@ import {
 	DefaultResourceLoader,
 	InteractiveMode,
 	ModelRegistry,
+	createSyntheticSourceInfo,
 	SessionManager,
 	SettingsManager,
 	type Skill,
 } from "@mariozechner/pi-coding-agent";
 
 import { neuroloopExtension } from "./neuroloop.ts";
-import { discoverSkillServer, getSkillPort } from "./neuroskill/index.ts";
+import { syncSkillsFromGitHub } from "./skills-sync.ts";
+import { refreshRuntimeVersions } from "./runtime-updates.ts";
+import { autoBootSkillLlmIfConfigured, registerSkillLlmProvider } from "./skill-llm.ts";
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -57,117 +60,55 @@ const NEUROLOOP_DIR = join(SRC_DIR, "..");
 const AGENT_DIR = join(homedir(), ".neuroloop");
 const SKILLS_DIR = join(NEUROLOOP_DIR, "skills");
 const METRICS_MD_PATH = join(NEUROLOOP_DIR, "METRICS.md");
+const LOCAL_NEUROLOOP_VERSION =
+	(JSON.parse(readFileSync(join(NEUROLOOP_DIR, "package.json"), "utf8")) as { version: string }).version;
+
+// Keep npm runtime bits fresh (neuroloop + local neuroskill CLI).
+const runtime = await refreshRuntimeVersions(LOCAL_NEUROLOOP_VERSION);
+if (runtime.neuroloop.npmLatest) {
+	const badge = runtime.neuroloop.upToDate ? "up-to-date" : "update available";
+	console.log(`neuroloop: v${runtime.neuroloop.local} (npm latest: v${runtime.neuroloop.npmLatest}, ${badge})`);
+}
+if (runtime.neuroloop.updated) {
+	console.log("neuroloop: updated globally from npm.");
+} else if (runtime.neuroloop.updateError) {
+	console.warn(`neuroloop: global update failed (${runtime.neuroloop.updateError})`);
+}
+if (runtime.neuroskill.npmLatest) {
+	console.log(
+		`neuroskill: local ${runtime.neuroskill.localInstalled ?? "none"} (npm latest: ${runtime.neuroskill.npmLatest})`,
+	);
+	if (runtime.neuroskill.installedNow) {
+		console.log("neuroskill: local runtime CLI updated.");
+	}
+	if (runtime.neuroskill.installError) {
+		console.warn(`neuroskill: local install failed (${runtime.neuroskill.installError})`);
+	}
+}
+
+// Pull latest skills from GitHub on every launch.
+const skillsSync = await syncSkillsFromGitHub();
+if (!skillsSync.skipped) {
+	console.log(`skills: ${skillsSync.message}`);
+	if (!skillsSync.ok && skillsSync.error) {
+		console.warn(`skills: ${skillsSync.error}`);
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Auth, models, settings — all stored under ~/.neuroloop
 // ---------------------------------------------------------------------------
 
 const authStorage = AuthStorage.create(join(AGENT_DIR, "auth.json"));
-const modelRegistry = new ModelRegistry(authStorage, join(AGENT_DIR, "models.json"));
+const modelRegistry = ModelRegistry.create(authStorage, join(AGENT_DIR, "models.json"));
 const settingsManager = SettingsManager.create(process.cwd(), AGENT_DIR);
 
 // ---------------------------------------------------------------------------
-// Skill LLM — discover and register the local LLM running inside the Skill
-// app before falling back to Ollama.  The Skill app's WS+HTTP server
-// (default port 8375) exposes an OpenAI-compatible API at /v1/*.
+// Skill LLM — optional boot (remote/local/auto) + provider registration.
 // ---------------------------------------------------------------------------
 
-// Port discovery is handled by the cross-platform neuroskill/run.ts module.
-// discoverSkillServer() tries the saved port, common alternatives, then
-// platform-specific discovery (lsof on macOS/Linux, netstat on Windows).
-
-/** Build a model entry for registerProvider. */
-function localModelEntry(
-	id: string,
-	opts: { contextWindow?: number; supportsVision?: boolean } = {},
-) {
-	return {
-		id,
-		name: id,
-		reasoning: false,
-		input: (opts.supportsVision ? ["text", "image"] : ["text"]) as ("text" | "image")[],
-		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-		contextWindow: opts.contextWindow ?? 32768,
-		maxTokens: 8192,
-		compat: {
-			supportsStore: false,
-			supportsReasoningEffort: false,
-			supportsDeveloperRole: false,
-			requiresToolResultName: false,
-			supportsStrictMode: false,
-		},
-	};
-}
-
-/**
- * Try to discover a running LLM inside the Skill app.
- * Returns true if the provider was registered (server is running and has a model).
- */
-async function registerSkillLlm(): Promise<boolean> {
-	try {
-		const discoveredPort = await discoverSkillServer();
-		if (!discoveredPort) return false;
-		const baseUrl = `http://127.0.0.1:${discoveredPort}`;
-
-		// Probe /llm/status — returns { status, model, n_ctx?, supports_vision? }
-		const res = await fetch(`${baseUrl}/llm/status`, {
-			signal: AbortSignal.timeout(2000),
-		});
-		if (!res.ok) return false;
-
-		const status = (await res.json()) as {
-			status: string;
-			model?: string;
-			model_name?: string;
-			n_ctx?: number;
-			supports_vision?: boolean;
-		};
-
-		if (status.status !== "running" && status.status !== "ok") return false;
-
-		const modelName = status.model_name ?? status.model;
-		if (!modelName) return false;
-
-		const models = [
-			localModelEntry(modelName, {
-				contextWindow: status.n_ctx ?? 32768,
-				supportsVision: status.supports_vision ?? false,
-			}),
-		];
-
-		// Also try to list additional models via /v1/models (may differ from active).
-		try {
-			const modelsRes = await fetch(`${baseUrl}/v1/models`, {
-				signal: AbortSignal.timeout(1500),
-			});
-			if (modelsRes.ok) {
-				const body = (await modelsRes.json()) as {
-					data?: Array<{ id: string }>;
-				};
-				for (const m of body.data ?? []) {
-					if (m.id && m.id !== modelName) {
-						models.push(localModelEntry(m.id));
-					}
-				}
-			}
-		} catch {
-			// Fine — we already have the active model.
-		}
-
-		modelRegistry.registerProvider("skill-llm", {
-			baseUrl: `${baseUrl}/v1`,
-			apiKey: "SKILL_LLM_API_KEY",
-			api: "openai-completions",
-			models,
-		});
-
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-const skillLlmRegistered = await registerSkillLlm();
+await autoBootSkillLlmIfConfigured();
+await registerSkillLlmProvider(modelRegistry);
 
 // ---------------------------------------------------------------------------
 // Ollama — auto-discover all available models, always include gpt-oss:20b.
@@ -271,11 +212,16 @@ const loader = new DefaultResourceLoader({
 				extra.push({
 					name: nameMatch[1].trim(),
 					description: descMatch[1].trim(),
-						// Package-relative path: "neuroloop/skills/…/SKILL.md"
+					// Package-relative path: "neuroloop/skills/…/SKILL.md"
 					// Consistent regardless of cwd or where npm installed the package.
 					filePath: skillFile,
 					baseDir: join(SKILLS_DIR, entry.name),
-					source: "path",
+					sourceInfo: createSyntheticSourceInfo(skillFile, {
+						source: "neuroloop/skills",
+						scope: "project",
+						origin: "top-level",
+						baseDir: join(SKILLS_DIR, entry.name),
+					}),
 					disableModelInvocation: false,
 				});
 			}
@@ -288,7 +234,12 @@ const loader = new DefaultResourceLoader({
 				description: "NeuroSkill EXG metrics reference — all indices, band powers, scores, and their scientific basis.",
 				filePath: METRICS_MD_PATH,
 				baseDir: NEUROLOOP_DIR,
-				source: "path",
+				sourceInfo: createSyntheticSourceInfo(METRICS_MD_PATH, {
+					source: "neuroloop",
+					scope: "project",
+					origin: "top-level",
+					baseDir: NEUROLOOP_DIR,
+				}),
 				disableModelInvocation: false,
 			});
 		}

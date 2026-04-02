@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.11] — 2026-04-02
+
+### Added
+
+- Auto-sync of `skills/` submodule on startup, plus `/skills-update` to force refresh from GitHub.
+- Startup/runtime version intelligence:
+  - local vs npm-latest checks for `neuroloop` and `neuroskill`
+  - GitHub latest commit and latest release tag lookup
+  - header version/status line in TUI
+  - `/version [refresh]` command
+- Changelog UX in TUI:
+  - automatic "what changed" card shown once per version
+  - `/changelog`, `/changelog all`, `/changelog reset`
+- Skill LLM connection orchestration:
+  - `/llm connect [remote|local|auto]`
+  - `/llm route` for active route + fallback visibility
+  - optional startup boot via `NEUROLOOP_SKILL_LLM_BOOT`
+- Model configuration management in TUI:
+  - `/model-config add` interactive creator for `~/.neuroloop/models.json`
+  - `/model-config open` to open the file in system editor (`open` / `start` / `xdg-open`)
+  - `/model-config show` and `/model-config path`
+
+### Changed
+
+- Updated pi dependencies to the 0.64 line (`@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`, `@mariozechner/pi-ai`).
+- Updated TypeScript compatibility for latest pi SDK types:
+  - `ModelRegistry.create(...)` usage
+  - skill `sourceInfo` metadata construction
+- `runNeuroSkill()` now prefers locally installed runtime `neuroskill` binary under `~/.neuroloop/runtime` before falling back to `npx`.
+- README updated to reflect all new commands and flows.
+
+---
+
 ## [0.0.10] — 2026-03-24
 
 ### Changed

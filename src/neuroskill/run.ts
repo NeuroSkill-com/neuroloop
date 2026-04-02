@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { getLocalNeuroSkillBinPath } from "../runtime-updates.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -159,12 +160,11 @@ function escapeArg(arg: string): string {
  */
 export async function runNeuroSkill<T = unknown>(args: string[]): Promise<NeuroSkillResult<T>> {
 	try {
-		const cliArgs = [
-			"neuroskill", "--port", String(_port),
-			...args.map(escapeArg),
-		];
+		const localBin = getLocalNeuroSkillBinPath();
+		const hasLocalBin = existsSync(localBin);
+		const cliArgs = ["--port", String(_port), ...args.map(escapeArg)];
 
-		const { stdout } = await execFileAsync("npx", cliArgs, {
+		const { stdout } = await execFileAsync(hasLocalBin ? localBin : "npx", hasLocalBin ? cliArgs : ["neuroskill", ...cliArgs], {
 			timeout: NEUROSKILL_TIMEOUT_MS,
 			maxBuffer: MAX_BUFFER,
 			env: { ...process.env },
