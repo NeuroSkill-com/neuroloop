@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.13] — 2026-04-02
+
+### Changed
+
+- Skills sync now supports a TUI progress indicator (spinner + progress bar) while fetching/updating skills.
+- Startup skills sync moved into interactive session start so progress is visible in the UI.
+- Skills are cached in `~/.neuroloop/skills` and loaded before bundled package skills.
+- Cross-platform path handling tightened for Windows/macOS/Linux while retaining bundled `SKILLS_DIR` fallback.
+
+---
+
 ## [0.0.12] — 2026-04-02
 
 ### Changed

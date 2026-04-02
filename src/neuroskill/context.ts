@@ -9,17 +9,31 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 import { runNeuroSkill } from "./run.ts";
 import { detectSignals } from "./signals.ts";
 
-const SKILLS_DIR = join(
+const BUNDLED_SKILLS_ROOT = join(
 	dirname(fileURLToPath(import.meta.url)),
-	"..", "..", "skills", "skills",
+	"..", "..", "skills",
 );
+const AGENT_SKILLS_ROOT = join(homedir(), ".neuroloop", "skills");
 
-const PROTOCOLS_SKILL_PATH = join(SKILLS_DIR, "neuroskill-protocols", "SKILL.md");
+const PROTOCOLS_SKILL_PATHS = [
+	join(AGENT_SKILLS_ROOT, "skills", "neuroskill-protocols", "SKILL.md"),
+	join(AGENT_SKILLS_ROOT, "neuroskill-protocols", "SKILL.md"),
+	join(BUNDLED_SKILLS_ROOT, "skills", "neuroskill-protocols", "SKILL.md"),
+	join(BUNDLED_SKILLS_ROOT, "neuroskill-protocols", "SKILL.md"),
+];
+
+function resolveProtocolsSkillPath(): string | null {
+	for (const p of PROTOCOLS_SKILL_PATHS) {
+		if (existsSync(p)) return p;
+	}
+	return null;
+}
 
 interface TaskDef {
 	label: string;
@@ -87,9 +101,10 @@ export async function selectContextualData(prompt: string): Promise<string[]> {
 	// ── Protocol skill — load on-demand when protocol intent is detected ────
 	const extras: string[] = [];
 
-	if (s.protocols && existsSync(PROTOCOLS_SKILL_PATH)) {
+	const protocolsSkillPath = s.protocols ? resolveProtocolsSkillPath() : null;
+	if (protocolsSkillPath) {
 		try {
-			const skillContent = readFileSync(PROTOCOLS_SKILL_PATH, "utf8");
+			const skillContent = readFileSync(protocolsSkillPath, "utf8");
 			extras.push(`## 🧘 Protocol Repertoire\n${skillContent}`);
 		} catch {
 			// Non-fatal — skill file unreadable, continue without it.

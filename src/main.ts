@@ -46,7 +46,7 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 import { neuroloopExtension } from "./neuroloop.ts";
-import { syncSkillsFromGitHub } from "./skills-sync.ts";
+import { getAgentSkillsDir } from "./skills-sync.ts";
 import { refreshRuntimeVersions } from "./runtime-updates.ts";
 import { autoBootSkillLlmIfConfigured, registerSkillLlmProvider } from "./skill-llm.ts";
 
@@ -58,7 +58,9 @@ const MAIN_FILE = fileURLToPath(import.meta.url);
 const SRC_DIR = dirname(MAIN_FILE);
 const NEUROLOOP_DIR = join(SRC_DIR, "..");
 const AGENT_DIR = join(homedir(), ".neuroloop");
+const AGENT_SKILLS_DIR = getAgentSkillsDir();
 const SKILLS_DIR = join(NEUROLOOP_DIR, "skills");
+const SKILLS_SCAN_DIRS = [AGENT_SKILLS_DIR, SKILLS_DIR];
 const METRICS_MD_PATH = join(NEUROLOOP_DIR, "METRICS.md");
 const LOCAL_NEUROLOOP_VERSION =
 	(JSON.parse(readFileSync(join(NEUROLOOP_DIR, "package.json"), "utf8")) as { version: string }).version;
@@ -86,16 +88,7 @@ if (runtime.neuroskill.npmLatest) {
 	}
 }
 
-// Pull latest skills from GitHub on every launch.
-const skillsSync = await syncSkillsFromGitHub();
-process.env.NEUROLOOP_SKILLS_SYNC_STATUS = skillsSync.message;
-process.env.NEUROLOOP_SKILLS_SYNC_OK = skillsSync.ok ? "1" : "0";
-process.env.NEUROLOOP_SKILLS_SYNC_UPDATED = skillsSync.updated ? "1" : "0";
-console.log(`skills: ${skillsSync.message}`);
-if (!skillsSync.ok && skillsSync.error) {
-	console.warn(`skills: ${skillsSync.error}`);
-}
-
+// Skills sync is performed in TUI session_start with live progress in the footer.
 // ---------------------------------------------------------------------------
 // Auth, models, settings — all stored under ~/.neuroloop
 // ---------------------------------------------------------------------------
@@ -188,43 +181,52 @@ const loader = new DefaultResourceLoader({
 	agentDir: AGENT_DIR,
 	settingsManager,
 
-	// Load individual skills from ./skills/<name>/SKILL.md + METRICS.md
+	// Load individual skills from ~/.neuroloop/skills first, then bundled ./skills.
 	skillsOverride: (base) => {
 		const extra: Skill[] = [];
+		const seen = new Set(base.skills.map((s) => s.name));
 
-		// Scan ./skills/ directory — each subdirectory must contain SKILL.md with
-		// name/description frontmatter matching the Agent Skills specification.
-		if (existsSync(SKILLS_DIR)) {
-			for (const entry of readdirSync(SKILLS_DIR, { withFileTypes: true })) {
-				if (!entry.isDirectory()) continue;
-				const skillFile = join(SKILLS_DIR, entry.name, "SKILL.md");
-				if (!existsSync(skillFile)) continue;
+		const addSkill = (skillFile: string): void => {
+			if (!existsSync(skillFile)) return;
+			const content = readFileSync(skillFile, "utf8");
+			const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+			if (!fmMatch) return;
 
-				// Parse YAML frontmatter to extract name and description.
-				const content = readFileSync(skillFile, "utf8");
-				const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-				if (!fmMatch) continue;
+			const fm = fmMatch[1];
+			const nameMatch = fm.match(/^name:\s*(.+)$/m);
+			const descMatch = fm.match(/^description:\s*(.+)$/m);
+			if (!nameMatch || !descMatch) return;
 
-				const fm = fmMatch[1];
-				const nameMatch = fm.match(/^name:\s*(.+)$/m);
-				const descMatch = fm.match(/^description:\s*(.+)$/m);
-				if (!nameMatch || !descMatch) continue;
+			const name = nameMatch[1].trim();
+			if (seen.has(name)) return;
+			seen.add(name);
 
-				extra.push({
-					name: nameMatch[1].trim(),
-					description: descMatch[1].trim(),
-					// Package-relative path: "neuroloop/skills/…/SKILL.md"
-					// Consistent regardless of cwd or where npm installed the package.
-					filePath: skillFile,
-					baseDir: join(SKILLS_DIR, entry.name),
-					sourceInfo: createSyntheticSourceInfo(skillFile, {
-						source: "neuroloop/skills",
-						scope: "project",
-						origin: "top-level",
-						baseDir: join(SKILLS_DIR, entry.name),
-					}),
-					disableModelInvocation: false,
-				});
+			const baseDir = dirname(skillFile);
+			extra.push({
+				name,
+				description: descMatch[1].trim(),
+				filePath: skillFile,
+				baseDir,
+				sourceInfo: createSyntheticSourceInfo(skillFile, {
+					source: "neuroloop/skills",
+					scope: "project",
+					origin: "top-level",
+					baseDir,
+				}),
+				disableModelInvocation: false,
+			});
+		};
+
+		for (const root of SKILLS_SCAN_DIRS) {
+			if (!existsSync(root)) continue;
+			addSkill(join(root, "SKILL.md"));
+
+			for (const container of [root, join(root, "skills")]) {
+				if (!existsSync(container)) continue;
+				for (const entry of readdirSync(container, { withFileTypes: true })) {
+					if (!entry.isDirectory()) continue;
+					addSkill(join(container, entry.name, "SKILL.md"));
+				}
 			}
 		}
 
@@ -258,7 +260,8 @@ const loader = new DefaultResourceLoader({
 			"assistant message before every turn. Use the `neuroskill_run` tool to query",
 			"any other neuroskill command.",
 			"",
-			`Skills dir: ${SKILLS_DIR}`,
+			`Skills cache dir: ${AGENT_SKILLS_DIR}`,
+			`Bundled skills dir: ${SKILLS_DIR}`,
 			`METRICS.md: ${METRICS_MD_PATH}`,
 		].join("\n");
 

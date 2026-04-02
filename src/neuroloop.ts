@@ -557,7 +557,7 @@ Available commands and typical args:
 	let exgEnabled    = true;
 	let runtimeVersions: RuntimeVersionState | null = getRuntimeVersionState();
 	let runtimeVersionsLoading = false;
-	let skillsSyncShown = false;
+	let skillsSyncInFlight = false;
 	let exgOnline     = false;
 	let exgMetrics: ExgMetrics | null = null;
 	let exgUpdatedAt: number | null   = null;
@@ -571,6 +571,66 @@ Available commands and typical args:
 	let exgPollTimer:        ReturnType<typeof setInterval> | null = null; // status poll
 	let exgAgoTimer:         ReturnType<typeof setInterval> | null = null; // "ago" refresh
 	let exgPollMs:           number = 1_000;  // default 1 s; user-configurable
+
+	const SYNC_SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+	function progressBar(percent: number, width = 14): string {
+		const p = Math.max(0, Math.min(100, Math.round(percent)));
+		const filled = Math.round((p / 100) * width);
+		return `[${"█".repeat(filled)}${"░".repeat(Math.max(0, width - filled))}] ${p}%`;
+	}
+
+	async function runSkillsSyncWithTui(
+		ctx: { ui: { setStatus: (key: string, value: string | undefined) => void; notify: (msg: string, level?: "info" | "warning" | "error" | "success") => void; theme: Theme } },
+		force = false,
+	): Promise<void> {
+		if (skillsSyncInFlight) {
+			ctx.ui.notify("Skills sync already running…", "info");
+			return;
+		}
+
+		skillsSyncInFlight = true;
+		let stage = "Starting";
+		let percent = 0;
+		let spin = 0;
+		const paint = () => {
+			const spinner = SYNC_SPINNER[spin % SYNC_SPINNER.length];
+			const line = `${spinner} skills ${progressBar(percent)} ${stage}`;
+			ctx.ui.setStatus("skills-sync", ctx.ui.theme.fg("muted", line));
+		};
+		paint();
+		const timer = setInterval(() => {
+			spin += 1;
+			paint();
+		}, 120);
+
+		try {
+			const result = await syncSkillsFromGitHub({
+				force,
+				onProgress: (p) => {
+					stage = p.stage;
+					percent = p.percent;
+					paint();
+				},
+			});
+			if (!result.ok) {
+				ctx.ui.notify(result.error ? `${result.message}\n${result.error}` : result.message, "error");
+				return;
+			}
+
+			ctx.ui.notify(result.message, "info");
+			if (result.updated) {
+				ctx.ui.notify(
+					"Skills updated. Changes to loaded skill index apply fully after restarting neuroloop.",
+					"info",
+				);
+			}
+		} finally {
+			clearInterval(timer);
+			ctx.ui.setStatus("skills-sync", undefined);
+			skillsSyncInFlight = false;
+		}
+	}
 
 	// ── Parsers ───────────────────────────────────────────────────────────────
 
@@ -863,15 +923,7 @@ Available commands and typical args:
 	// ── 4c. session_start ─────────────────────────────────────────────────────
 
 	pi.on("session_start", (_event, ctx) => {
-		if (!skillsSyncShown && process.env.NEUROLOOP_SKILLS_SYNC_STATUS) {
-			const ok = process.env.NEUROLOOP_SKILLS_SYNC_OK === "1";
-			const updated = process.env.NEUROLOOP_SKILLS_SYNC_UPDATED === "1";
-			ctx.ui.notify(
-				`Skills sync: ${process.env.NEUROLOOP_SKILLS_SYNC_STATUS}`,
-				ok ? (updated ? "info" : "info") : "warning",
-			);
-			skillsSyncShown = true;
-		}
+		void runSkillsSyncWithTui(ctx, false);
 
 		const changelog = changelogSinceLastShown(_pkgVersion);
 		if (changelog) {
@@ -1292,23 +1344,7 @@ Available commands and typical args:
 	pi.registerCommand("skills-update", {
 		description: "Force update skill files from GitHub",
 		handler: async (_args, handlerCtx) => {
-			handlerCtx.ui.notify("Syncing skills from GitHub …", "info");
-			const result = await syncSkillsFromGitHub({ force: true });
-			if (!result.ok) {
-				handlerCtx.ui.notify(
-					result.error ? `${result.message}\n${result.error}` : result.message,
-					"error",
-				);
-				return;
-			}
-
-			handlerCtx.ui.notify(result.message, "info");
-			if (result.updated) {
-				handlerCtx.ui.notify(
-					"Skills updated. Changes to loaded skill index apply fully after restarting neuroloop.",
-					"info",
-				);
-			}
+			await runSkillsSyncWithTui(handlerCtx, true);
 		},
 	});
 
