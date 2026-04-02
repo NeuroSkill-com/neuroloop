@@ -557,6 +557,7 @@ Available commands and typical args:
 	let exgEnabled    = true;
 	let runtimeVersions: RuntimeVersionState | null = getRuntimeVersionState();
 	let runtimeVersionsLoading = false;
+	let skillsSyncShown = false;
 	let exgOnline     = false;
 	let exgMetrics: ExgMetrics | null = null;
 	let exgUpdatedAt: number | null   = null;
@@ -862,6 +863,16 @@ Available commands and typical args:
 	// ── 4c. session_start ─────────────────────────────────────────────────────
 
 	pi.on("session_start", (_event, ctx) => {
+		if (!skillsSyncShown && process.env.NEUROLOOP_SKILLS_SYNC_STATUS) {
+			const ok = process.env.NEUROLOOP_SKILLS_SYNC_OK === "1";
+			const updated = process.env.NEUROLOOP_SKILLS_SYNC_UPDATED === "1";
+			ctx.ui.notify(
+				`Skills sync: ${process.env.NEUROLOOP_SKILLS_SYNC_STATUS}`,
+				ok ? (updated ? "info" : "info") : "warning",
+			);
+			skillsSyncShown = true;
+		}
+
 		const changelog = changelogSinceLastShown(_pkgVersion);
 		if (changelog) {
 			pi.sendMessage({
@@ -1347,9 +1358,9 @@ Available commands and typical args:
 		},
 	});
 
-	// /changelog — show unseen changelog entries in TUI
-	pi.registerCommand("changelog", {
-		description: "Show changelog updates in chat · /changelog [all|reset]",
+	// /updates — show unseen changelog entries in TUI
+	pi.registerCommand("updates", {
+		description: "Show changelog updates in chat · /updates [all|reset]",
 		handler: async (args, handlerCtx) => {
 			const sub = args.trim().toLowerCase();
 			if (sub === "reset") {

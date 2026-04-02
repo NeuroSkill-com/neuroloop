@@ -1,11 +1,12 @@
-import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SRC_DIR = dirname(fileURLToPath(import.meta.url));
 const NEUROLOOP_DIR = join(SRC_DIR, "..");
 const SKILLS_DIR = join(NEUROLOOP_DIR, "skills");
+const SKILLS_REPO_URL = "https://github.com/NeuroSkill-com/skills.git";
 
 export interface SkillsSyncResult {
 	ok: boolean;
@@ -33,24 +34,91 @@ function maybeRev(cwd: string): string | undefined {
 	}
 }
 
+function hasLocalSkillsContent(): boolean {
+	if (!existsSync(SKILLS_DIR)) return false;
+	try {
+		for (const entry of readdirSync(SKILLS_DIR, { withFileTypes: true })) {
+			if (!entry.isDirectory()) continue;
+			if (existsSync(join(SKILLS_DIR, entry.name, "SKILL.md"))) return true;
+		}
+		if (existsSync(join(SKILLS_DIR, "skills"))) {
+			for (const entry of readdirSync(join(SKILLS_DIR, "skills"), { withFileTypes: true })) {
+				if (!entry.isDirectory()) continue;
+				if (existsSync(join(SKILLS_DIR, "skills", entry.name, "SKILL.md"))) return true;
+			}
+		}
+	} catch {
+		return false;
+	}
+	return false;
+}
+
+function cloneSkillsRepo(): SkillsSyncResult {
+	try {
+		git(["clone", "--depth", "1", SKILLS_REPO_URL, SKILLS_DIR], NEUROLOOP_DIR);
+		const after = maybeRev(SKILLS_DIR);
+		return {
+			ok: true,
+			updated: true,
+			skipped: false,
+			after,
+			message: `Skills were missing locally; cloned from GitHub${after ? ` (${after.slice(0, 7)})` : ""}.`,
+		};
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		return {
+			ok: false,
+			updated: false,
+			skipped: false,
+			message: "Failed to clone missing skills from GitHub.",
+			error: message,
+		};
+	}
+}
+
 export async function syncSkillsFromGitHub(opts: { force?: boolean } = {}): Promise<SkillsSyncResult> {
 	const force = opts.force ?? false;
 
-	if (!existsSync(join(NEUROLOOP_DIR, ".git"))) {
-		return {
-			ok: true,
-			updated: false,
-			skipped: true,
-			message: "Git checkout not found; skipping skills sync.",
-		};
+	const hasGitCheckout = existsSync(join(NEUROLOOP_DIR, ".git"));
+	const hasSkills = hasLocalSkillsContent();
+
+	// First thing: if skills are missing, fetch them immediately.
+	if (!hasSkills) {
+		if (existsSync(SKILLS_DIR) && existsSync(join(SKILLS_DIR, ".git"))) {
+			// Existing standalone clone: refresh it instead of recloning.
+			try {
+				const before = maybeRev(SKILLS_DIR);
+				git(["fetch", "--all", "--prune"], SKILLS_DIR);
+				git(["reset", "--hard", "origin/HEAD"], SKILLS_DIR);
+				const after = maybeRev(SKILLS_DIR);
+				return {
+					ok: true,
+					updated: before !== after,
+					skipped: false,
+					before,
+					after,
+					message: "Skills were missing locally; refreshed standalone skills clone from GitHub.",
+				};
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				return {
+					ok: false,
+					updated: false,
+					skipped: false,
+					message: "Failed to refresh standalone skills clone.",
+					error: message,
+				};
+			}
+		}
+		return cloneSkillsRepo();
 	}
 
-	if (!existsSync(SKILLS_DIR)) {
+	if (!hasGitCheckout) {
 		return {
 			ok: true,
 			updated: false,
 			skipped: true,
-			message: "skills/ directory not found; skipping skills sync.",
+			message: "Using local bundled skills (no git checkout).",
 		};
 	}
 

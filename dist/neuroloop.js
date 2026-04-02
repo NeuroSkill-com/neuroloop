@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // src/main.ts
-import { existsSync as existsSync8, readdirSync, readFileSync as readFileSync7 } from "node:fs";
+import { existsSync as existsSync8, readdirSync as readdirSync2, readFileSync as readFileSync7 } from "node:fs";
 import { homedir as homedir6 } from "node:os";
 import { basename, dirname as dirname5, join as join8 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
@@ -1206,13 +1206,14 @@ ${r.text}` : null);
 }
 
 // src/skills-sync.ts
-import { existsSync as existsSync4 } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { existsSync as existsSync4, readdirSync } from "node:fs";
 import { dirname as dirname2, join as join4 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var SRC_DIR = dirname2(fileURLToPath2(import.meta.url));
 var NEUROLOOP_DIR = join4(SRC_DIR, "..");
 var SKILLS_DIR2 = join4(NEUROLOOP_DIR, "skills");
+var SKILLS_REPO_URL = "https://github.com/NeuroSkill-com/skills.git";
 function git(args, cwd) {
   return execFileSync("git", args, {
     cwd,
@@ -1227,22 +1228,84 @@ function maybeRev(cwd) {
     return void 0;
   }
 }
-async function syncSkillsFromGitHub(opts = {}) {
-  const force = opts.force ?? false;
-  if (!existsSync4(join4(NEUROLOOP_DIR, ".git"))) {
+function hasLocalSkillsContent() {
+  if (!existsSync4(SKILLS_DIR2)) return false;
+  try {
+    for (const entry of readdirSync(SKILLS_DIR2, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (existsSync4(join4(SKILLS_DIR2, entry.name, "SKILL.md"))) return true;
+    }
+    if (existsSync4(join4(SKILLS_DIR2, "skills"))) {
+      for (const entry of readdirSync(join4(SKILLS_DIR2, "skills"), { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        if (existsSync4(join4(SKILLS_DIR2, "skills", entry.name, "SKILL.md"))) return true;
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+function cloneSkillsRepo() {
+  try {
+    git(["clone", "--depth", "1", SKILLS_REPO_URL, SKILLS_DIR2], NEUROLOOP_DIR);
+    const after = maybeRev(SKILLS_DIR2);
     return {
       ok: true,
+      updated: true,
+      skipped: false,
+      after,
+      message: `Skills were missing locally; cloned from GitHub${after ? ` (${after.slice(0, 7)})` : ""}.`
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
       updated: false,
-      skipped: true,
-      message: "Git checkout not found; skipping skills sync."
+      skipped: false,
+      message: "Failed to clone missing skills from GitHub.",
+      error: message
     };
   }
-  if (!existsSync4(SKILLS_DIR2)) {
+}
+async function syncSkillsFromGitHub(opts = {}) {
+  const force = opts.force ?? false;
+  const hasGitCheckout = existsSync4(join4(NEUROLOOP_DIR, ".git"));
+  const hasSkills = hasLocalSkillsContent();
+  if (!hasSkills) {
+    if (existsSync4(SKILLS_DIR2) && existsSync4(join4(SKILLS_DIR2, ".git"))) {
+      try {
+        const before = maybeRev(SKILLS_DIR2);
+        git(["fetch", "--all", "--prune"], SKILLS_DIR2);
+        git(["reset", "--hard", "origin/HEAD"], SKILLS_DIR2);
+        const after = maybeRev(SKILLS_DIR2);
+        return {
+          ok: true,
+          updated: before !== after,
+          skipped: false,
+          before,
+          after,
+          message: "Skills were missing locally; refreshed standalone skills clone from GitHub."
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          ok: false,
+          updated: false,
+          skipped: false,
+          message: "Failed to refresh standalone skills clone.",
+          error: message
+        };
+      }
+    }
+    return cloneSkillsRepo();
+  }
+  if (!hasGitCheckout) {
     return {
       ok: true,
       updated: false,
       skipped: true,
-      message: "skills/ directory not found; skipping skills sync."
+      message: "Using local bundled skills (no git checkout)."
     };
   }
   try {
@@ -2028,7 +2091,7 @@ ${step.instruction}`);
 };
 
 // src/neuroloop.ts
-var _pkgVersion = (true ? "0.0.11" : void 0) ?? JSON.parse(readFileSync6(join7(dirname4(fileURLToPath3(import.meta.url)), "../package.json"), "utf8")).version;
+var _pkgVersion = (true ? "0.0.12" : void 0) ?? JSON.parse(readFileSync6(join7(dirname4(fileURLToPath3(import.meta.url)), "../package.json"), "utf8")).version;
 var AGENT_DIR3 = join7(homedir5(), ".neuroskill");
 var VERSION_STATE_DIR = join7(homedir5(), ".neuroloop");
 var NEUROLOOP_DIR2 = join7(dirname4(fileURLToPath3(import.meta.url)), "..");
@@ -2437,6 +2500,7 @@ Available commands and typical args:
   let exgEnabled = true;
   let runtimeVersions = getRuntimeVersionState();
   let runtimeVersionsLoading = false;
+  let skillsSyncShown = false;
   let exgOnline = false;
   let exgMetrics = null;
   let exgUpdatedAt = null;
@@ -2677,6 +2741,15 @@ Available commands and typical args:
     exgWs = null;
   }
   pi.on("session_start", (_event, ctx) => {
+    if (!skillsSyncShown && process.env.NEUROLOOP_SKILLS_SYNC_STATUS) {
+      const ok = process.env.NEUROLOOP_SKILLS_SYNC_OK === "1";
+      const updated = process.env.NEUROLOOP_SKILLS_SYNC_UPDATED === "1";
+      ctx.ui.notify(
+        `Skills sync: ${process.env.NEUROLOOP_SKILLS_SYNC_STATUS}`,
+        ok ? updated ? "info" : "info" : "warning"
+      );
+      skillsSyncShown = true;
+    }
     const changelog = changelogSinceLastShown(_pkgVersion);
     if (changelog) {
       pi.sendMessage({
@@ -3072,8 +3145,8 @@ ${result.error}` : result.message,
       });
     }
   });
-  pi.registerCommand("changelog", {
-    description: "Show changelog updates in chat \xB7 /changelog [all|reset]",
+  pi.registerCommand("updates", {
+    description: "Show changelog updates in chat \xB7 /updates [all|reset]",
     handler: async (args, handlerCtx) => {
       const sub = args.trim().toLowerCase();
       if (sub === "reset") {
@@ -3500,11 +3573,12 @@ if (runtime.neuroskill.npmLatest) {
   }
 }
 var skillsSync = await syncSkillsFromGitHub();
-if (!skillsSync.skipped) {
-  console.log(`skills: ${skillsSync.message}`);
-  if (!skillsSync.ok && skillsSync.error) {
-    console.warn(`skills: ${skillsSync.error}`);
-  }
+process.env.NEUROLOOP_SKILLS_SYNC_STATUS = skillsSync.message;
+process.env.NEUROLOOP_SKILLS_SYNC_OK = skillsSync.ok ? "1" : "0";
+process.env.NEUROLOOP_SKILLS_SYNC_UPDATED = skillsSync.updated ? "1" : "0";
+console.log(`skills: ${skillsSync.message}`);
+if (!skillsSync.ok && skillsSync.error) {
+  console.warn(`skills: ${skillsSync.error}`);
 }
 var authStorage = AuthStorage.create(join8(AGENT_DIR4, "auth.json"));
 var modelRegistry = ModelRegistry.create(authStorage, join8(AGENT_DIR4, "models.json"));
@@ -3568,7 +3642,7 @@ var loader = new DefaultResourceLoader({
   skillsOverride: (base) => {
     const extra = [];
     if (existsSync8(SKILLS_DIR3)) {
-      for (const entry of readdirSync(SKILLS_DIR3, { withFileTypes: true })) {
+      for (const entry of readdirSync2(SKILLS_DIR3, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue;
         const skillFile = join8(SKILLS_DIR3, entry.name, "SKILL.md");
         if (!existsSync8(skillFile)) continue;

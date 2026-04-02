@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.12] — 2026-04-02
+
+### Changed
+
+- README alignment expanded against the latest `skill` backend updates:
+  - native device coverage refresh
+  - LSL + remote LSL coverage
+  - EXG model (ZUNA) and LLM catalog family coverage
+  - backend integration notes (HealthKit, Oura, Calendar)
+- Startup behavior improved when local skills are missing:
+  - automatically pulls skills from GitHub before loading
+  - shows skills-sync status in the TUI at session start.
+
+---
+
 ## [0.0.11] — 2026-04-02
 
 ### Added
@@ -19,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `/version [refresh]` command
 - Changelog UX in TUI:
   - automatic "what changed" card shown once per version
-  - `/changelog`, `/changelog all`, `/changelog reset`
+  - `/updates`, `/updates all`, `/updates reset`
 - Skill LLM connection orchestration:
   - `/llm connect [remote|local|auto]`
   - `/llm route` for active route + fallback visibility
@@ -37,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - skill `sourceInfo` metadata construction
 - `runNeuroSkill()` now prefers locally installed runtime `neuroskill` binary under `~/.neuroloop/runtime` before falling back to `npx`.
 - README updated to reflect all new commands and flows.
+- README device/model coverage expanded to match current Skill app capabilities and recent backend changes:
+  - native connectors (Muse, Ganglion, MW75, Hermes)
+  - local + remote LSL ingestion
+  - EXG foundation model (ZUNA) and current Skill LLM model families
+  - backend capability alignment notes for HealthKit, Oura Ring cloud sync, and Calendar ingestion
 
 ---
 

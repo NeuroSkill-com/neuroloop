@@ -6,15 +6,28 @@ NeuroLoop™ runs on top of the [pi coding agent](https://github.com/mariozechne
 
 ### Supported Devices
 
-| Company | Device | Channels | Sample Rate |
-|---------|--------|----------|-------------|
-| **Muse** | Muse (2016), Muse 2, Muse S, Muse S (Athena) | 4 (TP9/AF7/AF8/TP10) | 256 Hz |
-| **Neurable** | MW75 Neuro | 12 | 500 Hz |
-| **OpenBCI** | Ganglion (4ch), Cyton (8ch), Cyton+Daisy (16ch), Galea | 4–16 | 200–250 Hz |
-| **Emotiv** | EPOC X (14ch), Insight (5ch), Flex Saline (32ch), MN8 | 5–32 | 128–256 Hz |
-| **IDUN** | Guardian (in-ear EEG earbud) | 1 | 250 Hz |
-| **RE-AK** | Nucleus Hermes | 8 | 250 Hz |
-| **Mendi** | Mendi (fNIRS headband) | fNIRS optical | — |
+#### Native NeuroSkill connectors
+
+| Device | Channels | Sample Rate | Transport | Notes |
+|---|---:|---:|---|---|
+| **Muse** (2016 / 2 / S / S Athena) | 4 (TP9, AF7, AF8, TP10) | 256 Hz | BLE | Includes PPG + IMU streams |
+| **OpenBCI Ganglion** | 4 | 200 Hz | BLE | Native adapter |
+| **Neurable MW75 Neuro** | 12 | 500 Hz | BLE + RFCOMM | Behind `mw75-rfcomm` feature flag |
+| **Hermes V1** | 8 (Fp1, Fp2, AF3, AF4, F3, F4, FC1, FC2) | 250 Hz | BLE GATT | ADS1299 + 9-DOF IMU |
+
+#### LSL sources (local network)
+
+Via NeuroSkill's built-in **LSL adapter**, NeuroLoop can ingest streams from Lab Streaming Layer publishers (e.g. OpenBCI/BrainFlow pipelines, MATLAB, Python `pylsl`, custom broadcasters).
+
+#### Remote LSL
+
+NeuroSkill also supports **remote LSL over encrypted iroh QUIC tunnels** (`rlsl-iroh`), so a remote EEG source can stream into your local Skill app and become available to NeuroLoop automatically.
+
+#### Additional wearable/OS data surfaced through NeuroSkill
+
+- **Apple HealthKit** (sleep, HR, HRV, steps, workouts)
+- **Oura Ring cloud sync** (sleep/activity/readiness/HR/SpO2/workouts/mindfulness)
+- **OS Calendar** ingestion (EventKit on macOS, `.ics` sources on Linux/Windows)
 
 [Paper](https://arxiv.org/abs/2603.03212)
 
@@ -26,6 +39,7 @@ NeuroLoop™ runs on top of the [pi coding agent](https://github.com/mariozechne
 
 - 🧠 **Live EXG context** — injects a real-time snapshot of brain state (focus, relaxation, engagement, drowsiness, HRV, sleep stage, consciousness indices, etc.) into every LLM turn
 - 📡 **Live TUI panel** — real-time scores and EEG band bars stream directly into the terminal footer via WebSocket; no polling delay
+- 🌉 **LSL ingestion support** — works with NeuroSkill's local LSL sources and remote LSL-over-iroh pipelines
 - 🎯 **Contextual skill loading** — detects domain signals in each user message (stress, sleep, focus, grief, awe, philosophy, HRV, etc.) and runs the matching NeuroSkill™ commands in parallel before the LLM responds
 - 🏃 **Guided protocols** — 100+ mind-body practices (breathing, meditation, somatic work, sleep, music, social-media, dietary, gym, eye exercises, etc.) proposed intelligently and executed step-by-step with OS notifications and EXG labelling
 - 🏷️ **Auto-labelling** — silently annotates notable mental, emotional, and philosophical moments as timestamped EXG events; the label text and context are written by the LLM
@@ -35,8 +49,9 @@ NeuroLoop™ runs on top of the [pi coding agent](https://github.com/mariozechne
 - 📅 **Daily calibration nudge** — reminds the user to run a calibration sequence at most once every 24 hours
 - 🔑 **In-app API key management** — add, list, or remove provider API keys at runtime with `/key` (no file editing required); keys are stored securely in `~/.neuroloop/auth.json`
 - 🤖 **Multi-provider model support** — Anthropic, OpenAI, Gemini, Skill app local/remote LLM routes, and all Ollama models (including `gpt-oss:20b` as the default local model)
+- 💬 **Expanded Skill LLM catalog coverage** — Qwen/Qwen-VL, GPT-OSS, Ministral, Gemma, Phi, OmniCoder, LFM, and uncensored Qwen families (availability depends on local catalog/download state)
 - 🧩 **In-TUI model configuration** — create/update `~/.neuroloop/models.json` interactively (`/model-config add`) or open it in your system editor (`/model-config open`)
-- 🗂️ **Update visibility** — startup changelog card (shown once per version), `/changelog`, and live version route/status commands (`/version`, `/llm route`)
+- 🗂️ **Update visibility** — startup changelog card (shown once per version), `/updates`, and live version route/status commands (`/version`, `/llm route`)
 - 🛡️ **Cross-platform** — works on macOS, Linux, and Windows (cross-platform port discovery, shell escaping, file permissions)
 - 🔒 **Safety hardened** — SSRF protection on web tools, shell injection prevention, bounded memory/protocol limits, restrictive file permissions, Node ≥ 20 enforced at startup
 
@@ -102,7 +117,7 @@ NeuroLoop extends the pi TUI with:
 | `/calibrate` | Start EXG calibration sequence |
 | `/skills-update` | Force-refresh skills submodule from GitHub |
 | `/version [refresh]` | Show local/npm/GitHub version status |
-| `/changelog [all\|reset]` | Show unseen changelog updates, full changelog, or reset seen state |
+| `/updates [all\|reset]` | Show unseen changelog updates, full changelog, or reset seen state |
 | `/llm` | On-device LLM status (model, context, vision) |
 | `/llm route` | Show active inference route and fallback chain |
 | `/llm connect [remote\|local\|auto]` | Start/connect Skill LLM via WS with local fallback |
@@ -276,6 +291,38 @@ Model selection order:
 5. First available Ollama model (`gpt-oss:20b` when none are listed first)
 
 When the Skill app has a running LLM, it is registered as the `skill-llm` provider and connected to directly via the OpenAI-compatible HTTP API — no CLI overhead for inference. If the Skill app's LLM server has an API key configured, set the `SKILL_LLM_API_KEY` environment variable.
+
+#### EXG foundation model (inside NeuroSkill)
+
+NeuroSkill's EXG embedding/search stack is powered by **ZUNA** (`Zyphra/ZUNA`), which converts 5-second EXG epochs into dense vectors used for similarity search, session compare, cross-modal joins, and sleep-stage pipelines.
+
+#### Skill app local LLM catalog families
+
+Current catalog families include:
+
+- **Qwen 3.5** (4B / 9B / 27B, plus Opus-distilled variants)
+- **Qwen coder lines** (Qwen2.5.1 Coder 7B, Qwen3 Coder Next)
+- **Qwen3-VL 30B** multimodal
+- **GPT-OSS 20B**
+- **Ministral 3 14B** (Instruct + Reasoning)
+- **Gemma 3 270M**
+- **Phi-4 Reasoning Plus**
+- **OmniCoder 9B**
+- **LFM2.5-VL 1.6B**
+- **Uncensored Qwen 3.5 variants** (4B / 9B / 27B / 35B-A3B)
+
+Many families include **mmproj** projector files for image input in the Skill app LLM server.
+
+### NeuroSkill backend capability alignment (from `../skill`)
+
+NeuroLoop tracks the NeuroSkill backend capabilities and exposes them through `/neuro`, `neuroskill_run`, and convenience commands where available. This includes:
+
+- native multi-device EXG connectors (Muse, Ganglion, MW75, Hermes)
+- local and remote LSL transports
+- EXG embedding/search model stack (ZUNA)
+- local Skill LLM server + model catalog management + tool-calling
+- screenshot/vision/OCR cross-modal memory workflows
+- HealthKit, Oura, and Calendar integrations
 
 ### NeuroSkill™ Server Port
 

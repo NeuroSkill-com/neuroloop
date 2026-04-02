@@ -88,11 +88,12 @@ if (runtime.neuroskill.npmLatest) {
 
 // Pull latest skills from GitHub on every launch.
 const skillsSync = await syncSkillsFromGitHub();
-if (!skillsSync.skipped) {
-	console.log(`skills: ${skillsSync.message}`);
-	if (!skillsSync.ok && skillsSync.error) {
-		console.warn(`skills: ${skillsSync.error}`);
-	}
+process.env.NEUROLOOP_SKILLS_SYNC_STATUS = skillsSync.message;
+process.env.NEUROLOOP_SKILLS_SYNC_OK = skillsSync.ok ? "1" : "0";
+process.env.NEUROLOOP_SKILLS_SYNC_UPDATED = skillsSync.updated ? "1" : "0";
+console.log(`skills: ${skillsSync.message}`);
+if (!skillsSync.ok && skillsSync.error) {
+	console.warn(`skills: ${skillsSync.error}`);
 }
 
 // ---------------------------------------------------------------------------
