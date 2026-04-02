@@ -19,11 +19,14 @@ const BUNDLED_SKILLS_ROOT = join(
 	dirname(fileURLToPath(import.meta.url)),
 	"..", "..", "skills",
 );
-const AGENT_SKILLS_ROOT = join(homedir(), ".neuroloop", "skills");
+const AGENT_SKILLS_ROOT = join(homedir(), ".neuroloop", "skills-cache");
+const LEGACY_AGENT_SKILLS_ROOT = join(homedir(), ".neuroloop", "skills");
 
 const PROTOCOLS_SKILL_PATHS = [
 	join(AGENT_SKILLS_ROOT, "skills", "neuroskill-protocols", "SKILL.md"),
 	join(AGENT_SKILLS_ROOT, "neuroskill-protocols", "SKILL.md"),
+	join(LEGACY_AGENT_SKILLS_ROOT, "skills", "neuroskill-protocols", "SKILL.md"),
+	join(LEGACY_AGENT_SKILLS_ROOT, "neuroskill-protocols", "SKILL.md"),
 	join(BUNDLED_SKILLS_ROOT, "skills", "neuroskill-protocols", "SKILL.md"),
 	join(BUNDLED_SKILLS_ROOT, "neuroskill-protocols", "SKILL.md"),
 ];

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.15] — 2026-04-02
+
+### Fixed
+
+- Moved synced skills cache from `~/.neuroloop/skills` to `~/.neuroloop/skills-cache` to avoid Pi auto-loading conflicts.
+- Added migration from legacy cache path and automatic sidelining of legacy dir when both paths exist.
+- Updated protocol-skill path resolution to support both legacy and new cache locations during transition.
+
+---
+
 ## [0.0.14] — 2026-04-02
 
 ### Fixed

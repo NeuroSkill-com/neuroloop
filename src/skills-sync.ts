@@ -1,12 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SRC_DIR = dirname(fileURLToPath(import.meta.url));
 const BUNDLED_SKILLS_DIR = join(SRC_DIR, "..", "skills");
-const AGENT_SKILLS_DIR = join(homedir(), ".neuroloop", "skills");
+const AGENT_SKILLS_DIR = join(homedir(), ".neuroloop", "skills-cache");
+const LEGACY_AGENT_SKILLS_DIR = join(homedir(), ".neuroloop", "skills");
 const SKILLS_REPO_URL = "https://github.com/NeuroSkill-com/skills.git";
 
 export interface SkillsSyncResult {
@@ -75,6 +76,20 @@ export async function syncSkillsFromGitHub(
 	const report = (stage: string, percent: number) => onProgress?.({ stage, percent });
 	const parentDir = dirname(AGENT_SKILLS_DIR);
 	mkdirSync(parentDir, { recursive: true });
+	if (existsSync(LEGACY_AGENT_SKILLS_DIR)) {
+		try {
+			if (!existsSync(AGENT_SKILLS_DIR)) {
+				renameSync(LEGACY_AGENT_SKILLS_DIR, AGENT_SKILLS_DIR);
+			} else {
+				const legacyDisabled = join(parentDir, "skills-legacy-disabled");
+				if (!existsSync(legacyDisabled)) {
+					renameSync(LEGACY_AGENT_SKILLS_DIR, legacyDisabled);
+				}
+			}
+		} catch {
+			// Non-fatal; we'll continue and clone into the new cache dir if needed.
+		}
+	}
 	report("Preparing skills sync", 5);
 
 	try {
