@@ -558,6 +558,7 @@ Available commands and typical args:
 	let runtimeVersions: RuntimeVersionState | null = getRuntimeVersionState();
 	let runtimeVersionsLoading = false;
 	let skillsSyncInFlight = false;
+	let skillsSyncShown = false;
 	let exgOnline     = false;
 	let exgMetrics: ExgMetrics | null = null;
 	let exgUpdatedAt: number | null   = null;
@@ -923,7 +924,14 @@ Available commands and typical args:
 	// ── 4c. session_start ─────────────────────────────────────────────────────
 
 	pi.on("session_start", (_event, ctx) => {
-		void runSkillsSyncWithTui(ctx, false);
+		if (!skillsSyncShown && process.env.NEUROLOOP_SKILLS_SYNC_STATUS) {
+			const ok = process.env.NEUROLOOP_SKILLS_SYNC_OK === "1";
+			ctx.ui.notify(
+				`Skills sync: ${process.env.NEUROLOOP_SKILLS_SYNC_STATUS}`,
+				ok ? "info" : "warning",
+			);
+			skillsSyncShown = true;
+		}
 
 		const changelog = changelogSinceLastShown(_pkgVersion);
 		if (changelog) {

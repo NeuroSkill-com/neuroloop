@@ -46,7 +46,7 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 import { neuroloopExtension } from "./neuroloop.ts";
-import { getAgentSkillsDir } from "./skills-sync.ts";
+import { getAgentSkillsDir, syncSkillsFromGitHub } from "./skills-sync.ts";
 import { refreshRuntimeVersions } from "./runtime-updates.ts";
 import { autoBootSkillLlmIfConfigured, registerSkillLlmProvider } from "./skill-llm.ts";
 
@@ -88,7 +88,16 @@ if (runtime.neuroskill.npmLatest) {
 	}
 }
 
-// Skills sync is performed in TUI session_start with live progress in the footer.
+// Pull latest skills before loading resources so they are available immediately.
+const skillsSync = await syncSkillsFromGitHub();
+process.env.NEUROLOOP_SKILLS_SYNC_STATUS = skillsSync.message;
+process.env.NEUROLOOP_SKILLS_SYNC_OK = skillsSync.ok ? "1" : "0";
+process.env.NEUROLOOP_SKILLS_SYNC_UPDATED = skillsSync.updated ? "1" : "0";
+console.log(`skills: ${skillsSync.message}`);
+if (!skillsSync.ok && skillsSync.error) {
+	console.warn(`skills: ${skillsSync.error}`);
+}
+
 // ---------------------------------------------------------------------------
 // Auth, models, settings — all stored under ~/.neuroloop
 // ---------------------------------------------------------------------------

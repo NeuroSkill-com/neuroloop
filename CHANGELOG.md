@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.14] — 2026-04-02
+
+### Fixed
+
+- Restored startup skill sync before resource loading so downloaded skills are available in the same launch/session.
+- Kept TUI progress UX for manual `/skills-update` runs without delaying initial skill injection.
+
+---
+
 ## [0.0.13] — 2026-04-02
 
 ### Changed
