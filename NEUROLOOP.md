@@ -75,6 +75,30 @@ Health data is automatically fetched when the user's prompt matches relevant dom
 | `web_fetch` | Fetch a URL and return its content. |
 | `web_search` | Search the web and return results. |
 
+## Response Compression
+
+NeuroLoop supports response compression to reduce token usage while maintaining technical accuracy. Two compression modes are available:
+
+- **Standard (default)**: Light compression that removes filler words and phrases while keeping grammar intact.
+- **Strong**: Heavy compression that drops articles, pronouns, and auxiliary verbs for maximum token reduction (caveman-style).
+
+### Usage
+
+```
+/settings compression standard   # Light compression (default)
+/settings compression strong     # Heavy compression
+/settings compression off        # Disable compression
+```
+
+### Examples
+
+| Mode | Input | Output |
+|---|---|---|
+| Standard | "I think the issue is that you are creating a new object reference on each render cycle." | "the issue is that you are creating a new object reference on each render cycle." |
+| Strong | "I think the issue is that you are creating a new object reference on each render cycle." | "issue creating new object reference each render cycle…" |
+
+Compression is applied automatically to all agent responses based on the configured mode. Use `/settings` to check the current mode or change it.
+
 ---
 
 ## Slash Commands
@@ -98,6 +122,8 @@ Health data is automatically fetched when the user's prompt matches relevant dom
 | `/label <text>` | Create a timestamped EXG annotation (supports `--context`) |
 | `/labels <query>` | Semantic search over EXG annotations (supports `--k`) |
 | `/hooks [sub]` | Proactive hook rules — `list`, `add`, `remove`, `enable`, `disable`, `log` |
+| `/settings` | Configure NeuroLoop settings (e.g., compression mode) |
+| `/settings compression <mode>` | Set compression mode (`standard`, `strong`, or `off`) |
 | `/dnd [on\|off]` | Do Not Disturb status / toggle |
 | `/say <text>` | Speak text aloud via on-device TTS (supports `--voice`) |
 | `/notify <title> [body]` | Send an OS notification |

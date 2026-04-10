@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 // src/main.ts
-import { existsSync as existsSync8, readdirSync as readdirSync2, readFileSync as readFileSync7 } from "node:fs";
-import { homedir as homedir8 } from "node:os";
-import { basename, dirname as dirname5, join as join8 } from "node:path";
+import { existsSync as existsSync9, readdirSync as readdirSync2, readFileSync as readFileSync8 } from "node:fs";
+import { homedir as homedir9 } from "node:os";
+import { basename, dirname as dirname5, join as join9 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 import {
   AuthStorage,
@@ -17,9 +17,9 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 // src/neuroloop.ts
-import { existsSync as existsSync7, mkdirSync as mkdirSync6, readFileSync as readFileSync6, writeFileSync as writeFileSync4 } from "node:fs";
-import { homedir as homedir7 } from "node:os";
-import { dirname as dirname4, join as join7 } from "node:path";
+import { existsSync as existsSync8, mkdirSync as mkdirSync7, readFileSync as readFileSync7, writeFileSync as writeFileSync5 } from "node:fs";
+import { homedir as homedir8 } from "node:os";
+import { dirname as dirname4, join as join8 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 import { Container, Markdown, Spacer } from "@mariozechner/pi-tui";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
@@ -29,14 +29,14 @@ import WS from "ws";
 
 // src/neuroskill/run.ts
 import { execFile as execFile2 } from "node:child_process";
-import { existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync2, writeFileSync } from "node:fs";
+import { existsSync as existsSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync2, writeFileSync } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { join as join2 } from "node:path";
 import { promisify as promisify2 } from "node:util";
 
 // src/runtime-updates.ts
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync as mkdirSync2, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -95,7 +95,7 @@ function getLocalNeuroSkillBinPath() {
   return join(RUNTIME_NODE_MODULES, ".bin", IS_WINDOWS ? "neuroskill.cmd" : "neuroskill");
 }
 async function installRuntimePackage(pkg, version) {
-  if (!existsSync(RUNTIME_PREFIX)) mkdirSync(RUNTIME_PREFIX, { recursive: true, mode: 448 });
+  if (!existsSync(RUNTIME_PREFIX)) mkdirSync2(RUNTIME_PREFIX, { recursive: true, mode: 448 });
   await execFileAsync("npm", ["install", "--prefix", RUNTIME_PREFIX, "--no-save", `${pkg}@${version}`], {
     timeout: 18e4,
     maxBuffer: 4 * 1024 * 1024,
@@ -194,7 +194,7 @@ function loadPort() {
 }
 function savePort(port) {
   try {
-    if (!existsSync2(AGENT_DIR2)) mkdirSync2(AGENT_DIR2, { recursive: true, mode: 448 });
+    if (!existsSync2(AGENT_DIR2)) mkdirSync3(AGENT_DIR2, { recursive: true, mode: 448 });
     writeFileSync(PORT_FILE, JSON.stringify({ port }), { encoding: "utf8", mode: 384 });
   } catch {
   }
@@ -893,10 +893,13 @@ var BUNDLED_SKILLS_ROOT = join3(
   "..",
   "skills"
 );
-var AGENT_SKILLS_ROOT = join3(homedir3(), ".neuroloop", "skills");
+var AGENT_SKILLS_ROOT = join3(homedir3(), ".neuroloop", "skills-cache");
+var LEGACY_AGENT_SKILLS_ROOT = join3(homedir3(), ".neuroloop", "skills");
 var PROTOCOLS_SKILL_PATHS = [
   join3(AGENT_SKILLS_ROOT, "skills", "neuroskill-protocols", "SKILL.md"),
   join3(AGENT_SKILLS_ROOT, "neuroskill-protocols", "SKILL.md"),
+  join3(LEGACY_AGENT_SKILLS_ROOT, "skills", "neuroskill-protocols", "SKILL.md"),
+  join3(LEGACY_AGENT_SKILLS_ROOT, "neuroskill-protocols", "SKILL.md"),
   join3(BUNDLED_SKILLS_ROOT, "skills", "neuroskill-protocols", "SKILL.md"),
   join3(BUNDLED_SKILLS_ROOT, "neuroskill-protocols", "SKILL.md")
 ];
@@ -1220,13 +1223,14 @@ ${r.text}` : null);
 
 // src/skills-sync.ts
 import { execFileSync } from "node:child_process";
-import { existsSync as existsSync4, mkdirSync as mkdirSync3, readdirSync } from "node:fs";
+import { existsSync as existsSync4, mkdirSync as mkdirSync4, readdirSync, renameSync } from "node:fs";
 import { homedir as homedir4 } from "node:os";
 import { dirname as dirname2, join as join4 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var SRC_DIR = dirname2(fileURLToPath2(import.meta.url));
 var BUNDLED_SKILLS_DIR = join4(SRC_DIR, "..", "skills");
-var AGENT_SKILLS_DIR = join4(homedir4(), ".neuroloop", "skills");
+var AGENT_SKILLS_DIR = join4(homedir4(), ".neuroloop", "skills-cache");
+var LEGACY_AGENT_SKILLS_DIR = join4(homedir4(), ".neuroloop", "skills");
 var SKILLS_REPO_URL = "https://github.com/NeuroSkill-com/skills.git";
 function git(args, cwd) {
   return execFileSync("git", args, {
@@ -1269,7 +1273,20 @@ async function syncSkillsFromGitHub(opts = {}) {
   const onProgress = opts.onProgress;
   const report = (stage, percent) => onProgress?.({ stage, percent });
   const parentDir = dirname2(AGENT_SKILLS_DIR);
-  mkdirSync3(parentDir, { recursive: true });
+  mkdirSync4(parentDir, { recursive: true });
+  if (existsSync4(LEGACY_AGENT_SKILLS_DIR)) {
+    try {
+      if (!existsSync4(AGENT_SKILLS_DIR)) {
+        renameSync(LEGACY_AGENT_SKILLS_DIR, AGENT_SKILLS_DIR);
+      } else {
+        const legacyDisabled = join4(parentDir, "skills-legacy-disabled");
+        if (!existsSync4(legacyDisabled)) {
+          renameSync(LEGACY_AGENT_SKILLS_DIR, legacyDisabled);
+        }
+      }
+    } catch {
+    }
+  }
   report("Preparing skills sync", 5);
   try {
     const hasGitClone = existsSync4(join4(AGENT_SKILLS_DIR, ".git"));
@@ -1434,7 +1451,7 @@ async function autoBootSkillLlmIfConfigured() {
 
 // src/model-config.ts
 import { execFile as execFile3 } from "node:child_process";
-import { existsSync as existsSync5, mkdirSync as mkdirSync4, readFileSync as readFileSync4, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync5, mkdirSync as mkdirSync5, readFileSync as readFileSync4, writeFileSync as writeFileSync2 } from "node:fs";
 import { homedir as homedir5 } from "node:os";
 import { join as join5 } from "node:path";
 import { promisify as promisify3 } from "node:util";
@@ -1455,7 +1472,7 @@ function readModelsFile() {
 }
 function writeModelsFile(file) {
   const dir = join5(homedir5(), ".neuroloop");
-  if (!existsSync5(dir)) mkdirSync4(dir, { recursive: true, mode: 448 });
+  if (!existsSync5(dir)) mkdirSync5(dir, { recursive: true, mode: 448 });
   writeFileSync2(MODEL_CONFIG_PATH, JSON.stringify(file, null, 2) + "\n", {
     encoding: "utf8",
     mode: 384
@@ -1499,7 +1516,7 @@ async function openModelsFileInSystem() {
 }
 
 // src/memory.ts
-import { existsSync as existsSync6, mkdirSync as mkdirSync5, readFileSync as readFileSync5, writeFileSync as writeFileSync3 } from "node:fs";
+import { existsSync as existsSync6, mkdirSync as mkdirSync6, readFileSync as readFileSync5, writeFileSync as writeFileSync3 } from "node:fs";
 import { homedir as homedir6 } from "node:os";
 import { dirname as dirname3, join as join6 } from "node:path";
 var MEMORY_PATH = join6(homedir6(), ".neuroskill", "memory.md");
@@ -1509,7 +1526,7 @@ function readMemory(path = MEMORY_PATH) {
 }
 var MAX_MEMORY_BYTES = 512 * 1024;
 function writeMemory(content, mode2, path = MEMORY_PATH) {
-  mkdirSync5(dirname3(path), { recursive: true, mode: 448 });
+  mkdirSync6(dirname3(path), { recursive: true, mode: 448 });
   if (mode2 === "append") {
     const existing = existsSync6(path) ? readFileSync5(path, "utf-8") : "";
     const sep = existing && !existing.endsWith("\n") ? "\n" : "";
@@ -2088,37 +2105,141 @@ ${step.instruction}`);
   }
 };
 
+// src/compression.ts
+import { homedir as homedir7 } from "node:os";
+import { join as join7 } from "node:path";
+import { existsSync as existsSync7, readFileSync as readFileSync6, writeFileSync as writeFileSync4 } from "node:fs";
+var AGENT_DIR3 = join7(homedir7(), ".neuroloop");
+var COMPRESSION_SETTINGS_PATH = join7(AGENT_DIR3, "compression.json");
+function loadCompressionSettings() {
+  try {
+    if (existsSync7(COMPRESSION_SETTINGS_PATH)) {
+      const raw = readFileSync6(COMPRESSION_SETTINGS_PATH, "utf8");
+      const settings = JSON.parse(raw);
+      if (settings.mode === "standard" || settings.mode === "strong" || settings.mode === "off") {
+        return settings;
+      }
+    }
+  } catch {
+  }
+  return { mode: "standard" };
+}
+function saveCompressionSettings(settings) {
+  try {
+    if (!existsSync7(AGENT_DIR3)) {
+      mkdirSync(AGENT_DIR3, { recursive: true, mode: 448 });
+    }
+    writeFileSync4(
+      COMPRESSION_SETTINGS_PATH,
+      JSON.stringify(settings, null, 2),
+      { encoding: "utf8", mode: 384 }
+    );
+  } catch {
+  }
+}
+function compressStandard(text) {
+  const fillers = [
+    /I think /gi,
+    /I believe /gi,
+    /In my opinion,? /gi,
+    /It seems that /gi,
+    /It appears that /gi,
+    /I would recommend /gi,
+    /I suggest /gi,
+    /I'd like to /gi,
+    /I'm going to /gi,
+    /I'll /gi,
+    /I can /gi,
+    /I will /gi,
+    /I am /gi,
+    /I have /gi,
+    /I've /gi,
+    /I'm /gi,
+    /I'd /gi,
+    /I'll /gi,
+    /I'm going to /gi,
+    /I'm going to /gi,
+    /I'm going to /gi,
+    /I'm going to /gi
+  ];
+  let result = text;
+  for (const filler of fillers) {
+    result = result.replace(filler, "");
+  }
+  return result.trim();
+}
+function compressStrong(text) {
+  let result = compressStandard(text);
+  result = result.replace(/\b(a|an|the)\s+/gi, "");
+  result = result.replace(/\b(is|are|was|were|have|has|had|am)\s+/gi, "");
+  result = result.replace(/\b(I|you|we|they|he|she|it|my|your|our|their|his|her|its)\s+/gi, "");
+  result = result.replace(/\b(and|but|or|so|then)\s+/gi, ", ");
+  result = result.replace(/\b(in|on|at|to|for|with|from|by|about)\s+/gi, "");
+  result = result.replace(/\b(can|could|would|should|may|might|must)\s+/gi, "");
+  result = result.replace(/\b(that|which|who|whom|whose)\s+/gi, "");
+  result = result.replace(/\b(really|very|quite|rather|too|so|just)\s+/gi, "");
+  result = result.replace(/\s+/g, " ").trim();
+  if (!/[.!?]$/.test(result)) {
+    result += "\u2026";
+  }
+  result = result.replace(/→/g, "\u2192");
+  result = result.replace(/because/g, "\u21D2");
+  result = result.replace(/so/g, "\u21D2");
+  return result;
+}
+function compressText(text, mode2) {
+  switch (mode2) {
+    case "standard":
+      return compressStandard(text);
+    case "strong":
+      return compressStrong(text);
+    case "off":
+    default:
+      return text;
+  }
+}
+function getCompressionModeName(mode2) {
+  switch (mode2) {
+    case "standard":
+      return "Standard";
+    case "strong":
+      return "Strong";
+    case "off":
+      return "Off";
+  }
+}
+
 // src/neuroloop.ts
-var _pkgVersion = (true ? "0.0.13" : void 0) ?? JSON.parse(readFileSync6(join7(dirname4(fileURLToPath3(import.meta.url)), "../package.json"), "utf8")).version;
-var AGENT_DIR3 = join7(homedir7(), ".neuroskill");
-var VERSION_STATE_DIR = join7(homedir7(), ".neuroloop");
-var NEUROLOOP_DIR = join7(dirname4(fileURLToPath3(import.meta.url)), "..");
-var NEUROLOOP_MD_PATH = join7(NEUROLOOP_DIR, "NEUROLOOP.md");
-var CHANGELOG_PATH = join7(NEUROLOOP_DIR, "CHANGELOG.md");
-var CHANGELOG_STATE_PATH = join7(VERSION_STATE_DIR, "changelog_state.json");
+var _pkgVersion = (true ? "0.0.15" : void 0) ?? JSON.parse(readFileSync7(join8(dirname4(fileURLToPath3(import.meta.url)), "../package.json"), "utf8")).version;
+var AGENT_DIR4 = join8(homedir8(), ".neuroskill");
+var VERSION_STATE_DIR = join8(homedir8(), ".neuroloop");
+var NEUROLOOP_DIR = join8(dirname4(fileURLToPath3(import.meta.url)), "..");
+var NEUROLOOP_MD_PATH = join8(NEUROLOOP_DIR, "NEUROLOOP.md");
+var CHANGELOG_PATH = join8(NEUROLOOP_DIR, "CHANGELOG.md");
+var CHANGELOG_STATE_PATH = join8(VERSION_STATE_DIR, "changelog_state.json");
 var NEUROSKILL_STATUS_TYPE = "neuroskill-status";
-var CALIBRATION_PROMPT_STATE_PATH = join7(AGENT_DIR3, "last_calibration_prompt.json");
+var CALIBRATION_PROMPT_STATE_PATH = join8(AGENT_DIR4, "last_calibration_prompt.json");
 var CALIBRATION_PROMPT_INTERVAL_MS = 24 * 60 * 60 * 1e3;
 function readChangelogState() {
   try {
-    if (!existsSync7(CHANGELOG_STATE_PATH)) return {};
-    return JSON.parse(readFileSync6(CHANGELOG_STATE_PATH, "utf8"));
+    if (!existsSync8(CHANGELOG_STATE_PATH)) return {};
+    return JSON.parse(readFileSync7(CHANGELOG_STATE_PATH, "utf8"));
   } catch {
     return {};
   }
 }
 function writeChangelogState(state) {
   try {
-    if (!existsSync7(VERSION_STATE_DIR)) {
-      mkdirSync6(VERSION_STATE_DIR, { recursive: true, mode: 448 });
+    if (!existsSync8(VERSION_STATE_DIR)) {
+      mkdirSync7(VERSION_STATE_DIR, { recursive: true, mode: 448 });
     }
-    writeFileSync4(CHANGELOG_STATE_PATH, JSON.stringify(state), { encoding: "utf8", mode: 384 });
+    writeFileSync5(CHANGELOG_STATE_PATH, JSON.stringify(state), { encoding: "utf8", mode: 384 });
   } catch {
   }
 }
 function changelogSinceLastShown(currentVersion) {
-  if (!existsSync7(CHANGELOG_PATH)) return null;
-  const content = readFileSync6(CHANGELOG_PATH, "utf8");
+  if (!existsSync8(CHANGELOG_PATH)) return null;
+  const content = readFileSync7(CHANGELOG_PATH, "utf8");
   const state = readChangelogState();
   if (state.lastShownVersion === currentVersion) return null;
   const matches = [...content.matchAll(/^## \[(.+?)\].*$/gm)];
@@ -2145,8 +2266,8 @@ ${block}`;
 }
 function shouldNudgeCalibration() {
   try {
-    if (existsSync7(CALIBRATION_PROMPT_STATE_PATH)) {
-      const raw = readFileSync6(CALIBRATION_PROMPT_STATE_PATH, "utf8");
+    if (existsSync8(CALIBRATION_PROMPT_STATE_PATH)) {
+      const raw = readFileSync7(CALIBRATION_PROMPT_STATE_PATH, "utf8");
       const { lastPromptedAt } = JSON.parse(raw);
       if (Date.now() - lastPromptedAt < CALIBRATION_PROMPT_INTERVAL_MS) {
         return false;
@@ -2158,7 +2279,7 @@ function shouldNudgeCalibration() {
 }
 function markCalibrationNudgeSent() {
   try {
-    writeFileSync4(
+    writeFileSync5(
       CALIBRATION_PROMPT_STATE_PATH,
       JSON.stringify({ lastPromptedAt: Date.now() }),
       { encoding: "utf8", mode: 384 }
@@ -2302,11 +2423,11 @@ ${memory}`;
     const systemBody = systemSections.join("\n\n---\n\n");
     let skillIndex = "";
     try {
-      if (existsSync7(NEUROLOOP_MD_PATH)) {
+      if (existsSync8(NEUROLOOP_MD_PATH)) {
         skillIndex = `
 
 ## \u{1F4D6} NeuroLoop Capabilities
-${readFileSync6(NEUROLOOP_MD_PATH, "utf8")}`;
+${readFileSync7(NEUROLOOP_MD_PATH, "utf8")}`;
       }
     } catch {
     }
@@ -2499,11 +2620,13 @@ Available commands and typical args:
   let runtimeVersions = getRuntimeVersionState();
   let runtimeVersionsLoading = false;
   let skillsSyncInFlight = false;
+  let skillsSyncShown = false;
   let exgOnline = false;
   let exgMetrics = null;
   let exgUpdatedAt = null;
   let exgLastLabel = null;
   let uiTui = null;
+  let compressionSettings = loadCompressionSettings();
   let exgWs = null;
   let exgWsPort = 8375;
   let exgWsReconnectTimer = null;
@@ -2791,7 +2914,14 @@ ${result.error}` : result.message, "error");
     exgWs = null;
   }
   pi.on("session_start", (_event, ctx) => {
-    void runSkillsSyncWithTui(ctx, false);
+    if (!skillsSyncShown && process.env.NEUROLOOP_SKILLS_SYNC_STATUS) {
+      const ok = process.env.NEUROLOOP_SKILLS_SYNC_OK === "1";
+      ctx.ui.notify(
+        `Skills sync: ${process.env.NEUROLOOP_SKILLS_SYNC_STATUS}`,
+        ok ? "info" : "warning"
+      );
+      skillsSyncShown = true;
+    }
     const changelog = changelogSinceLastShown(_pkgVersion);
     if (changelog) {
       pi.sendMessage({
@@ -2887,6 +3017,46 @@ ${result.error}` : result.message, "error");
   });
   pi.on("before_agent_start", () => {
     if (exgEnabled && !exgWs) connectExgWs();
+  });
+  pi.on("after_agent_finish", (event) => {
+    if (compressionSettings.mode === "off") return;
+    if (event.response && typeof event.response === "string") {
+      event.response = compressText(event.response, compressionSettings.mode);
+    } else if (event.response && Array.isArray(event.response)) {
+      event.response = event.response.map((part) => {
+        if (part.type === "text" && typeof part.text === "string") {
+          return { ...part, text: compressText(part.text, compressionSettings.mode) };
+        }
+        return part;
+      });
+    }
+  });
+  pi.registerCommand("settings", {
+    description: "Configure NeuroLoop settings \xB7 /settings [compression <mode>]",
+    handler: async (args, handlerCtx) => {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      const sub = parts[0]?.toLowerCase() ?? "";
+      if (sub === "compression") {
+        const mode2 = parts[1]?.toLowerCase() ?? "standard";
+        if (mode2 !== "standard" && mode2 !== "strong" && mode2 !== "off") {
+          handlerCtx.ui.notify(
+            "Usage: /settings compression <standard|strong|off>",
+            "warning"
+          );
+          return;
+        }
+        compressionSettings.mode = mode2;
+        saveCompressionSettings(compressionSettings);
+        handlerCtx.ui.notify(
+          `Compression mode set to ${getCompressionModeName(mode2)}.`,
+          "info"
+        );
+        return;
+      }
+      const lines = ["Current NeuroLoop settings:"];
+      lines.push(`  Compression: ${getCompressionModeName(compressionSettings.mode)}`);
+      handlerCtx.ui.notify(lines.join("\n"), "info");
+    }
   });
   const KEY_PROVIDERS = [
     { id: "google", displayName: "Google Gemini", envVar: "GEMINI_API_KEY" },
@@ -3180,14 +3350,14 @@ ${result.text}
         handlerCtx.ui.notify("Changelog state reset. New updates will be shown on next launch.", "info");
         return;
       }
-      if (!existsSync7(CHANGELOG_PATH)) {
+      if (!existsSync8(CHANGELOG_PATH)) {
         handlerCtx.ui.notify("CHANGELOG.md not found.", "warning");
         return;
       }
       if (sub === "all") {
         pi.sendMessage({
           customType: NEUROSKILL_STATUS_TYPE,
-          content: readFileSync6(CHANGELOG_PATH, "utf8"),
+          content: readFileSync7(CHANGELOG_PATH, "utf8"),
           display: true,
           details: void 0
         });
@@ -3572,13 +3742,13 @@ if (major < 20) {
 }
 var MAIN_FILE = fileURLToPath4(import.meta.url);
 var SRC_DIR2 = dirname5(MAIN_FILE);
-var NEUROLOOP_DIR2 = join8(SRC_DIR2, "..");
-var AGENT_DIR4 = join8(homedir8(), ".neuroloop");
+var NEUROLOOP_DIR2 = join9(SRC_DIR2, "..");
+var AGENT_DIR5 = join9(homedir9(), ".neuroloop");
 var AGENT_SKILLS_DIR2 = getAgentSkillsDir();
-var SKILLS_DIR = join8(NEUROLOOP_DIR2, "skills");
+var SKILLS_DIR = join9(NEUROLOOP_DIR2, "skills");
 var SKILLS_SCAN_DIRS = [AGENT_SKILLS_DIR2, SKILLS_DIR];
-var METRICS_MD_PATH = join8(NEUROLOOP_DIR2, "METRICS.md");
-var LOCAL_NEUROLOOP_VERSION = JSON.parse(readFileSync7(join8(NEUROLOOP_DIR2, "package.json"), "utf8")).version;
+var METRICS_MD_PATH = join9(NEUROLOOP_DIR2, "METRICS.md");
+var LOCAL_NEUROLOOP_VERSION = JSON.parse(readFileSync8(join9(NEUROLOOP_DIR2, "package.json"), "utf8")).version;
 var runtime = await refreshRuntimeVersions(LOCAL_NEUROLOOP_VERSION);
 if (runtime.neuroloop.npmLatest) {
   const badge = runtime.neuroloop.upToDate ? "up-to-date" : "update available";
@@ -3600,9 +3770,17 @@ if (runtime.neuroskill.npmLatest) {
     console.warn(`neuroskill: local install failed (${runtime.neuroskill.installError})`);
   }
 }
-var authStorage = AuthStorage.create(join8(AGENT_DIR4, "auth.json"));
-var modelRegistry = ModelRegistry.create(authStorage, join8(AGENT_DIR4, "models.json"));
-var settingsManager = SettingsManager.create(process.cwd(), AGENT_DIR4);
+var skillsSync = await syncSkillsFromGitHub();
+process.env.NEUROLOOP_SKILLS_SYNC_STATUS = skillsSync.message;
+process.env.NEUROLOOP_SKILLS_SYNC_OK = skillsSync.ok ? "1" : "0";
+process.env.NEUROLOOP_SKILLS_SYNC_UPDATED = skillsSync.updated ? "1" : "0";
+console.log(`skills: ${skillsSync.message}`);
+if (!skillsSync.ok && skillsSync.error) {
+  console.warn(`skills: ${skillsSync.error}`);
+}
+var authStorage = AuthStorage.create(join9(AGENT_DIR5, "auth.json"));
+var modelRegistry = ModelRegistry.create(authStorage, join9(AGENT_DIR5, "models.json"));
+var settingsManager = SettingsManager.create(process.cwd(), AGENT_DIR5);
 await autoBootSkillLlmIfConfigured();
 await registerSkillLlmProvider(modelRegistry);
 var DEFAULT_OLLAMA_MODEL = "gpt-oss:20b";
@@ -3656,15 +3834,15 @@ await registerOllamaModels();
 var loadedSkills = [];
 var loader = new DefaultResourceLoader({
   cwd: process.cwd(),
-  agentDir: AGENT_DIR4,
+  agentDir: AGENT_DIR5,
   settingsManager,
   // Load individual skills from ~/.neuroloop/skills first, then bundled ./skills.
   skillsOverride: (base) => {
     const extra = [];
     const seen = new Set(base.skills.map((s) => s.name));
     const addSkill = (skillFile) => {
-      if (!existsSync8(skillFile)) return;
-      const content = readFileSync7(skillFile, "utf8");
+      if (!existsSync9(skillFile)) return;
+      const content = readFileSync8(skillFile, "utf8");
       const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
       if (!fmMatch) return;
       const fm = fmMatch[1];
@@ -3690,17 +3868,17 @@ var loader = new DefaultResourceLoader({
       });
     };
     for (const root of SKILLS_SCAN_DIRS) {
-      if (!existsSync8(root)) continue;
-      addSkill(join8(root, "SKILL.md"));
-      for (const container of [root, join8(root, "skills")]) {
-        if (!existsSync8(container)) continue;
+      if (!existsSync9(root)) continue;
+      addSkill(join9(root, "SKILL.md"));
+      for (const container of [root, join9(root, "skills")]) {
+        if (!existsSync9(container)) continue;
         for (const entry of readdirSync2(container, { withFileTypes: true })) {
           if (!entry.isDirectory()) continue;
-          addSkill(join8(container, entry.name, "SKILL.md"));
+          addSkill(join9(container, entry.name, "SKILL.md"));
         }
       }
     }
-    if (existsSync8(METRICS_MD_PATH)) {
+    if (existsSync9(METRICS_MD_PATH)) {
       extra.push({
         name: "neuroskill-metrics",
         description: "NeuroSkill EXG metrics reference \u2014 all indices, band powers, scores, and their scientific basis.",
@@ -3744,11 +3922,11 @@ var loader = new DefaultResourceLoader({
 await loader.reload();
 var { session, modelFallbackMessage } = await createAgentSession({
   cwd: process.cwd(),
-  agentDir: AGENT_DIR4,
+  agentDir: AGENT_DIR5,
   authStorage,
   modelRegistry,
   resourceLoader: loader,
-  sessionManager: SessionManager.create(process.cwd(), join8(AGENT_DIR4, "sessions")),
+  sessionManager: SessionManager.create(process.cwd(), join9(AGENT_DIR5, "sessions")),
   settingsManager
   // No explicit model — let findInitialModel choose:
   //   built-in providers win if they have API keys / OAuth tokens,

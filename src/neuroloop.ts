@@ -43,6 +43,7 @@ import { MEMORY_PATH, readMemory, writeMemory } from "./memory.ts";
 import { webFetchTool } from "./tools/web-fetch.ts";
 import { webSearchTool } from "./tools/web-search.ts";
 import { runProtocolTool } from "./tools/protocol.ts";
+import { loadCompressionSettings, saveCompressionSettings, compressText, type CompressionMode, getCompressionModeName } from "./compression.ts";
 
 const AGENT_DIR = join(homedir(), ".neuroskill");
 const VERSION_STATE_DIR = join(homedir(), ".neuroloop");
@@ -564,6 +565,7 @@ Available commands and typical args:
 	let exgUpdatedAt: number | null   = null;
 	let exgLastLabel: { text: string; createdAt: number } | null = null;
 	let uiTui: TUI | null = null;
+	let compressionSettings = loadCompressionSettings();
 
 	// WebSocket state
 	let exgWs:               InstanceType<typeof WS> | null = null;
@@ -1070,7 +1072,58 @@ Available commands and typical args:
 		if (exgEnabled && !exgWs) connectExgWs();
 	});
 
-	// ── 4e. /key — add / list / remove API provider keys ────────────────────
+	// ── 4e. Compress agent responses ─────────────────────────────────────────
+	pi.on("after_agent_finish", (event) => {
+		if (compressionSettings.mode === "off") return;
+		
+		// Compress the agent's response
+		if (event.response && typeof event.response === "string") {
+			event.response = compressText(event.response, compressionSettings.mode);
+		} else if (event.response && Array.isArray(event.response)) {
+			// Handle array of content parts
+			event.response = event.response.map((part) => {
+				if (part.type === "text" && typeof part.text === "string") {
+					return { ...part, text: compressText(part.text, compressionSettings.mode) };
+				}
+				return part;
+			});
+		}
+	});
+
+	// ── 4e. /settings — configure compression and other options ─────────────
+	pi.registerCommand("settings", {
+		description: "Configure NeuroLoop settings · /settings [compression <mode>]",
+		handler: async (args, handlerCtx) => {
+			const parts = args.trim().split(/\s+/).filter(Boolean);
+			const sub   = parts[0]?.toLowerCase() ?? "";
+
+			// ── compression ────────────────────────────────────────────────────────
+			if (sub === "compression") {
+				const mode = (parts[1]?.toLowerCase() as CompressionMode) ?? "standard";
+				if (mode !== "standard" && mode !== "strong" && mode !== "off") {
+					handlerCtx.ui.notify(
+						"Usage: /settings compression <standard|strong|off>",
+						"warning"
+					);
+					return;
+				}
+				compressionSettings.mode = mode;
+				saveCompressionSettings(compressionSettings);
+				handlerCtx.ui.notify(
+					`Compression mode set to ${getCompressionModeName(mode)}.`,
+					"info"
+				);
+				return;
+			}
+
+			// ── show current settings ─────────────────────────────────────────────
+			const lines: string[] = ["Current NeuroLoop settings:"];
+			lines.push(`  Compression: ${getCompressionModeName(compressionSettings.mode)}`);
+			handlerCtx.ui.notify(lines.join("\n"), "info");
+		},
+	});
+
+	// ── 4f. /key — add / list / remove API provider keys ────────────────────
 	//
 	//  /key              → interactive: pick provider, enter API key
 	//  /key list         → show which providers are configured
