@@ -209,7 +209,7 @@ function setSkillPort(port) {
 }
 async function probeSkillServer(port = _port) {
   try {
-    const res = await fetch(`http://127.0.0.1:${port}/health`, {
+    const res = await fetch(`http://127.0.0.1:${port}/healthz`, {
       signal: AbortSignal.timeout(2e3)
     });
     if (!res.ok) return false;
@@ -221,7 +221,7 @@ async function probeSkillServer(port = _port) {
 }
 async function discoverSkillServer() {
   if (await probeSkillServer(_port)) return _port;
-  for (const p of [8375, 8376, 8377]) {
+  for (const p of [18444, 8375, 8376, 8377]) {
     if (p === _port) continue;
     if (await probeSkillServer(p)) {
       setSkillPort(p);
@@ -2578,6 +2578,35 @@ Available commands and typical args:
   llm downloads                      \u2192 list all downloads with progress
   llm fit                            \u2192 check which models fit in RAM/VRAM
   llm chat "message" [--image a.jpg] \u2192 single-shot LLM chat (supports vision)
+  oura                               \u2192 Oura Ring status (token + connectivity)
+  oura sync [--start YYYY-MM-DD --end YYYY-MM-DD] \u2192 sync Oura Ring data
+  oura status                        \u2192 check Oura Ring token and user info
+  calendar [--start --end]           \u2192 list calendar events (default: next 7 days)
+  calendar status                    \u2192 show calendar access status + platform
+  calendar permission                \u2192 request calendar access (macOS dialog)
+  iroh info                          \u2192 show iroh endpoint + auth summary
+  iroh totp list|create|qr|revoke    \u2192 manage iroh TOTP credentials
+  iroh clients list|register|revoke|scope|permissions \u2192 manage iroh clients
+  iroh scope-groups                  \u2192 list available permission scope groups
+  iroh phone-invite                  \u2192 generate a phone pairing invitation
+  tokens [list]                      \u2192 list all access tokens (redacted)
+  tokens create <name> [--acl <level>] [--expiry <period>] \u2192 create token
+  tokens revoke <id>                 \u2192 revoke an access token
+  tokens delete <id>                 \u2192 permanently delete an access token
+  tokens refresh                     \u2192 rotate the default daemon token
+  devices [list]                     \u2192 list discovered BLE devices
+  devices pair <id> [name]           \u2192 pair a BLE device by ID
+  devices forget <id>                \u2192 forget a paired device
+  devices set-preferred <id>         \u2192 set preferred device for auto-connect
+  start-session [target]             \u2192 start a recording session
+  stop-session                       \u2192 stop the current recording session
+  scanner start|stop|state           \u2192 control the BLE device scanner
+  reconnect state|enable|disable|retry|cancel \u2192 manage auto-reconnect
+  service install|uninstall|status   \u2192 manage the daemon background service
+  lsl                                \u2192 discover available LSL streams
+  daemon-version                     \u2192 show daemon version and protocol info
+  daemon-log                         \u2192 show recent daemon log lines
+  subscribe [--events <csv>] [--fields <csv>] [--max-hz <n>] \u2192 set broadcast filter
   raw <json>                         \u2192 send arbitrary JSON to the server`,
     parameters: Type4.Object({
       command: Type4.String({ description: "The neuroskill subcommand to run." }),

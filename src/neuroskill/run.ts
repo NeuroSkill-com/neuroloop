@@ -71,7 +71,7 @@ export function setSkillPort(port: number): void { _port = port; savePort(port);
  */
 export async function probeSkillServer(port: number = _port): Promise<boolean> {
 	try {
-		const res = await fetch(`http://127.0.0.1:${port}/health`, {
+		const res = await fetch(`http://127.0.0.1:${port}/healthz`, {
 			signal: AbortSignal.timeout(2000),
 		});
 		if (!res.ok) return false;
@@ -91,7 +91,7 @@ export async function discoverSkillServer(): Promise<number | null> {
 	if (await probeSkillServer(_port)) return _port;
 
 	// 2. Common alternatives
-	for (const p of [8375, 8376, 8377]) {
+	for (const p of [18444, 8375, 8376, 8377]) {
 		if (p === _port) continue;
 		if (await probeSkillServer(p)) { setSkillPort(p); return p; }
 	}

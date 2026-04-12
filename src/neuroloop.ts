@@ -488,6 +488,35 @@ Available commands and typical args:
   llm downloads                      → list all downloads with progress
   llm fit                            → check which models fit in RAM/VRAM
   llm chat "message" [--image a.jpg] → single-shot LLM chat (supports vision)
+  oura                               → Oura Ring status (token + connectivity)
+  oura sync [--start YYYY-MM-DD --end YYYY-MM-DD] → sync Oura Ring data
+  oura status                        → check Oura Ring token and user info
+  calendar [--start --end]           → list calendar events (default: next 7 days)
+  calendar status                    → show calendar access status + platform
+  calendar permission                → request calendar access (macOS dialog)
+  iroh info                          → show iroh endpoint + auth summary
+  iroh totp list|create|qr|revoke    → manage iroh TOTP credentials
+  iroh clients list|register|revoke|scope|permissions → manage iroh clients
+  iroh scope-groups                  → list available permission scope groups
+  iroh phone-invite                  → generate a phone pairing invitation
+  tokens [list]                      → list all access tokens (redacted)
+  tokens create <name> [--acl <level>] [--expiry <period>] → create token
+  tokens revoke <id>                 → revoke an access token
+  tokens delete <id>                 → permanently delete an access token
+  tokens refresh                     → rotate the default daemon token
+  devices [list]                     → list discovered BLE devices
+  devices pair <id> [name]           → pair a BLE device by ID
+  devices forget <id>                → forget a paired device
+  devices set-preferred <id>         → set preferred device for auto-connect
+  start-session [target]             → start a recording session
+  stop-session                       → stop the current recording session
+  scanner start|stop|state           → control the BLE device scanner
+  reconnect state|enable|disable|retry|cancel → manage auto-reconnect
+  service install|uninstall|status   → manage the daemon background service
+  lsl                                → discover available LSL streams
+  daemon-version                     → show daemon version and protocol info
+  daemon-log                         → show recent daemon log lines
+  subscribe [--events <csv>] [--fields <csv>] [--max-hz <n>] → set broadcast filter
   raw <json>                         → send arbitrary JSON to the server`,
 		parameters: Type.Object({
 			command: Type.String({ description: "The neuroskill subcommand to run." }),
