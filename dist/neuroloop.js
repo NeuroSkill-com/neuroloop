@@ -1383,7 +1383,7 @@ function localModelEntry(id, opts = {}) {
   return {
     id,
     name: id,
-    reasoning: false,
+    reasoning: true,
     input: opts.supportsVision ? ["text", "image"] : ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: opts.contextWindow ?? 32768,
@@ -2752,6 +2752,10 @@ Available commands and typical args:
   let exgMetrics = null;
   let exgUpdatedAt = null;
   let exgLastLabel = null;
+  let exgDeviceName = null;
+  let exgDeviceKind = null;
+  let exgDeviceChannels = 0;
+  let exgDeviceRate = 0;
   let uiTui = null;
   let uiNotify = null;
   let sessionModelRegistry = null;
@@ -2971,6 +2975,25 @@ ${result.error}` : result.message, "error");
         lines.push(truncateToWidth(website, width));
         const logo = theme.fg("accent", "\u25C6") + " " + theme.bold("NeuroLoop\u2122") + theme.fg("dim", ` v${_pkgVersion}`) + connDot;
         lines.push(truncateToWidth(logo, width));
+        if (exgOnline && exgDeviceName) {
+          const kindMap = {
+            muse: "BLE",
+            brainbit: "BLE",
+            openbci: "Serial",
+            cognionics: "USB",
+            lsl: "LSL",
+            serial: "Serial"
+          };
+          const isVirtual = exgDeviceName.toLowerCase().includes("virtual");
+          const transport = isVirtual ? "Virtual" : kindMap[exgDeviceKind ?? ""] ?? exgDeviceKind ?? "";
+          const chInfo = exgDeviceChannels > 0 ? theme.fg("dim", ` ${exgDeviceChannels}ch`) : "";
+          const rateInfo = exgDeviceRate > 0 ? theme.fg("dim", ` @ ${Math.round(exgDeviceRate)}Hz`) : "";
+          const transportTag = transport ? theme.fg("muted", ` [${transport}]`) : "";
+          lines.push(truncateToWidth(
+            " " + theme.fg("dim", "\u2388 ") + theme.fg("accent", exgDeviceName) + transportTag + chInfo + rateInfo,
+            width
+          ));
+        }
         if (skillsSyncLastAt) {
           const ago = timeAgo(skillsSyncLastAt.getTime()) || "just now";
           const syncLine = " " + theme.bold("NeuroSkill\u2122") + theme.fg("dim", ` skills synced ${ago}`);
@@ -3103,6 +3126,13 @@ ${result.error}` : result.message, "error");
         if (exgOnline) {
           exgMetrics = parseExgMetrics(msg);
           exgUpdatedAt = Date.now();
+        }
+        const dev = msg.device;
+        if (dev) {
+          exgDeviceName = dev.name ?? null;
+          exgDeviceKind = dev.kind ?? null;
+          exgDeviceChannels = dev.eeg_channels ?? 0;
+          exgDeviceRate = dev.eeg_sample_rate ?? 0;
         }
         const recent = msg.labels?.recent;
         if (recent?.[0]) {
@@ -3853,8 +3883,68 @@ ${result.text}
       await neuroCmd(["calibrate"], "\u{1F3AF} Calibration", handlerCtx);
     }
   });
+  let llmCatalogCache = [];
+  let llmCatalogCacheAt = 0;
+  async function refreshLlmCatalogCache() {
+    if (Date.now() - llmCatalogCacheAt < 3e4 && llmCatalogCache.length > 0) return;
+    try {
+      const baseUrl = await getSkillServerBaseUrl();
+      const res = await fetch(`${baseUrl}/v1/llm/catalog`, {
+        headers: authHeaders(),
+        signal: AbortSignal.timeout(3e3)
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      llmCatalogCache = (data.entries ?? []).map((e) => ({
+        filename: String(e.filename ?? ""),
+        state: String(e.state ?? "not_downloaded"),
+        isMmproj: !!e.is_mmproj
+      }));
+      llmCatalogCacheAt = Date.now();
+    } catch {
+    }
+  }
   pi.registerCommand("llm", {
     description: "LLM control \xB7 /llm [models|status|route|connect|start|stop|list|add|remove|select|download|cancel|pause|resume|fit|chat \u2026]",
+    getArgumentCompletions(prefix) {
+      const parts = prefix.trim().split(/\s+/);
+      const sub = parts[0]?.toLowerCase() ?? "";
+      const partial = (parts[1] ?? "").toLowerCase();
+      if (parts.length <= 1) {
+        const subs = [
+          "models",
+          "status",
+          "route",
+          "connect",
+          "start",
+          "stop",
+          "list",
+          "select",
+          "download",
+          "cancel",
+          "pause",
+          "resume",
+          "add",
+          "remove",
+          "fit",
+          "chat"
+        ];
+        return subs.filter((s) => s.startsWith(sub)).map((s) => ({ value: s, label: s, description: "" }));
+      }
+      const filenameSubs = /* @__PURE__ */ new Set(["select", "download", "cancel", "pause", "resume", "remove", "delete"]);
+      if (filenameSubs.has(sub) && parts.length === 2) {
+        refreshLlmCatalogCache();
+        const models = llmCatalogCache.filter((m) => !m.isMmproj);
+        let filtered = models;
+        if (sub === "select") filtered = models.filter((m) => m.state === "downloaded");
+        else if (sub === "download") filtered = models.filter((m) => m.state !== "downloaded");
+        else if (sub === "cancel" || sub === "pause") filtered = models.filter((m) => m.state === "downloading");
+        else if (sub === "resume") filtered = models.filter((m) => m.state === "paused");
+        else if (sub === "remove" || sub === "delete") filtered = models.filter((m) => m.state === "downloaded");
+        return filtered.filter((m) => m.filename.toLowerCase().includes(partial)).map((m) => ({ value: `${sub} ${m.filename}`, label: m.filename, description: m.state }));
+      }
+      return null;
+    },
     handler: async (args, handlerCtx) => {
       const parts = args.trim().split(/\s+/).filter(Boolean);
       const sub = (parts[0] ?? "models").toLowerCase();
@@ -4112,7 +4202,7 @@ Usage: /llm ${sub} <filename>`, "warning");
         return;
       }
       if (sub === "downloads" || sub === "models") {
-        let catData;
+        let data;
         try {
           const baseUrl = await getSkillServerBaseUrl();
           const res = await fetch(`${baseUrl}/v1/llm/catalog`, {
@@ -4120,168 +4210,59 @@ Usage: /llm ${sub} <filename>`, "warning");
             signal: AbortSignal.timeout(5e3)
           });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          catData = await res.json();
+          data = await res.json();
         } catch (e) {
           handlerCtx.ui.notify(`Failed to fetch catalog: ${e instanceof Error ? e.message : String(e)}`, "error");
           return;
         }
-        const catEntries = catData?.entries ?? [];
-        const activeModel = String(catData?.active_model ?? "");
-        const rows = catEntries.filter((e) => !e.is_mmproj).map((e) => ({
-          filename: String(e.filename ?? ""),
-          family: String(e.family_name ?? ""),
-          quant: String(e.quant ?? ""),
-          sizeGb: e.size_gb ? `${Number(e.size_gb).toFixed(1)} GB` : "",
-          state: String(e.state ?? "not_downloaded"),
-          progress: typeof e.progress === "number" ? e.progress : 0,
-          recommended: !!e.recommended,
-          isActive: String(e.filename ?? "") === activeModel
-        }));
-        if (!rows.length) {
-          handlerCtx.ui.notify("Model catalog is empty.", "warning");
+        const entries = data?.entries ?? [];
+        const active = data?.active_model ?? "\u2013";
+        if (!entries.length) {
+          handlerCtx.ui.notify("Model catalog is empty. Use /llm add to add a model.", "warning");
           return;
         }
-        const buildOptions = () => rows.map((r) => {
-          let icon;
-          if (r.state === "downloaded") icon = r.isActive ? "\u25B6" : "\u2713";
-          else if (r.state === "downloading") icon = "\u2B07";
-          else if (r.state === "paused") icon = "\u23F8";
-          else if (r.state === "failed") icon = "\u2717";
-          else icon = "\u25CB";
-          const rec = r.recommended ? " \u2B50" : "";
-          return `${icon} ${r.filename}  ${r.quant}  ${r.sizeGb}${rec}`;
-        });
-        let keepOpen = true;
-        while (keepOpen) {
-          const options = [...buildOptions(), "\u2500\u2500 Cancel \u2500\u2500"];
-          const choice = await handlerCtx.ui.select("LLM Models \u2014 pick to download/select/manage", options);
-          if (!choice || choice === "\u2500\u2500 Cancel \u2500\u2500") break;
-          const idx = options.indexOf(choice);
-          if (idx < 0 || idx >= rows.length) break;
-          const row = rows[idx];
-          const actions = [];
-          if (row.state === "downloaded" && !row.isActive) actions.push("Select as active model");
-          if (row.state === "downloaded" && row.isActive) actions.push("Start LLM server");
-          if (row.state === "downloaded") actions.push("Delete from disk");
-          if (row.state === "not_downloaded" || row.state === "failed" || row.state === "cancelled") actions.push("Download");
-          if (row.state === "downloading") actions.push("Pause");
-          if (row.state === "paused") actions.push("Resume");
-          if (row.state === "downloading" || row.state === "paused") actions.push("Cancel download");
-          actions.push("Back to list");
-          const action = await handlerCtx.ui.select(`${row.filename}`, actions);
-          if (!action || action === "Back to list") continue;
-          const baseUrl = await getSkillServerBaseUrl();
-          const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
-          if (action === "Select as active model") {
-            try {
-              const res = await fetch(`${baseUrl}/v1/llm/selection/active-model`, {
-                method: "POST",
-                headers: hdrs,
-                body: JSON.stringify({ filename: row.filename }),
-                signal: AbortSignal.timeout(5e3)
-              });
-              if (res.ok) {
-                for (const r of rows) r.isActive = false;
-                row.isActive = true;
-                handlerCtx.ui.notify(`Selected ${row.filename}`, "info");
-              } else {
-                handlerCtx.ui.notify(`Select failed: HTTP ${res.status}`, "error");
-              }
-            } catch (e) {
-              handlerCtx.ui.notify(`Select failed: ${e instanceof Error ? e.message : String(e)}`, "error");
-            }
-          } else if (action === "Start LLM server") {
-            handlerCtx.ui.notify("Starting LLM server\u2026", "info");
-            try {
-              const res = await fetch(`${baseUrl}/v1/llm/server/start`, {
-                method: "POST",
-                headers: hdrs,
-                body: "{}",
-                signal: AbortSignal.timeout(3e4)
-              });
-              if (res.ok) {
-                handlerCtx.ui.notify("LLM server started.", "info");
-                if (sessionModelRegistry) {
-                  await registerSkillLlmProvider(sessionModelRegistry).catch(() => {
-                  });
-                }
-              } else {
-                handlerCtx.ui.notify(`Start failed: HTTP ${res.status}`, "error");
-              }
-            } catch (e) {
-              handlerCtx.ui.notify(`Start failed: ${e instanceof Error ? e.message : String(e)}`, "error");
-            }
-            keepOpen = false;
-          } else if (action === "Download") {
-            try {
-              const res = await fetch(`${baseUrl}/v1/llm/download/start`, {
-                method: "POST",
-                headers: hdrs,
-                body: JSON.stringify({ filename: row.filename }),
-                signal: AbortSignal.timeout(1e4)
-              });
-              if (res.ok) {
-                row.state = "downloading";
-                row.progress = 0;
-                if (!llmDownloads.find((d) => d.filename === row.filename)) {
-                  llmDownloads.push({ filename: row.filename, progress: 0, state: "downloading" });
-                }
-                startLlmDownloadPoll();
-                handlerCtx.ui.notify(`Downloading ${row.filename} \u2014 progress in footer`, "info");
-              } else {
-                handlerCtx.ui.notify(`Download failed: HTTP ${res.status}`, "error");
-              }
-            } catch (e) {
-              handlerCtx.ui.notify(`Download failed: ${e instanceof Error ? e.message : String(e)}`, "error");
-            }
-          } else if (action === "Pause") {
-            await fetch(`${baseUrl}/v1/llm/download/pause`, {
-              method: "POST",
-              headers: hdrs,
-              body: JSON.stringify({ filename: row.filename }),
-              signal: AbortSignal.timeout(5e3)
-            }).catch(() => {
-            });
-            row.state = "paused";
-            handlerCtx.ui.notify(`Paused ${row.filename}`, "info");
-          } else if (action === "Resume") {
-            await fetch(`${baseUrl}/v1/llm/download/resume`, {
-              method: "POST",
-              headers: hdrs,
-              body: JSON.stringify({ filename: row.filename }),
-              signal: AbortSignal.timeout(5e3)
-            }).catch(() => {
-            });
-            row.state = "downloading";
-            handlerCtx.ui.notify(`Resumed ${row.filename}`, "info");
-          } else if (action === "Cancel download") {
-            await fetch(`${baseUrl}/v1/llm/download/cancel`, {
-              method: "POST",
-              headers: hdrs,
-              body: JSON.stringify({ filename: row.filename }),
-              signal: AbortSignal.timeout(5e3)
-            }).catch(() => {
-            });
-            row.state = "cancelled";
-            llmDownloads = llmDownloads.filter((dl) => dl.filename !== row.filename);
-            if (llmDownloads.length === 0) stopLlmDownloadPoll();
-            handlerCtx.ui.notify(`Cancelled ${row.filename}`, "info");
-          } else if (action === "Delete from disk") {
-            const confirm = await handlerCtx.ui.confirm("Delete model", `Delete ${row.filename} from disk?`);
-            if (confirm) {
-              await fetch(`${baseUrl}/v1/llm/download/delete`, {
-                method: "POST",
-                headers: hdrs,
-                body: JSON.stringify({ filename: row.filename }),
-                signal: AbortSignal.timeout(1e4)
-              }).catch(() => {
-              });
-              row.state = "not_downloaded";
-              if (row.isActive) row.isActive = false;
-              handlerCtx.ui.notify(`Deleted ${row.filename}`, "info");
-            }
+        const downloaded = [];
+        const available = [];
+        const downloading = [];
+        for (const e of entries) {
+          if (e.is_mmproj) continue;
+          const fname = String(e.filename ?? "");
+          const state = String(e.state ?? "not_downloaded");
+          const size = e.size_gb ? `${Number(e.size_gb).toFixed(1)} GB` : "";
+          const quant = String(e.quant ?? "");
+          const family = String(e.family_name ?? "");
+          const params = e.params_b ? `${e.params_b}B` : "";
+          const info = [quant, params, size].filter(Boolean).join("  ");
+          const rec = e.recommended ? " \u2B50" : "";
+          if (state === "downloaded") {
+            const mark = fname === active ? "\u25B6 " : "  ";
+            downloaded.push(`${mark}\`${fname}\`  ${info}${rec}`);
+          } else if (state === "downloading") {
+            const pct = typeof e.progress === "number" ? ` ${Math.round(e.progress)}%` : "";
+            downloading.push(`  \u2B07 \`${fname}\`  ${info}${pct}`);
+          } else {
+            available.push(`  \u25CB ${family ? `_${family}_  ` : ""}\`${fname}\`  ${info}${rec}`);
           }
         }
+        const sections = [];
+        sections.push(`Active: **${active}**`);
+        if (downloaded.length) sections.push("\n**Downloaded:**\n" + downloaded.join("\n"));
+        if (downloading.length) sections.push("\n**Downloading:**\n" + downloading.join("\n"));
+        if (available.length) sections.push("\n**Available to download:**\n" + available.join("\n"));
+        sections.push("");
+        sections.push("**Commands:**");
+        sections.push("  `/llm select <file>` \u2014 set active model");
+        sections.push("  `/llm download <file>` \u2014 download a model");
+        sections.push("  `/llm pause|resume|cancel [file]` \u2014 manage downloads");
+        sections.push("  `/llm start` / `/llm stop` \u2014 server control");
+        sections.push("  `/llm status` \u2014 show server status");
+        pi.sendMessage({
+          customType: NEUROSKILL_STATUS_TYPE,
+          content: `## \u{1F916} LLM Models
+${sections.join("\n")}`,
+          display: true,
+          details: void 0
+        });
         return;
       }
       if (sub === "edit") {

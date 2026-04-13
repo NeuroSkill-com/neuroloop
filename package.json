@@ -30,6 +30,7 @@
     "build": "node build.mjs",
     "build:watch": "node build.mjs --watch",
     "start": "PI_PACKAGE_DIR=$(pwd)/pi-pkg npx tsx src/main.ts",
+    "postinstall": "patch-package",
     "prepublishOnly": "node build.mjs"
   },
   "dependencies": {
@@ -42,6 +43,7 @@
     "@mariozechner/pi-ai": "^0.64.0",
     "@types/node": "^25.3.3",
     "esbuild": "^0.27.3",
+    "patch-package": "^8.0.1",
     "typescript": "^5.0.0"
   },
   "engines": {
