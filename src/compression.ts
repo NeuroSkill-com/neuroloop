@@ -6,9 +6,9 @@
  *   - strong: Heavy compression (caveman-style, drops articles, fragments).
  */
 
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 // ---------------------------------------------------------------------------
 // Types

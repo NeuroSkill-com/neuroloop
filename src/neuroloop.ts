@@ -34,10 +34,10 @@ const _pkgVersion: string =
 	(JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../package.json"), "utf8")) as { version: string }).version;
 
 import WS from "ws";
-import { runNeuroSkill, selectContextualData, warmCompareInBackground, getSkillPort, setSkillPort, discoverSkillServer } from "./neuroskill/index.ts";
+import { runNeuroSkill, selectContextualData, warmCompareInBackground, getSkillPort, setSkillPort, discoverSkillServer, checkAuthStatus, getAuthStatus, getDaemonTokenPath } from "./neuroskill/index.ts";
 import { syncSkillsFromGitHub } from "./skills-sync.ts";
 import { getRuntimeVersionState, refreshRuntimeVersions, type RuntimeVersionState } from "./runtime-updates.ts";
-import { registerSkillLlmProvider, startSkillLlmServer } from "./skill-llm.ts";
+import { registerSkillLlmProvider, startSkillLlmServer, getSkillServerBaseUrl, authHeaders } from "./skill-llm.ts";
 import { MODEL_CONFIG_PATH, openModelsFileInSystem, readModelsFile, upsertProviderModel, writeModelsFile } from "./model-config.ts";
 import { MEMORY_PATH, readMemory, writeMemory } from "./memory.ts";
 import { webFetchTool } from "./tools/web-fetch.ts";
@@ -274,7 +274,7 @@ export async function neuroloopExtension(pi: ExtensionAPI): Promise<void> {
 		const displaySections: string[] = [];
 		const systemSections: string[] = [];
 
-		const statusResult = await runNeuroSkill(["status"]);
+		const statusResult = await runNeuroSkill(["--json", "status"]);
 
 		if (statusResult.ok && statusResult.text) {
 			// Clean display: just the live data, no instruction prose.
@@ -285,10 +285,21 @@ export async function neuroloopExtension(pi: ExtensionAPI): Promise<void> {
 			const extra = await selectContextualData(event.prompt);
 			displaySections.push(...extra);
 			systemSections.push(...extra);
+		} else if (exgOnline) {
+			// WS is connected (EXG live) but CLI status failed — daemon is up, just CLI hiccup
+			displaySections.push("## 🧠 NeuroSkill™\n_Connected — live EXG data available._");
+			systemSections.push("## 🧠 NeuroSkill™\n_Connected — live EXG data available. Use neuroskill_run tool for queries._");
 		} else {
-			const unavailable =
-				"## 🧠 NeuroSkill\n_Unavailable — server not running or no EXG device connected._\n" +
-				"Use the `neuroskill_run` tool to query once it comes online.";
+			let unavailable: string;
+			if (getAuthStatus() === "local") {
+				unavailable =
+					"## 🧠 NeuroSkill™\n_Daemon not running. Start it with:_ `npm run daemon`\n" +
+					"Use the `neuroskill_run` tool to query once it comes online.";
+			} else {
+				unavailable =
+					"## 🧠 NeuroSkill™\n_Not connected to a NeuroSkill server. Use `/connect` to set up._\n" +
+					"Use the `neuroskill_run` tool to query once it comes online.";
+			}
 			displaySections.push(unavailable);
 			systemSections.push(unavailable);
 		}
@@ -430,7 +441,7 @@ export async function neuroloopExtension(pi: ExtensionAPI): Promise<void> {
 
 	pi.registerTool({
 		name: "neuroskill_run",
-		label: "NeuroSkill",
+		label: "NeuroSkill™",
 		description: `Run a neuroskill EXG command and return its JSON output.
 
 Available commands and typical args:
@@ -554,7 +565,9 @@ Available commands and typical args:
 			),
 		}),
 		execute: async (_id, params:any, _signal, _onUpdate, _ctx) => {
-			const args = [params.command, ...(params.args ?? [])];
+			// Split command on whitespace so "hooks add" becomes ["hooks", "add"]
+			const cmdParts = (params.command as string).trim().split(/\s+/);
+			const args = [...cmdParts, ...(params.args ?? [])];
 			const result = await runNeuroSkill(args);
 			if (!result.ok) {
 				return {
@@ -616,16 +629,70 @@ Available commands and typical args:
 	let runtimeVersionsLoading = false;
 	let skillsSyncInFlight = false;
 	let skillsSyncShown = false;
+	let skillsSyncLastAt: Date | null = null;
+	let skillsSyncTimer: ReturnType<typeof setInterval> | null = null;
+	const SKILLS_SYNC_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 	let exgOnline     = false;
+	let exgConnecting = false;
+	let exgConnectSpin = 0;
+	let exgConnectSpinTimer: ReturnType<typeof setInterval> | null = null;
 	let exgMetrics: ExgMetrics | null = null;
 	let exgUpdatedAt: number | null   = null;
 	let exgLastLabel: { text: string; createdAt: number } | null = null;
 	let uiTui: TUI | null = null;
+	let uiNotify: ((msg: string, level?: "info" | "warning" | "error") => void) | null = null;
+	let sessionModelRegistry: { registerProvider: (id: string, cfg: unknown) => void } | null = null;
 	let compressionSettings = loadCompressionSettings();
+
+	// LLM download progress (rendered in footer)
+	interface LlmDownloadEntry { filename: string; progress: number; state: string }
+	let llmDownloads: LlmDownloadEntry[] = [];
+	let llmDownloadSpin = 0;
+	let llmDownloadPollTimer: ReturnType<typeof setInterval> | null = null;
+
+	function startLlmDownloadPoll(): void {
+		if (llmDownloadPollTimer) return;
+		llmDownloadPollTimer = setInterval(async () => {
+			try {
+				const baseUrl = await getSkillServerBaseUrl();
+				const res = await fetch(`${baseUrl}/v1/llm/downloads`, {
+					headers: authHeaders(), signal: AbortSignal.timeout(3000),
+				});
+				if (!res.ok) return;
+				const downloads = (await res.json()) as Array<{ filename: string; state: string; progress: number; status_msg?: string }>;
+
+				// Check for completions/failures and notify
+				for (const prev of llmDownloads) {
+					const cur = downloads.find((d) => d.filename === prev.filename);
+					if (!cur || cur.state === "downloaded") {
+						uiNotify?.(`${prev.filename} downloaded successfully.`, "info");
+					} else if (cur.state === "failed" || cur.state === "cancelled") {
+						uiNotify?.(`${prev.filename} download ${cur.state}.`, "error");
+					}
+				}
+
+				// Keep only active downloads
+				llmDownloads = downloads
+					.filter((d) => d.state === "downloading" || d.state === "paused")
+					.map((d) => ({ filename: d.filename, progress: d.progress ?? 0, state: d.state }));
+				llmDownloadSpin++;
+				uiTui?.requestRender();
+
+				// Stop polling when no active downloads remain
+				if (llmDownloads.length === 0) stopLlmDownloadPoll();
+			} catch { /* retry next tick */ }
+		}, 2000);
+	}
+
+	function stopLlmDownloadPoll(): void {
+		if (llmDownloadPollTimer) { clearInterval(llmDownloadPollTimer); llmDownloadPollTimer = null; }
+		llmDownloads = [];
+		uiTui?.requestRender();
+	}
 
 	// WebSocket state
 	let exgWs:               InstanceType<typeof WS> | null = null;
-	let exgWsPort:           number = 8375;   // discovered once, then reused
+	let exgWsPort:           number = 18444;  // discovered once, then reused
 	let exgWsReconnectTimer: ReturnType<typeof setTimeout>  | null = null;
 	let exgPollTimer:        ReturnType<typeof setInterval> | null = null; // status poll
 	let exgAgoTimer:         ReturnType<typeof setInterval> | null = null; // "ago" refresh
@@ -640,7 +707,7 @@ Available commands and typical args:
 	}
 
 	async function runSkillsSyncWithTui(
-		ctx: { ui: { setStatus: (key: string, value: string | undefined) => void; notify: (msg: string, level?: "info" | "warning" | "error" | "success") => void; theme: Theme } },
+		ctx: { ui: { setStatus: (key: string, value: string | undefined) => void; notify: (msg: string, level?: "info" | "warning" | "error") => void; theme: Theme } },
 		force = false,
 	): Promise<void> {
 		if (skillsSyncInFlight) {
@@ -677,13 +744,13 @@ Available commands and typical args:
 				return;
 			}
 
-			ctx.ui.notify(result.message, "info");
-			if (result.updated) {
-				ctx.ui.notify(
-					"Skills updated. Changes to loaded skill index apply fully after restarting neuroloop.",
-					"info",
-				);
-			}
+			skillsSyncLastAt = new Date();
+			ctx.ui.notify(
+				result.updated
+					? `Skills updated at ${skillsSyncLastAt.toLocaleTimeString()}. Restart neuroloop to apply changes to loaded skill index.`
+					: `Skills up to date (synced at ${skillsSyncLastAt.toLocaleTimeString()})`,
+				"info",
+			);
 		} finally {
 			clearInterval(timer);
 			ctx.ui.setStatus("skills-sync", undefined);
@@ -755,9 +822,11 @@ Available commands and typical args:
 
 	function timeAgo(ts: number): string {
 		const s = Math.round((Date.now() - ts) / 1000);
+		if (s <= 5)   return "";
 		if (s < 60)   return `${s}s ago`;
 		if (s < 3600) return `${Math.round(s / 60)}m ago`;
-		return `${Math.round(s / 3600)}h ago`;
+		if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+		return `${Math.round(s / 86400)}d ago`;
 	}
 
 	/**
@@ -807,39 +876,14 @@ Available commands and typical args:
 	// ── 4a. Custom header ────────────────────────────────────────────────────
 
 	function buildHeader(_tui: TUI, theme: Theme) {
-		const versionLine = () => {
-			if (runtimeVersionsLoading) return theme.fg("dim", " versions: checking npm/github …");
-			if (!runtimeVersions) return theme.fg("dim", " versions: unavailable");
-			const nl = runtimeVersions.neuroloop;
-			const ns = runtimeVersions.neuroskill;
-			const gh = runtimeVersions.github;
-			const nlStatus = nl.npmLatest
-				? (nl.upToDate ? theme.fg("success", "latest") : theme.fg("warning", "update available"))
-				: theme.fg("dim", "npm ?");
-			const nsStatus = ns.npmLatest
-				? (ns.upToDate ? theme.fg("success", "latest") : theme.fg("warning", "updating"))
-				: theme.fg("dim", "npm ?");
-			const ghCommit = gh.latestCommit ? gh.latestCommit : "?";
-			const ghTag = gh.latestTag ?? "?";
-			return " "
-				+ theme.fg("dim", `neuroloop v${nl.local}`)
-				+ theme.fg("dim", " · npm ") + theme.fg("muted", `v${nl.npmLatest ?? "?"}`) + theme.fg("dim", " (") + nlStatus + theme.fg("dim", ")")
-				+ theme.fg("dim", " · neuroskill local ") + theme.fg("muted", `v${ns.localInstalled ?? "none"}`)
-				+ theme.fg("dim", " / npm ") + theme.fg("muted", `v${ns.npmLatest ?? "?"}`) + theme.fg("dim", " (") + nsStatus + theme.fg("dim", ")")
-				+ theme.fg("dim", ` · github ${ghCommit} · release ${ghTag}`);
-		};
-		// Only the essential shortcuts — keeps the hint row under ~120 chars.
+		// Only the 5 most important shortcuts — keeps the hint row clean.
 		const hints: [string, string][] = [
 			["esc",       "stop"],
 			["ctrl+d",    "quit"],
-			["shift+tab", "think"],
-			["ctrl+l",    "model"],
-			["ctrl+o",    "tools"],
-			["/key",      "api key"],
-			["/exg",      "exg"],
-			["/exg-session",  "metrics"],
-			["/sleep",    "sleep"],
-			["!",         "shell"],
+			["/help",     "commands"],
+			["/exg",      "brain"],
+			["/connect",  "server"],
+			["/llm",      "models"],
 		];
 
 		return {
@@ -847,20 +891,43 @@ Available commands and typical args:
 			render(width: number): string[] {
 				const lines: string[] = [];
 
-				// ── row 1: ◆ brand ─────────────────────────────────────────
-				const logo = theme.fg("accent", "◆") + " " + theme.bold("neuroloop")
-					+ theme.fg("dim", ` v${_pkgVersion}`);
-				lines.push(truncateToWidth(logo, width));
-				lines.push(truncateToWidth(versionLine(), width));
+				// ── row 1: ◆ brand + connection status ─────────────────────
+				const authSt = getAuthStatus();
+				let connDot: string;
+				if (exgOnline) {
+					if (authSt === "local")       connDot = theme.fg("success", " ●") + theme.fg("dim", " Local");
+					else if (authSt === "lan")    connDot = theme.fg("warning", " ●") + theme.fg("dim", " LAN");
+					else if (authSt === "remote") connDot = theme.fg("accent", " ●") + theme.fg("dim", " Remote");
+					else                          connDot = theme.fg("success", " ●") + theme.fg("dim", " Connected");
+				} else if (exgConnecting) {
+					const spinner = SYNC_SPINNER[exgConnectSpin % SYNC_SPINNER.length];
+					connDot = theme.fg("warning", ` ${spinner}`) + theme.fg("dim", " Connecting…");
+				} else {
+					const lastSeen = exgUpdatedAt ? theme.fg("dim", ` · last seen ${timeAgo(exgUpdatedAt)}`) : "";
+					connDot = theme.fg("dim", " ○ Offline") + lastSeen;
+				}
+				const website = theme.fg("accent", "🌐") + " " + theme.fg("dim", "https://www.neuroskill.com");
+				lines.push(truncateToWidth(website, width));
 
-				// ── row 3: keybinding hints ─────────────────────────────────
+				const logo = theme.fg("accent", "◆") + " " + theme.bold("NeuroLoop™")
+					+ theme.fg("dim", ` v${_pkgVersion}`) + connDot;
+				lines.push(truncateToWidth(logo, width));
+
+				// ── row 3: skills sync status ───────────────────────────
+				if (skillsSyncLastAt) {
+					const ago = timeAgo(skillsSyncLastAt.getTime()) || "just now";
+					const syncLine = " " + theme.bold("NeuroSkill™") + theme.fg("dim", ` skills synced ${ago}`);
+					lines.push(truncateToWidth(syncLine, width));
+				}
+
+				// ── row 4: keybinding hints ─────────────────────────────────
 				const hintStr = hints
 					.map(([k, a]) =>
-						theme.fg("dim", "[") + theme.fg("muted", k) + theme.fg("dim", "] ") + theme.fg("dim", a))
-					.join(theme.fg("dim", "  "));
+						theme.fg("muted", k) + theme.fg("dim", " " + a))
+					.join(theme.fg("dim", " · "));
 				lines.push(truncateToWidth(" " + hintStr, width));
 
-				// ── row 4: separator ────────────────────────────────────────
+				// ── row 5: separator ────────────────────────────────────────
 				lines.push(sep(theme, width));
 
 				return lines;
@@ -876,11 +943,37 @@ Available commands and typical args:
 		return port ?? getSkillPort();
 	}
 
+	function startConnectSpinner(): void {
+		if (exgConnectSpinTimer) return;
+		exgConnecting = true;
+		exgConnectSpin = 0;
+		exgConnectSpinTimer = setInterval(() => {
+			exgConnectSpin++;
+			uiTui?.requestRender();
+		}, 80);
+		uiTui?.requestRender();
+	}
+
+	function stopConnectSpinner(): void {
+		exgConnecting = false;
+		if (exgConnectSpinTimer) { clearInterval(exgConnectSpinTimer); exgConnectSpinTimer = null; }
+	}
+
 	function connectExgWs(): void {
 		if (!exgEnabled) return;
 		if (exgWs) return; // already connecting or open
 
-		const url = `ws://127.0.0.1:${exgWsPort}`;
+		startConnectSpinner();
+
+		// Load daemon token for WS auth (same file neuroskill CLI reads)
+		const wsToken = (() => {
+			try {
+				const p = getDaemonTokenPath();
+				return readFileSync(p, "utf8").trim();
+			} catch { return ""; }
+		})();
+		const tokenParam = wsToken ? `?token=${encodeURIComponent(wsToken)}` : "";
+		const url = `ws://127.0.0.1:${exgWsPort}/v1/events${tokenParam}`;
 		let ws: InstanceType<typeof WS>;
 		try {
 			ws = new WS(url);
@@ -891,6 +984,20 @@ Available commands and typical args:
 		exgWs = ws;
 
 		ws.on("open", () => {
+			stopConnectSpinner();
+			exgReconnectAttempt = 0; // reset backoff on successful connect
+			uiNotify?.(`Connected to NeuroSkill™ on port ${exgWsPort}`, "info");
+			// Try to register the LLM provider now that daemon is reachable.
+			// Retry a few times since the LLM server may still be loading.
+			if (sessionModelRegistry) {
+				const reg = sessionModelRegistry;
+				(async () => {
+					for (let i = 0; i < 5; i++) {
+						if (await registerSkillLlmProvider(reg)) return;
+						await new Promise((r) => setTimeout(r, 3000));
+					}
+				})();
+			}
 			// Immediate full snapshot for initial metrics + device state + last label.
 			ws.send(JSON.stringify({ command: "status" }));
 			// Then poll every exgPollMs for live updates.
@@ -907,18 +1014,40 @@ Available commands and typical args:
 			try { msg = JSON.parse(raw.toString()) as Record<string, unknown>; }
 			catch { return; }
 
-			const event = msg.event as string | undefined;
+			// Events can arrive as EventEnvelope {type, payload} or flat {event, ...}
+			const eventType = (msg.type ?? msg.event) as string | undefined;
+			const payload = (msg.payload ?? msg) as Record<string, unknown>;
 
-			if (event === "scores") {
-				// ~5-second epoch: flat fields, real-time bands + focus + hr
-				mergeScoresEvent(msg);
+			if (eventType === "EegBands" || eventType === "scores") {
+				// Average per-channel band powers if they arrive as channels array
+				const channels = payload.channels as Array<Record<string, unknown>> | undefined;
+				if (channels?.length) {
+					const avg = (key: string) => {
+						let sum = 0; let n = 0;
+						for (const ch of channels) {
+							const v = ch[key];
+							if (typeof v === "number") { sum += v; n++; }
+						}
+						return n > 0 ? sum / n : undefined;
+					};
+					// Merge averaged bands + any top-level scores into metrics
+					const flat: Record<string, unknown> = { ...payload };
+					flat.rel_delta = avg("rel_delta");
+					flat.rel_theta = avg("rel_theta");
+					flat.rel_alpha = avg("rel_alpha");
+					flat.rel_beta  = avg("rel_beta");
+					flat.rel_gamma = avg("rel_gamma");
+					mergeScoresEvent(flat);
+				} else {
+					mergeScoresEvent(payload);
+				}
 				uiTui?.requestRender();
 				return;
 			}
 
-			if (event === "label_created") {
-				const text      = String(msg.text ?? "");
-				const createdAt = Number(msg.created_at ?? Date.now() / 1000);
+			if (eventType === "label_created") {
+				const text      = String(payload.text ?? "");
+				const createdAt = Number(payload.created_at ?? Date.now() / 1000);
 				exgLastLabel = { text, createdAt };
 				uiTui?.requestRender();
 				pi.sendMessage({
@@ -952,8 +1081,14 @@ Available commands and typical args:
 
 		ws.on("close", () => {
 			stopExgPoll();
+			const wasOnline = exgOnline;
 			exgWs     = null;
 			exgOnline = false;
+			if (wasOnline) {
+				uiNotify?.(`Disconnected from NeuroSkill™ (port ${exgWsPort})`, "warning");
+			} else if (exgReconnectAttempt === 0) {
+				uiNotify?.("Could not connect to NeuroSkill™ — retrying…", "error");
+			}
 			uiTui?.requestRender();
 			scheduleExgReconnect();
 		});
@@ -963,12 +1098,16 @@ Available commands and typical args:
 		if (exgPollTimer) { clearInterval(exgPollTimer); exgPollTimer = null; }
 	}
 
-	function scheduleExgReconnect(delayMs = 5_000): void {
+	let exgReconnectAttempt = 0;
+	function scheduleExgReconnect(): void {
 		if (exgWsReconnectTimer) return;
+		// Exponential backoff: 500ms, 1s, 2s, 4s, 5s (capped)
+		const delay = Math.min(500 * Math.pow(2, exgReconnectAttempt), 5_000);
+		exgReconnectAttempt++;
 		exgWsReconnectTimer = setTimeout(() => {
 			exgWsReconnectTimer = null;
 			if (exgEnabled) connectExgWs();
-		}, delayMs);
+		}, delay);
 	}
 
 	function disconnectExgWs(): void {
@@ -982,13 +1121,57 @@ Available commands and typical args:
 	// ── 4c. session_start ─────────────────────────────────────────────────────
 
 	pi.on("session_start", (_event, ctx) => {
+		uiNotify = (msg, level) => ctx.ui.notify(msg, level);
+		sessionModelRegistry = ctx.modelRegistry as unknown as { registerProvider: (id: string, cfg: unknown) => void };
 		if (!skillsSyncShown && process.env.NEUROLOOP_SKILLS_SYNC_STATUS) {
 			const ok = process.env.NEUROLOOP_SKILLS_SYNC_OK === "1";
+			skillsSyncLastAt = new Date();
+			const updated = process.env.NEUROLOOP_SKILLS_SYNC_UPDATED === "1";
 			ctx.ui.notify(
-				`Skills sync: ${process.env.NEUROLOOP_SKILLS_SYNC_STATUS}`,
+				updated
+					? `Skills synced at ${skillsSyncLastAt.toLocaleTimeString()}`
+					: `Skills up to date (synced at ${skillsSyncLastAt.toLocaleTimeString()})`,
 				ok ? "info" : "warning",
 			);
 			skillsSyncShown = true;
+		}
+
+		// Periodic skills sync — runs silently in the background every 10 minutes.
+		if (!skillsSyncTimer) {
+			skillsSyncTimer = setInterval(async () => {
+				if (skillsSyncInFlight) return;
+				skillsSyncInFlight = true;
+				try {
+					const result = await syncSkillsFromGitHub();
+					skillsSyncLastAt = new Date();
+					if (result.updated && uiNotify) {
+						uiNotify(`Skills updated at ${skillsSyncLastAt.toLocaleTimeString()}`, "info");
+					}
+				} catch {
+					// Non-fatal — silent background sync.
+				} finally {
+					skillsSyncInFlight = false;
+				}
+			}, SKILLS_SYNC_INTERVAL_MS);
+		}
+
+		// First-run welcome — shown only once ever.
+		const firstRunMarker = join(AGENT_DIR, ".welcome-shown");
+		if (!existsSync(firstRunMarker)) {
+			pi.sendMessage({
+				customType: NEUROSKILL_STATUS_TYPE,
+				content:
+					"Welcome to neuroloop! \u{1F9E0}\n\n" +
+					"Quick start:\n" +
+					"- Connect your EEG device and start Skill app\n" +
+					"- Type naturally \u2014 I can see your brain state\n" +
+					"- /exg to toggle live metrics \u00B7 /help for all commands\n\n" +
+					"Learn more at https://www.neuroskill.com",
+				display: true,
+				details: undefined,
+			});
+			mkdirSync(dirname(firstRunMarker), { recursive: true });
+			writeFileSync(firstRunMarker, new Date().toISOString(), "utf8");
 		}
 
 		const changelog = changelogSinceLastShown(_pkgVersion);
@@ -1016,7 +1199,8 @@ Available commands and typical args:
 		}
 		ctx.ui.setHeader((tui, theme) => {
 			uiTui = tui;
-			// Discover port once, then open WebSocket (reconnects automatically).
+			// Check auth/connection status, then discover port and open WebSocket.
+			checkAuthStatus().then(() => tui.requestRender());
 			discoverExgPort().then((port) => {
 				exgWsPort = port;
 				connectExgWs();
@@ -1060,7 +1244,14 @@ Available commands and typical args:
 							sc("mood",     m.mood,           "high"),
 							hrPart,
 						].filter(Boolean).join(theme.fg("dim", "   "));
-						lines.push(truncateToWidth(" " + scores, width));
+
+						// timestamp — prominent so users notice stale data
+						const agoRaw = exgUpdatedAt ? timeAgo(exgUpdatedAt) : "";
+						const agoStr = agoRaw ? theme.fg("muted", ` ${agoRaw}`) : "";
+						lines.push(truncateToWidth(" " + scores + agoStr, width));
+
+						// divider between scores and bands
+						lines.push(truncateToWidth(" " + theme.fg("dim", "│"), width));
 
 						// band bars row
 						const b = m.bands ?? {};
@@ -1084,6 +1275,24 @@ Available commands and typical args:
 						const labelW = visibleWidth(labelStr);
 						const spacer = Math.max(1, width - bandW - labelW);
 						lines.push(truncateToWidth(" " + bandParts + " ".repeat(spacer) + labelStr, width));
+					} else if (exgEnabled && !exgOnline) {
+						lines.push(sep(theme, width));
+						const agoText = (exgUpdatedAt != null && exgUpdatedAt > 0) ? timeAgo(exgUpdatedAt) : "";
+						const lastSeen = agoText ? ` · last seen ${agoText}` : "";
+						lines.push(truncateToWidth(" " + theme.fg("dim", `◌ EXG offline${lastSeen} — /connect to reconnect`), width));
+					}
+
+					// ── LLM download progress ────────────────────────────
+					for (const dl of llmDownloads) {
+						const icon = dl.state === "paused"
+							? theme.fg("warning", "⏸")
+							: theme.fg("accent", SYNC_SPINNER[llmDownloadSpin % SYNC_SPINNER.length]);
+						lines.push(truncateToWidth(
+							" " + icon + " " +
+							theme.fg("dim", dl.filename + " ") +
+							theme.fg("muted", progressBar(dl.progress)),
+							width,
+						));
 					}
 
 					// ── status bar: cwd · EXG · context · model ─────────────
@@ -1092,7 +1301,8 @@ Available commands and typical args:
 						+ (branch ? " " + theme.fg("dim", `(${branch})`) : "");
 
 					const dot     = exgOnline ? theme.fg("success", "◉") : theme.fg("dim", "◌");
-					const ago     = exgUpdatedAt ? theme.fg("dim", ` ${timeAgo(exgUpdatedAt)}`) : "";
+					const agoVal  = exgUpdatedAt ? timeAgo(exgUpdatedAt) : "";
+					const ago     = agoVal ? theme.fg("dim", ` ${agoVal}`) : "";
 					const exgPart = exgEnabled
 						? dot + " " + theme.fg("dim", "EXG") + ago
 						: theme.fg("dim", "◌ EXG off");
@@ -1112,11 +1322,15 @@ Available commands and typical args:
 			};
 		});
 
-		ctx.ui.setWorkingMessage("🧠 thinking…");
+		ctx.ui.setWorkingMessage("thinking…");
 	});
 
 	pi.on("session_shutdown", (_event, sessionCtx) => {
+		stopConnectSpinner();
+		stopLlmDownloadPoll();
 		disconnectExgWs();
+		uiNotify = null;
+		sessionModelRegistry = null;
 		sessionCtx.ui.setHeader(undefined);
 		sessionCtx.ui.setFooter(undefined);
 	});
@@ -1129,36 +1343,75 @@ Available commands and typical args:
 	});
 
 	// ── 4e. Compress agent responses ─────────────────────────────────────────
-	pi.on("after_agent_finish", (event) => {
+	pi.on("agent_end", (event: { type: string; messages: any[] }) => {
 		if (compressionSettings.mode === "off") return;
-		
-		// Compress the agent's response
-		if (event.response && typeof event.response === "string") {
-			event.response = compressText(event.response, compressionSettings.mode);
-		} else if (event.response && Array.isArray(event.response)) {
-			// Handle array of content parts
-			event.response = event.response.map((part) => {
-				if (part.type === "text" && typeof part.text === "string") {
-					return { ...part, text: compressText(part.text, compressionSettings.mode) };
-				}
-				return part;
-			});
+
+		// Compress text in agent messages
+		for (const msg of event.messages) {
+			if (msg.content && typeof msg.content === "string") {
+				msg.content = compressText(msg.content, compressionSettings.mode);
+			} else if (msg.content && Array.isArray(msg.content)) {
+				msg.content = msg.content.map((part: any) => {
+					if (part.type === "text" && typeof part.text === "string") {
+						return { ...part, text: compressText(part.text, compressionSettings.mode) };
+					}
+					return part;
+				});
+			}
 		}
 	});
 
-	// ── 4e. /settings — configure compression and other options ─────────────
-	pi.registerCommand("settings", {
-		description: "Configure NeuroLoop settings · /settings [compression <mode>]",
+	// ── 4e. /config — configure compression and other options ───────────────
+	pi.registerCommand("config", {
+		description: "Configure NeuroLoop settings · /config [compression <mode> | device <gpu|cpu>]",
 		handler: async (args, handlerCtx) => {
 			const parts = args.trim().split(/\s+/).filter(Boolean);
 			const sub   = parts[0]?.toLowerCase() ?? "";
+
+			// ── device (gpu/cpu) ───────────────────────────────────────────────────
+			if (sub === "device") {
+				const device = parts[1]?.toLowerCase();
+				if (device !== "gpu" && device !== "cpu") {
+					// Show current device
+					try {
+						const baseUrl = await getSkillServerBaseUrl();
+						const hdrs = authHeaders();
+						const res = await fetch(`${baseUrl}/v1/settings/inference-device`, { headers: hdrs, signal: AbortSignal.timeout(3000) });
+						if (res.ok) {
+							const data = (await res.json()) as { device?: string };
+							handlerCtx.ui.notify(`Inference device: ${data.device ?? "unknown"}\nUsage: /config device <gpu|cpu>`, "info");
+						} else {
+							handlerCtx.ui.notify("Usage: /config device <gpu|cpu>", "warning");
+						}
+					} catch {
+						handlerCtx.ui.notify("Usage: /config device <gpu|cpu>", "warning");
+					}
+					return;
+				}
+				try {
+					const baseUrl = await getSkillServerBaseUrl();
+					const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
+					const res = await fetch(`${baseUrl}/v1/settings/inference-device`, {
+						method: "POST", headers: hdrs, body: JSON.stringify({ device }),
+						signal: AbortSignal.timeout(5000),
+					});
+					if (res.ok) {
+						handlerCtx.ui.notify(`Inference device set to ${device.toUpperCase()}.`, "info");
+					} else {
+						handlerCtx.ui.notify(`Failed to set device: HTTP ${res.status}`, "error");
+					}
+				} catch (e) {
+					handlerCtx.ui.notify(`Failed to set device: ${e instanceof Error ? e.message : String(e)}`, "error");
+				}
+				return;
+			}
 
 			// ── compression ────────────────────────────────────────────────────────
 			if (sub === "compression") {
 				const mode = (parts[1]?.toLowerCase() as CompressionMode) ?? "standard";
 				if (mode !== "standard" && mode !== "strong" && mode !== "off") {
 					handlerCtx.ui.notify(
-						"Usage: /settings compression <standard|strong|off>",
+						"Usage: /config compression <standard|strong|off>",
 						"warning"
 					);
 					return;
@@ -1175,6 +1428,16 @@ Available commands and typical args:
 			// ── show current settings ─────────────────────────────────────────────
 			const lines: string[] = ["Current NeuroLoop settings:"];
 			lines.push(`  Compression: ${getCompressionModeName(compressionSettings.mode)}`);
+			try {
+				const baseUrl = await getSkillServerBaseUrl();
+				const res = await fetch(`${baseUrl}/v1/settings/inference-device`, {
+					headers: authHeaders(), signal: AbortSignal.timeout(2000),
+				});
+				if (res.ok) {
+					const data = (await res.json()) as { device?: string };
+					lines.push(`  Inference device: ${(data.device ?? "unknown").toUpperCase()}`);
+				}
+			} catch { /* daemon offline */ }
 			handlerCtx.ui.notify(lines.join("\n"), "info");
 		},
 	});
@@ -1492,6 +1755,8 @@ Available commands and typical args:
 			const gh = s.github;
 			const lines = [
 				"## 📦 Version Status",
+				`Learn more at https://www.neuroskill.com`,
+				"",
 				`- neuroloop local: **v${nl.local}**`,
 				`- neuroloop npm latest: **v${nl.npmLatest ?? "?"}** (${nl.upToDate ? "latest" : "update available"})`,
 				`- neuroskill local runtime: **v${ns.localInstalled ?? "none"}**`,
@@ -1731,10 +1996,10 @@ Available commands and typical args:
 	//  /llm connect [remote|local|auto] → start skill LLM via WS and register provider, then fallback
 	//  /llm *              → pass through to neuroskill llm <sub>
 	pi.registerCommand("llm", {
-		description: "LLM control · /llm [status|route|connect|start|stop|list|add|remove|select|download|fit|chat …]",
+		description: "LLM control · /llm [models|status|route|connect|start|stop|list|add|remove|select|download|cancel|pause|resume|fit|chat …]",
 		handler: async (args, handlerCtx) => {
 			const parts = args.trim().split(/\s+/).filter(Boolean);
-			const sub = (parts[0] ?? "status").toLowerCase();
+			const sub = (parts[0] ?? "models").toLowerCase();
 
 			// ── route ────────────────────────────────────────────────
 			if (sub === "route") {
@@ -1783,7 +2048,7 @@ Available commands and typical args:
 			}
 
 			// ── status ───────────────────────────────────────────────
-			if (sub === "status" || parts.length === 0) {
+			if (sub === "status") {
 				const result = await runNeuroSkill(["llm", "status"]);
 				if (result.ok) {
 					const data = result.data as Record<string, unknown> | undefined;
@@ -1804,7 +2069,7 @@ Available commands and typical args:
 						details: undefined,
 					});
 				} else {
-					handlerCtx.ui.notify(result.error ?? "LLM status failed", "error");
+					handlerCtx.ui.notify("LLM server not running. Use /llm start or /llm models to manage models.", "warning");
 				}
 				return;
 			}
@@ -1846,9 +2111,19 @@ Available commands and typical args:
 
 			// ── list (alias for catalog) ─────────────────────────────
 			if (sub === "list" || sub === "catalog") {
-				const result = await runNeuroSkill(["llm", "catalog"]);
-				if (result.ok) {
-					const data = result.data as Record<string, unknown> | undefined;
+				let data: Record<string, unknown> | undefined;
+				try {
+					const baseUrl = await getSkillServerBaseUrl();
+					const res = await fetch(`${baseUrl}/v1/llm/catalog`, {
+						headers: authHeaders(), signal: AbortSignal.timeout(5000),
+					});
+					if (!res.ok) throw new Error(`HTTP ${res.status}`);
+					data = (await res.json()) as Record<string, unknown>;
+				} catch (e) {
+					handlerCtx.ui.notify(`Failed to fetch catalog: ${e instanceof Error ? e.message : String(e)}`, "error");
+					return;
+				}
+				{
 					const entries = (data?.entries ?? []) as Array<Record<string, unknown>>;
 					const active  = data?.active_model ?? "–";
 					const mmproj  = data?.active_mmproj ?? "–";
@@ -1856,22 +2131,52 @@ Available commands and typical args:
 						handlerCtx.ui.notify("Model catalog is empty. Use /llm add to add a model.", "warning");
 						return;
 					}
-					const lines = entries.map((e) => {
-						const mark = e.filename === active ? "▶ " : "  ";
-						const state = e.state ?? e.status ?? "";
-						const size  = e.size_gb ? `${e.size_gb} GB` : "";
+
+					const downloaded: string[] = [];
+					const available: string[] = [];
+					const downloading: string[] = [];
+
+					for (const e of entries) {
+						if (e.is_mmproj) continue;
+						const fname = String(e.filename ?? "");
+						const state = String(e.state ?? e.status ?? "not_downloaded");
+						const size  = e.size_gb ? `${Number(e.size_gb).toFixed(1)} GB` : "";
 						const quant = e.quant ?? "";
-						return `${mark}**${e.filename}**  ${quant}  ${size}  \`${state}\``;
-					});
-					const header = `Active: **${active}** · mmproj: **${mmproj}**`;
+						const family = e.family_name ?? "";
+						const params = e.params_b ? `${e.params_b}B` : "";
+						const info  = [quant, params, size].filter(Boolean).join("  ");
+						const rec   = e.recommended ? " ⭐" : "";
+
+						if (state === "downloaded") {
+							const mark = fname === active ? "▶ " : "  ";
+							downloaded.push(`${mark}**${fname}**  ${info}${rec}`);
+						} else if (state === "downloading") {
+							const pct = typeof e.progress === "number" ? ` ${Math.round(e.progress as number)}%` : "";
+							downloading.push(`  ⬇ **${fname}**  ${info}${pct}`);
+						} else {
+							available.push(`  ○ ${family ? `_${family}_  ` : ""}**${fname}**  ${info}${rec}`);
+						}
+					}
+
+					const sections: string[] = [];
+					sections.push(`Active: **${active}**` + (mmproj !== "–" ? ` · mmproj: **${mmproj}**` : ""));
+					if (downloaded.length) {
+						sections.push("\n**Downloaded:**\n" + downloaded.join("\n"));
+					}
+					if (downloading.length) {
+						sections.push("\n**Downloading:**\n" + downloading.join("\n"));
+					}
+					if (available.length) {
+						sections.push("\n**Available to download:**\n" + available.join("\n"));
+					}
+					sections.push("\n`/llm download <file>` · `/llm pause|resume|cancel [file]` · `/llm select <file>` · `/llm start`");
+
 					pi.sendMessage({
 						customType: NEUROSKILL_STATUS_TYPE,
-						content: `## 🤖 LLM Catalog\n${header}\n\n${lines.join("\n")}`,
+						content: `## 🤖 LLM Catalog\n${sections.join("\n")}`,
 						display: true,
 						details: undefined,
 					});
-				} else {
-					handlerCtx.ui.notify(result.error ?? "LLM catalog failed", "error");
 				}
 				return;
 			}
@@ -1919,8 +2224,257 @@ Available commands and typical args:
 					handlerCtx.ui.notify("Usage: /llm download <filename>", "warning");
 					return;
 				}
-				handlerCtx.ui.notify(`Downloading ${filename} — poll /llm list for progress`, "info");
-				await neuroCmd(["llm", "download", filename], "🤖 LLM — download", handlerCtx);
+				// Start download via REST API
+				try {
+					const baseUrl = await getSkillServerBaseUrl();
+					const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
+					const startRes = await fetch(`${baseUrl}/v1/llm/download/start`, {
+						method: "POST", headers: hdrs,
+						body: JSON.stringify({ filename }),
+						signal: AbortSignal.timeout(10000),
+					});
+					if (!startRes.ok) {
+						const body = await startRes.text().catch(() => "");
+						handlerCtx.ui.notify(`Download failed: HTTP ${startRes.status} ${body}`, "error");
+						return;
+					}
+				} catch (e) {
+					handlerCtx.ui.notify(`Download failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+					return;
+				}
+
+				// Track in footer and start polling if not already
+				handlerCtx.ui.notify(`Downloading ${filename} — progress shown in footer`, "info");
+				if (!llmDownloads.find((d) => d.filename === filename)) {
+					llmDownloads.push({ filename, progress: 0, state: "downloading" });
+				}
+				startLlmDownloadPoll();
+				return;
+			}
+
+			// ── cancel / pause / resume ──────────────────────────────
+			if (sub === "cancel" || sub === "pause" || sub === "resume") {
+				const target = parts[1] ?? (llmDownloads.length === 1 ? llmDownloads[0].filename : undefined);
+				if (!target) {
+					if (llmDownloads.length > 1) {
+						const names = llmDownloads.map((d) => d.filename).join(", ");
+						handlerCtx.ui.notify(`Multiple downloads active: ${names}\nUsage: /llm ${sub} <filename>`, "warning");
+					} else {
+						handlerCtx.ui.notify(`No download in progress. Usage: /llm ${sub} <filename>`, "warning");
+					}
+					return;
+				}
+				const endpoint = sub === "cancel" ? "cancel" : sub === "pause" ? "pause" : "resume";
+				try {
+					const baseUrl = await getSkillServerBaseUrl();
+					const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
+					const res = await fetch(`${baseUrl}/v1/llm/download/${endpoint}`, {
+						method: "POST", headers: hdrs,
+						body: JSON.stringify({ filename: target }),
+						signal: AbortSignal.timeout(5000),
+					});
+					if (res.ok) {
+						if (sub === "cancel") {
+							llmDownloads = llmDownloads.filter((d) => d.filename !== target);
+							if (llmDownloads.length === 0) stopLlmDownloadPoll();
+							uiTui?.requestRender();
+						}
+						handlerCtx.ui.notify(`${target}: ${sub} OK`, "info");
+					} else {
+						handlerCtx.ui.notify(`${sub} failed: HTTP ${res.status}`, "error");
+					}
+				} catch (e) {
+					handlerCtx.ui.notify(`${sub} failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+				}
+				return;
+			}
+
+			// ── downloads (interactive TUI) ──────────────────────────
+			if (sub === "downloads" || sub === "models") {
+				// Fetch catalog via REST API (more reliable than CLI)
+				let catData: Record<string, unknown> | undefined;
+				try {
+					const baseUrl = await getSkillServerBaseUrl();
+					const res = await fetch(`${baseUrl}/v1/llm/catalog`, {
+						headers: authHeaders(), signal: AbortSignal.timeout(5000),
+					});
+					if (!res.ok) throw new Error(`HTTP ${res.status}`);
+					catData = (await res.json()) as Record<string, unknown>;
+				} catch (e) {
+					handlerCtx.ui.notify(`Failed to fetch catalog: ${e instanceof Error ? e.message : String(e)}`, "error");
+					return;
+				}
+				const catEntries = (catData?.entries ?? []) as Array<Record<string, unknown>>;
+				const activeModel = String(catData?.active_model ?? "");
+
+				interface ModelRow {
+					filename: string;
+					family: string;
+					quant: string;
+					sizeGb: string;
+					state: string;
+					progress: number;
+					recommended: boolean;
+					isActive: boolean;
+				}
+
+				const rows: ModelRow[] = catEntries
+					.filter((e) => !e.is_mmproj)
+					.map((e) => ({
+						filename: String(e.filename ?? ""),
+						family: String(e.family_name ?? ""),
+						quant: String(e.quant ?? ""),
+						sizeGb: e.size_gb ? `${Number(e.size_gb).toFixed(1)} GB` : "",
+						state: String(e.state ?? "not_downloaded"),
+						progress: typeof e.progress === "number" ? (e.progress as number) : 0,
+						recommended: !!e.recommended,
+						isActive: String(e.filename ?? "") === activeModel,
+					}));
+
+				if (!rows.length) {
+					handlerCtx.ui.notify("Model catalog is empty.", "warning");
+					return;
+				}
+
+				// Build select options with state indicators
+				const buildOptions = () => rows.map((r) => {
+					let icon: string;
+					if (r.state === "downloaded") icon = r.isActive ? "▶" : "✓";
+					else if (r.state === "downloading") icon = "⬇";
+					else if (r.state === "paused") icon = "⏸";
+					else if (r.state === "failed") icon = "✗";
+					else icon = "○";
+					const rec = r.recommended ? " ⭐" : "";
+					return `${icon} ${r.filename}  ${r.quant}  ${r.sizeGb}${rec}`;
+				});
+
+				// Interactive loop using select()
+				let keepOpen = true;
+				while (keepOpen) {
+					const options = [...buildOptions(), "── Cancel ──"];
+					const choice = await handlerCtx.ui.select("LLM Models — pick to download/select/manage", options);
+					if (!choice || choice === "── Cancel ──") break;
+
+					// Find the selected row by matching filename
+					const idx = options.indexOf(choice);
+					if (idx < 0 || idx >= rows.length) break;
+					const row = rows[idx];
+
+					// Show action menu for the selected model
+					const actions: string[] = [];
+					if (row.state === "downloaded" && !row.isActive) actions.push("Select as active model");
+					if (row.state === "downloaded" && row.isActive) actions.push("Start LLM server");
+					if (row.state === "downloaded") actions.push("Delete from disk");
+					if (row.state === "not_downloaded" || row.state === "failed" || row.state === "cancelled") actions.push("Download");
+					if (row.state === "downloading") actions.push("Pause");
+					if (row.state === "paused") actions.push("Resume");
+					if (row.state === "downloading" || row.state === "paused") actions.push("Cancel download");
+					actions.push("Back to list");
+
+					const action = await handlerCtx.ui.select(`${row.filename}`, actions);
+					if (!action || action === "Back to list") continue;
+
+					const baseUrl = await getSkillServerBaseUrl();
+					const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
+
+					if (action === "Select as active model") {
+						try {
+							const res = await fetch(`${baseUrl}/v1/llm/selection/active-model`, {
+								method: "POST", headers: hdrs,
+								body: JSON.stringify({ filename: row.filename }),
+								signal: AbortSignal.timeout(5000),
+							});
+							if (res.ok) {
+								for (const r of rows) r.isActive = false;
+								row.isActive = true;
+								handlerCtx.ui.notify(`Selected ${row.filename}`, "info");
+							} else {
+								handlerCtx.ui.notify(`Select failed: HTTP ${res.status}`, "error");
+							}
+						} catch (e) {
+							handlerCtx.ui.notify(`Select failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+						}
+					} else if (action === "Start LLM server") {
+						handlerCtx.ui.notify("Starting LLM server…", "info");
+						try {
+							const res = await fetch(`${baseUrl}/v1/llm/server/start`, {
+								method: "POST", headers: hdrs, body: "{}",
+								signal: AbortSignal.timeout(30000),
+							});
+							if (res.ok) {
+								handlerCtx.ui.notify("LLM server started.", "info");
+								// Re-register provider
+								if (sessionModelRegistry) {
+									await registerSkillLlmProvider(sessionModelRegistry).catch(() => {});
+								}
+							} else {
+								handlerCtx.ui.notify(`Start failed: HTTP ${res.status}`, "error");
+							}
+						} catch (e) {
+							handlerCtx.ui.notify(`Start failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+						}
+						keepOpen = false;
+					} else if (action === "Download") {
+						try {
+							const res = await fetch(`${baseUrl}/v1/llm/download/start`, {
+								method: "POST", headers: hdrs,
+								body: JSON.stringify({ filename: row.filename }),
+								signal: AbortSignal.timeout(10000),
+							});
+							if (res.ok) {
+								row.state = "downloading";
+								row.progress = 0;
+								if (!llmDownloads.find((d) => d.filename === row.filename)) {
+									llmDownloads.push({ filename: row.filename, progress: 0, state: "downloading" });
+								}
+								startLlmDownloadPoll();
+								handlerCtx.ui.notify(`Downloading ${row.filename} — progress in footer`, "info");
+							} else {
+								handlerCtx.ui.notify(`Download failed: HTTP ${res.status}`, "error");
+							}
+						} catch (e) {
+							handlerCtx.ui.notify(`Download failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+						}
+					} else if (action === "Pause") {
+						await fetch(`${baseUrl}/v1/llm/download/pause`, {
+							method: "POST", headers: hdrs,
+							body: JSON.stringify({ filename: row.filename }),
+							signal: AbortSignal.timeout(5000),
+						}).catch(() => {});
+						row.state = "paused";
+						handlerCtx.ui.notify(`Paused ${row.filename}`, "info");
+					} else if (action === "Resume") {
+						await fetch(`${baseUrl}/v1/llm/download/resume`, {
+							method: "POST", headers: hdrs,
+							body: JSON.stringify({ filename: row.filename }),
+							signal: AbortSignal.timeout(5000),
+						}).catch(() => {});
+						row.state = "downloading";
+						handlerCtx.ui.notify(`Resumed ${row.filename}`, "info");
+					} else if (action === "Cancel download") {
+						await fetch(`${baseUrl}/v1/llm/download/cancel`, {
+							method: "POST", headers: hdrs,
+							body: JSON.stringify({ filename: row.filename }),
+							signal: AbortSignal.timeout(5000),
+						}).catch(() => {});
+						row.state = "cancelled";
+						llmDownloads = llmDownloads.filter((dl) => dl.filename !== row.filename);
+						if (llmDownloads.length === 0) stopLlmDownloadPoll();
+						handlerCtx.ui.notify(`Cancelled ${row.filename}`, "info");
+					} else if (action === "Delete from disk") {
+						const confirm = await handlerCtx.ui.confirm("Delete model", `Delete ${row.filename} from disk?`);
+						if (confirm) {
+							await fetch(`${baseUrl}/v1/llm/download/delete`, {
+								method: "POST", headers: hdrs,
+								body: JSON.stringify({ filename: row.filename }),
+								signal: AbortSignal.timeout(10000),
+							}).catch(() => {});
+							row.state = "not_downloaded";
+							if (row.isActive) row.isActive = false;
+							handlerCtx.ui.notify(`Deleted ${row.filename}`, "info");
+						}
+					}
+				}
 				return;
 			}
 
@@ -1982,6 +2536,126 @@ Available commands and typical args:
 		handler: async (args, handlerCtx) => {
 			const parts = args.trim().split(/\s+/).filter(Boolean);
 			await neuroCmd(["listen", ...parts], "📡 Live Stream", handlerCtx);
+		},
+	});
+
+	// ── 4g. /connect — set up daemon connection ─────────────────────────────
+
+	pi.registerCommand("connect", {
+		description: "Connect to a NeuroSkill server · /connect",
+		handler: async (_args, handlerCtx) => {
+			handlerCtx.ui.notify("Checking for local daemon...", "info");
+			const authSt = await checkAuthStatus();
+
+			if (authSt === "local") {
+				const port = getSkillPort();
+				pi.sendMessage({
+					customType: NEUROSKILL_STATUS_TYPE,
+					content: `## Connected Locally\n\nDaemon found on \`127.0.0.1:${port}\`. Auth token loaded automatically from:\n\`${getDaemonTokenPath()}\``,
+					display: true,
+					details: undefined,
+				});
+				return;
+			}
+
+			const options = [
+				"LAN — connect to a daemon on your network",
+				"Remote — connect via iroh relay (TOTP pairing)",
+				"Cancel",
+			];
+			const choice = await handlerCtx.ui.select(
+				"No local daemon found. How would you like to connect?",
+				options,
+			);
+
+			if (!choice || choice === "Cancel") return;
+
+			if (choice.startsWith("LAN")) {
+				const hostPort = await handlerCtx.ui.input(
+					"Enter the daemon address (host:port, e.g. 192.168.1.10:18444):",
+				);
+				if (!hostPort) return;
+
+				const token = await handlerCtx.ui.input(
+					"Enter the daemon auth token.\n" +
+					"Find it on the server machine at:\n" +
+					"  macOS:   ~/Library/Application Support/skill/daemon/auth.token\n" +
+					"  Linux:   ~/.config/skill/daemon/auth.token\n" +
+					"  Windows: %APPDATA%\\skill\\daemon\\auth.token",
+				);
+				if (!token) return;
+
+				const [host, portStr] = hostPort.includes(":") ? hostPort.split(":") : [hostPort, "18444"];
+				const port = parseInt(portStr, 10) || 18444;
+				try {
+					const res = await fetch(`http://${host}:${port}/healthz`, {
+						signal: AbortSignal.timeout(5000),
+						headers: { Authorization: `Bearer ${token}` },
+					});
+					if (res.ok) {
+						setSkillPort(port);
+						pi.sendMessage({
+							customType: NEUROSKILL_STATUS_TYPE,
+							content: `## Connected via LAN\n\nDaemon reachable at \`${host}:${port}\`. Connection verified.`,
+							display: true,
+							details: undefined,
+						});
+					} else {
+						handlerCtx.ui.notify(`Daemon responded with HTTP ${res.status}. Check your token.`, "error");
+					}
+				} catch (err) {
+					handlerCtx.ui.notify(`Could not reach daemon at ${host}:${port}: ${err instanceof Error ? err.message : String(err)}`, "error");
+				}
+				return;
+			}
+
+			if (choice.startsWith("Remote")) {
+				pi.sendMessage({
+					customType: NEUROSKILL_STATUS_TYPE,
+					content:
+						"## Remote Connection via iroh\n\n" +
+						"**Step 1:** On the server machine, create a TOTP credential:\n" +
+						"```\nneuroskill iroh totp create \"my-client\"\n```\n\n" +
+						"**Step 2:** Open the authenticator app and get the 6-digit code.\n\n" +
+						"**Step 3:** Enter the iroh endpoint ID and code below.",
+					display: true,
+					details: undefined,
+				});
+
+				const endpointId = await handlerCtx.ui.input("Enter the server's iroh endpoint ID:");
+				if (!endpointId) return;
+
+				const otp = await handlerCtx.ui.input("Enter the 6-digit TOTP code:");
+				if (!otp) return;
+
+				const scopeChoice = await handlerCtx.ui.select(
+					"Permission scope:",
+					[
+						"read",
+						"full",
+					],
+				);
+				const scope = scopeChoice || "read";
+
+				handlerCtx.ui.notify("Registering with iroh relay...", "info");
+				const result = await runNeuroSkill([
+					"iroh", "clients", "register", endpointId,
+					"--otp", otp,
+					"--scope", scope,
+				]);
+
+				if (result.ok) {
+					pi.sendMessage({
+						customType: NEUROSKILL_STATUS_TYPE,
+						content: "## Remote Connection Established\n\nSuccessfully registered via iroh.\n```json\n" + result.text + "\n```",
+						display: true,
+						details: undefined,
+					});
+				} else {
+					handlerCtx.ui.notify(`Registration failed: ${result.error}`, "error");
+				}
+				return;
+			}
 		},
 	});
 

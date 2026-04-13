@@ -7,7 +7,7 @@
  * Cross-platform notes:
  *   • On Windows, `npx` is a `.cmd` batch file — `execFile` cannot launch it
  *     directly; we must use `shell: true` so cmd.exe interprets the `.cmd`.
- *   • The Skill server port (default 8375) is auto-discovered or persisted
+ *   • The Skill server port (default 18444) is auto-discovered or persisted
  *     in ~/.neuroloop/neuroskill_port.json.  We pass `--port <n>` to the CLI
  *     so it skips mDNS discovery (faster, more reliable on all platforms).
  */
@@ -18,6 +18,48 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { getLocalNeuroSkillBinPath } from "../runtime-updates.ts";
+
+// ---------------------------------------------------------------------------
+// Auth status — describes how we're connected to the daemon
+// ---------------------------------------------------------------------------
+
+export type AuthStatus = "local" | "lan" | "remote" | "none";
+
+/** Cached auth status, updated by checkAuthStatus(). */
+let _authStatus: AuthStatus = "none";
+
+/** Get the last-known auth status without re-probing. */
+export function getAuthStatus(): AuthStatus { return _authStatus; }
+
+/**
+ * Determine how (or whether) we're connected to the skill daemon.
+ *  - "local"  — daemon reachable on 127.0.0.1; token auto-read from disk.
+ *  - "lan"    — daemon reachable on a LAN address (future use).
+ *  - "remote" — iroh relay (future use).
+ *  - "none"   — daemon unreachable.
+ */
+export async function checkAuthStatus(): Promise<AuthStatus> {
+	// Try localhost first (the common case).
+	const port = await discoverSkillServer();
+	if (port !== null) {
+		_authStatus = "local";
+		return "local";
+	}
+	// TODO: LAN and iroh remote discovery will be added here.
+	_authStatus = "none";
+	return "none";
+}
+
+/**
+ * Return the platform-specific path to the daemon auth token file.
+ */
+export function getDaemonTokenPath(): string {
+	const configDir = process.env.XDG_CONFIG_HOME
+		|| (process.platform === "win32"
+			? join(process.env.APPDATA || join(homedir(), "AppData", "Roaming"))
+			: join(homedir(), process.platform === "darwin" ? "Library/Application Support" : ".config"));
+	return join(configDir, "skill", "daemon", "auth.token");
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -39,7 +81,7 @@ export interface NeuroSkillResult<T = unknown> {
 
 const AGENT_DIR = join(homedir(), ".neuroloop");
 const PORT_FILE = join(AGENT_DIR, "neuroskill_port.json");
-let _port = 8375;
+let _port = 18444;
 
 function loadPort(): number {
 	try {
@@ -48,7 +90,7 @@ function loadPort(): number {
 			if (typeof port === "number" && port > 0 && port <= 65535) return port;
 		}
 	} catch { /* use default */ }
-	return 8375;
+	return 18444;
 }
 
 function savePort(port: number): void {
@@ -77,7 +119,7 @@ export async function probeSkillServer(port: number = _port): Promise<boolean> {
 		if (!res.ok) return false;
 		// Validate this is actually the Skill server, not a random HTTP service
 		const body = (await res.json()) as Record<string, unknown>;
-		return typeof body.status === "string";
+		return body.ok === true || typeof body.status === "string";
 	} catch { return false; }
 }
 
@@ -90,11 +132,8 @@ export async function discoverSkillServer(): Promise<number | null> {
 	// 1. Saved / default port
 	if (await probeSkillServer(_port)) return _port;
 
-	// 2. Common alternatives
-	for (const p of [18444, 8375, 8376, 8377]) {
-		if (p === _port) continue;
-		if (await probeSkillServer(p)) { setSkillPort(p); return p; }
-	}
+	// 2. Default daemon port (if saved port differs)
+	if (_port !== 18444 && await probeSkillServer(18444)) { setSkillPort(18444); return 18444; }
 
 	// 3. Platform-specific discovery (macOS/Linux only — lsof can filter by process name)
 	if (process.platform !== "win32") {

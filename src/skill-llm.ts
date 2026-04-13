@@ -1,5 +1,16 @@
 import type { ProviderConfig } from "@mariozechner/pi-coding-agent";
-import { runNeuroSkill, discoverSkillServer, getSkillPort } from "./neuroskill/index.ts";
+import { readFileSync } from "node:fs";
+import { runNeuroSkill, discoverSkillServer, getSkillPort, getDaemonTokenPath } from "./neuroskill/index.ts";
+
+function loadToken(): string {
+	try { return readFileSync(getDaemonTokenPath(), "utf8").trim(); }
+	catch { return ""; }
+}
+
+export function authHeaders(): Record<string, string> {
+	const token = loadToken();
+	return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 interface ProviderRegistry {
 	registerProvider: (id: string, cfg: ProviderConfig) => void;
@@ -12,7 +23,7 @@ function localModelEntry(
 	return {
 		id,
 		name: id,
-		reasoning: false,
+		reasoning: true,
 		input: (opts.supportsVision ? ["text", "image"] : ["text"]) as ("text" | "image")[],
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		contextWindow: opts.contextWindow ?? 32768,
@@ -32,48 +43,72 @@ export async function registerSkillLlmProvider(modelRegistry: ProviderRegistry):
 		const discoveredPort = await discoverSkillServer();
 		if (!discoveredPort) return false;
 		const baseUrl = `http://127.0.0.1:${discoveredPort}`;
+		const hdrs = authHeaders();
 
-		const res = await fetch(`${baseUrl}/llm/status`, {
-			signal: AbortSignal.timeout(2000),
-		});
-		if (!res.ok) return false;
+		const models: ReturnType<typeof localModelEntry>[] = [];
+		let serverRunning = false;
 
-		const status = (await res.json()) as {
-			status: string;
-			model?: string;
-			model_name?: string;
-			n_ctx?: number;
-			supports_vision?: boolean;
-		};
-		if (status.status !== "running" && status.status !== "ok") return false;
+		// Try to get LLM server status (running model info)
+		for (const path of ["/llm/status", "/v1/llm/server/status"]) {
+			try {
+				const r = await fetch(`${baseUrl}${path}`, { signal: AbortSignal.timeout(2000), headers: hdrs });
+				if (r.ok) {
+					const status = (await r.json()) as {
+						status: string; model?: string; model_name?: string;
+						n_ctx?: number; supports_vision?: boolean;
+					};
+					if (status.status === "running" || status.status === "ok") {
+						const name = status.model_name ?? status.model;
+						if (name) {
+							models.push(localModelEntry(name, {
+								contextWindow: status.n_ctx ?? 32768,
+								supportsVision: status.supports_vision ?? false,
+							}));
+							serverRunning = true;
+						}
+					}
+					break;
+				}
+			} catch { /* try next */ }
+		}
 
-		const modelName = status.model_name ?? status.model;
-		if (!modelName) return false;
-
-		const models = [
-			localModelEntry(modelName, {
-				contextWindow: status.n_ctx ?? 32768,
-				supportsVision: status.supports_vision ?? false,
-			}),
-		];
-
+		// Fetch catalog to list all downloaded models (even if server isn't running)
 		try {
-			const modelsRes = await fetch(`${baseUrl}/v1/models`, {
-				signal: AbortSignal.timeout(1500),
+			const catRes = await fetch(`${baseUrl}/v1/llm/catalog`, {
+				signal: AbortSignal.timeout(2000), headers: hdrs,
 			});
-			if (modelsRes.ok) {
-				const body = (await modelsRes.json()) as { data?: Array<{ id: string }> };
-				for (const m of body.data ?? []) {
-					if (m.id && m.id !== modelName) models.push(localModelEntry(m.id));
+			if (catRes.ok) {
+				const cat = (await catRes.json()) as {
+					active_model?: string;
+					entries?: Array<{ filename?: string; state?: string; is_mmproj?: boolean }>;
+				};
+				const existing = new Set(models.map((m) => m.id));
+				// If server isn't running, add the active model first
+				if (!serverRunning && cat.active_model) {
+					const active = (cat.entries ?? []).find(
+						(e) => e.filename === cat.active_model && e.state === "downloaded" && !e.is_mmproj,
+					);
+					if (active?.filename && !existing.has(active.filename)) {
+						models.push(localModelEntry(active.filename));
+						existing.add(active.filename);
+					}
+				}
+				for (const e of cat.entries ?? []) {
+					if (!e.filename || e.is_mmproj) continue;
+					if (e.state !== "downloaded") continue;
+					if (!existing.has(e.filename)) {
+						models.push(localModelEntry(e.filename));
+						existing.add(e.filename);
+					}
 				}
 			}
-		} catch {
-			// ignore; active model is enough
-		}
+		} catch { /* ignore */ }
+
+		if (models.length === 0) return false;
 
 		modelRegistry.registerProvider("skill-llm", {
 			baseUrl: `${baseUrl}/v1`,
-			apiKey: "SKILL_LLM_API_KEY",
+			apiKey: loadToken() || "SKILL_LLM_API_KEY",
 			api: "openai-completions",
 			models,
 		});

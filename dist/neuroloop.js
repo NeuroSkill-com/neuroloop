@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // src/main.ts
-import { existsSync as existsSync9, readdirSync as readdirSync2, readFileSync as readFileSync8 } from "node:fs";
+import { existsSync as existsSync9, readdirSync as readdirSync2, readFileSync as readFileSync9 } from "node:fs";
 import { homedir as homedir9 } from "node:os";
 import { basename, dirname as dirname5, join as join9 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
@@ -17,7 +17,7 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 // src/neuroloop.ts
-import { existsSync as existsSync8, mkdirSync as mkdirSync7, readFileSync as readFileSync7, writeFileSync as writeFileSync5 } from "node:fs";
+import { existsSync as existsSync8, mkdirSync as mkdirSync7, readFileSync as readFileSync8, writeFileSync as writeFileSync5 } from "node:fs";
 import { homedir as homedir8 } from "node:os";
 import { dirname as dirname4, join as join8 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
@@ -29,14 +29,14 @@ import WS from "ws";
 
 // src/neuroskill/run.ts
 import { execFile as execFile2 } from "node:child_process";
-import { existsSync as existsSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync2, writeFileSync } from "node:fs";
+import { existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync2, writeFileSync } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { join as join2 } from "node:path";
 import { promisify as promisify2 } from "node:util";
 
 // src/runtime-updates.ts
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync as mkdirSync2, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -95,7 +95,7 @@ function getLocalNeuroSkillBinPath() {
   return join(RUNTIME_NODE_MODULES, ".bin", IS_WINDOWS ? "neuroskill.cmd" : "neuroskill");
 }
 async function installRuntimePackage(pkg, version) {
-  if (!existsSync(RUNTIME_PREFIX)) mkdirSync2(RUNTIME_PREFIX, { recursive: true, mode: 448 });
+  if (!existsSync(RUNTIME_PREFIX)) mkdirSync(RUNTIME_PREFIX, { recursive: true, mode: 448 });
   await execFileAsync("npm", ["install", "--prefix", RUNTIME_PREFIX, "--no-save", `${pkg}@${version}`], {
     timeout: 18e4,
     maxBuffer: 4 * 1024 * 1024,
@@ -177,11 +177,28 @@ function getRuntimeVersionState() {
 }
 
 // src/neuroskill/run.ts
+var _authStatus = "none";
+function getAuthStatus() {
+  return _authStatus;
+}
+async function checkAuthStatus() {
+  const port = await discoverSkillServer();
+  if (port !== null) {
+    _authStatus = "local";
+    return "local";
+  }
+  _authStatus = "none";
+  return "none";
+}
+function getDaemonTokenPath() {
+  const configDir = process.env.XDG_CONFIG_HOME || (process.platform === "win32" ? join2(process.env.APPDATA || join2(homedir2(), "AppData", "Roaming")) : join2(homedir2(), process.platform === "darwin" ? "Library/Application Support" : ".config"));
+  return join2(configDir, "skill", "daemon", "auth.token");
+}
 var execFileAsync2 = promisify2(execFile2);
 var NEUROSKILL_TIMEOUT_MS = 3e4;
 var AGENT_DIR2 = join2(homedir2(), ".neuroloop");
 var PORT_FILE = join2(AGENT_DIR2, "neuroskill_port.json");
-var _port = 8375;
+var _port = 18444;
 function loadPort() {
   try {
     if (existsSync2(PORT_FILE)) {
@@ -190,11 +207,11 @@ function loadPort() {
     }
   } catch {
   }
-  return 8375;
+  return 18444;
 }
 function savePort(port) {
   try {
-    if (!existsSync2(AGENT_DIR2)) mkdirSync3(AGENT_DIR2, { recursive: true, mode: 448 });
+    if (!existsSync2(AGENT_DIR2)) mkdirSync2(AGENT_DIR2, { recursive: true, mode: 448 });
     writeFileSync(PORT_FILE, JSON.stringify({ port }), { encoding: "utf8", mode: 384 });
   } catch {
   }
@@ -214,19 +231,16 @@ async function probeSkillServer(port = _port) {
     });
     if (!res.ok) return false;
     const body = await res.json();
-    return typeof body.status === "string";
+    return body.ok === true || typeof body.status === "string";
   } catch {
     return false;
   }
 }
 async function discoverSkillServer() {
   if (await probeSkillServer(_port)) return _port;
-  for (const p of [18444, 8375, 8376, 8377]) {
-    if (p === _port) continue;
-    if (await probeSkillServer(p)) {
-      setSkillPort(p);
-      return p;
-    }
+  if (_port !== 18444 && await probeSkillServer(18444)) {
+    setSkillPort(18444);
+    return 18444;
   }
   if (process.platform !== "win32") {
     const { exec } = await import("node:child_process");
@@ -1223,7 +1237,7 @@ ${r.text}` : null);
 
 // src/skills-sync.ts
 import { execFileSync } from "node:child_process";
-import { existsSync as existsSync4, mkdirSync as mkdirSync4, readdirSync, renameSync } from "node:fs";
+import { existsSync as existsSync4, mkdirSync as mkdirSync3, readdirSync, renameSync } from "node:fs";
 import { homedir as homedir4 } from "node:os";
 import { dirname as dirname2, join as join4 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
@@ -1273,7 +1287,7 @@ async function syncSkillsFromGitHub(opts = {}) {
   const onProgress = opts.onProgress;
   const report = (stage, percent) => onProgress?.({ stage, percent });
   const parentDir = dirname2(AGENT_SKILLS_DIR);
-  mkdirSync4(parentDir, { recursive: true });
+  mkdirSync3(parentDir, { recursive: true });
   if (existsSync4(LEGACY_AGENT_SKILLS_DIR)) {
     try {
       if (!existsSync4(AGENT_SKILLS_DIR)) {
@@ -1353,6 +1367,18 @@ async function syncSkillsFromGitHub(opts = {}) {
 }
 
 // src/skill-llm.ts
+import { readFileSync as readFileSync4 } from "node:fs";
+function loadToken() {
+  try {
+    return readFileSync4(getDaemonTokenPath(), "utf8").trim();
+  } catch {
+    return "";
+  }
+}
+function authHeaders() {
+  const token = loadToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 function localModelEntry(id, opts = {}) {
   return {
     id,
@@ -1376,35 +1402,61 @@ async function registerSkillLlmProvider(modelRegistry2) {
     const discoveredPort = await discoverSkillServer();
     if (!discoveredPort) return false;
     const baseUrl = `http://127.0.0.1:${discoveredPort}`;
-    const res = await fetch(`${baseUrl}/llm/status`, {
-      signal: AbortSignal.timeout(2e3)
-    });
-    if (!res.ok) return false;
-    const status = await res.json();
-    if (status.status !== "running" && status.status !== "ok") return false;
-    const modelName = status.model_name ?? status.model;
-    if (!modelName) return false;
-    const models = [
-      localModelEntry(modelName, {
-        contextWindow: status.n_ctx ?? 32768,
-        supportsVision: status.supports_vision ?? false
-      })
-    ];
+    const hdrs = authHeaders();
+    const models = [];
+    let serverRunning = false;
+    for (const path of ["/llm/status", "/v1/llm/server/status"]) {
+      try {
+        const r = await fetch(`${baseUrl}${path}`, { signal: AbortSignal.timeout(2e3), headers: hdrs });
+        if (r.ok) {
+          const status = await r.json();
+          if (status.status === "running" || status.status === "ok") {
+            const name = status.model_name ?? status.model;
+            if (name) {
+              models.push(localModelEntry(name, {
+                contextWindow: status.n_ctx ?? 32768,
+                supportsVision: status.supports_vision ?? false
+              }));
+              serverRunning = true;
+            }
+          }
+          break;
+        }
+      } catch {
+      }
+    }
     try {
-      const modelsRes = await fetch(`${baseUrl}/v1/models`, {
-        signal: AbortSignal.timeout(1500)
+      const catRes = await fetch(`${baseUrl}/v1/llm/catalog`, {
+        signal: AbortSignal.timeout(2e3),
+        headers: hdrs
       });
-      if (modelsRes.ok) {
-        const body = await modelsRes.json();
-        for (const m of body.data ?? []) {
-          if (m.id && m.id !== modelName) models.push(localModelEntry(m.id));
+      if (catRes.ok) {
+        const cat = await catRes.json();
+        const existing = new Set(models.map((m) => m.id));
+        if (!serverRunning && cat.active_model) {
+          const active = (cat.entries ?? []).find(
+            (e) => e.filename === cat.active_model && e.state === "downloaded" && !e.is_mmproj
+          );
+          if (active?.filename && !existing.has(active.filename)) {
+            models.push(localModelEntry(active.filename));
+            existing.add(active.filename);
+          }
+        }
+        for (const e of cat.entries ?? []) {
+          if (!e.filename || e.is_mmproj) continue;
+          if (e.state !== "downloaded") continue;
+          if (!existing.has(e.filename)) {
+            models.push(localModelEntry(e.filename));
+            existing.add(e.filename);
+          }
         }
       }
     } catch {
     }
+    if (models.length === 0) return false;
     modelRegistry2.registerProvider("skill-llm", {
       baseUrl: `${baseUrl}/v1`,
-      apiKey: "SKILL_LLM_API_KEY",
+      apiKey: loadToken() || "SKILL_LLM_API_KEY",
       api: "openai-completions",
       models
     });
@@ -1448,10 +1500,14 @@ async function autoBootSkillLlmIfConfigured() {
   if (mode2 === "off") return;
   await startSkillLlmServer(mode2);
 }
+async function getSkillServerBaseUrl() {
+  const port = await discoverSkillServer() ?? getSkillPort();
+  return `http://127.0.0.1:${port}`;
+}
 
 // src/model-config.ts
 import { execFile as execFile3 } from "node:child_process";
-import { existsSync as existsSync5, mkdirSync as mkdirSync5, readFileSync as readFileSync4, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync5, mkdirSync as mkdirSync4, readFileSync as readFileSync5, writeFileSync as writeFileSync2 } from "node:fs";
 import { homedir as homedir5 } from "node:os";
 import { join as join5 } from "node:path";
 import { promisify as promisify3 } from "node:util";
@@ -1463,7 +1519,7 @@ function defaultModelsFile() {
 function readModelsFile() {
   try {
     if (!existsSync5(MODEL_CONFIG_PATH)) return defaultModelsFile();
-    const parsed = JSON.parse(readFileSync4(MODEL_CONFIG_PATH, "utf8"));
+    const parsed = JSON.parse(readFileSync5(MODEL_CONFIG_PATH, "utf8"));
     if (!parsed.providers || typeof parsed.providers !== "object") return defaultModelsFile();
     return parsed;
   } catch {
@@ -1472,7 +1528,7 @@ function readModelsFile() {
 }
 function writeModelsFile(file) {
   const dir = join5(homedir5(), ".neuroloop");
-  if (!existsSync5(dir)) mkdirSync5(dir, { recursive: true, mode: 448 });
+  if (!existsSync5(dir)) mkdirSync4(dir, { recursive: true, mode: 448 });
   writeFileSync2(MODEL_CONFIG_PATH, JSON.stringify(file, null, 2) + "\n", {
     encoding: "utf8",
     mode: 384
@@ -1516,19 +1572,19 @@ async function openModelsFileInSystem() {
 }
 
 // src/memory.ts
-import { existsSync as existsSync6, mkdirSync as mkdirSync6, readFileSync as readFileSync5, writeFileSync as writeFileSync3 } from "node:fs";
+import { existsSync as existsSync6, mkdirSync as mkdirSync5, readFileSync as readFileSync6, writeFileSync as writeFileSync3 } from "node:fs";
 import { homedir as homedir6 } from "node:os";
 import { dirname as dirname3, join as join6 } from "node:path";
 var MEMORY_PATH = join6(homedir6(), ".neuroskill", "memory.md");
 function readMemory(path = MEMORY_PATH) {
   if (!existsSync6(path)) return void 0;
-  return readFileSync5(path, "utf-8").trim() || void 0;
+  return readFileSync6(path, "utf-8").trim() || void 0;
 }
 var MAX_MEMORY_BYTES = 512 * 1024;
 function writeMemory(content, mode2, path = MEMORY_PATH) {
-  mkdirSync6(dirname3(path), { recursive: true, mode: 448 });
+  mkdirSync5(dirname3(path), { recursive: true, mode: 448 });
   if (mode2 === "append") {
-    const existing = existsSync6(path) ? readFileSync5(path, "utf-8") : "";
+    const existing = existsSync6(path) ? readFileSync6(path, "utf-8") : "";
     const sep = existing && !existing.endsWith("\n") ? "\n" : "";
     const combined = existing + sep + content;
     if (Buffer.byteLength(combined, "utf-8") > MAX_MEMORY_BYTES) {
@@ -2106,15 +2162,15 @@ ${step.instruction}`);
 };
 
 // src/compression.ts
+import { existsSync as existsSync7, mkdirSync as mkdirSync6, readFileSync as readFileSync7, writeFileSync as writeFileSync4 } from "node:fs";
 import { homedir as homedir7 } from "node:os";
 import { join as join7 } from "node:path";
-import { existsSync as existsSync7, readFileSync as readFileSync6, writeFileSync as writeFileSync4 } from "node:fs";
 var AGENT_DIR3 = join7(homedir7(), ".neuroloop");
 var COMPRESSION_SETTINGS_PATH = join7(AGENT_DIR3, "compression.json");
 function loadCompressionSettings() {
   try {
     if (existsSync7(COMPRESSION_SETTINGS_PATH)) {
-      const raw = readFileSync6(COMPRESSION_SETTINGS_PATH, "utf8");
+      const raw = readFileSync7(COMPRESSION_SETTINGS_PATH, "utf8");
       const settings = JSON.parse(raw);
       if (settings.mode === "standard" || settings.mode === "strong" || settings.mode === "off") {
         return settings;
@@ -2127,7 +2183,7 @@ function loadCompressionSettings() {
 function saveCompressionSettings(settings) {
   try {
     if (!existsSync7(AGENT_DIR3)) {
-      mkdirSync(AGENT_DIR3, { recursive: true, mode: 448 });
+      mkdirSync6(AGENT_DIR3, { recursive: true, mode: 448 });
     }
     writeFileSync4(
       COMPRESSION_SETTINGS_PATH,
@@ -2210,7 +2266,7 @@ function getCompressionModeName(mode2) {
 }
 
 // src/neuroloop.ts
-var _pkgVersion = (true ? "0.0.15" : void 0) ?? JSON.parse(readFileSync7(join8(dirname4(fileURLToPath3(import.meta.url)), "../package.json"), "utf8")).version;
+var _pkgVersion = (true ? "0.1.0" : void 0) ?? JSON.parse(readFileSync8(join8(dirname4(fileURLToPath3(import.meta.url)), "../package.json"), "utf8")).version;
 var AGENT_DIR4 = join8(homedir8(), ".neuroskill");
 var VERSION_STATE_DIR = join8(homedir8(), ".neuroloop");
 var NEUROLOOP_DIR = join8(dirname4(fileURLToPath3(import.meta.url)), "..");
@@ -2223,7 +2279,7 @@ var CALIBRATION_PROMPT_INTERVAL_MS = 24 * 60 * 60 * 1e3;
 function readChangelogState() {
   try {
     if (!existsSync8(CHANGELOG_STATE_PATH)) return {};
-    return JSON.parse(readFileSync7(CHANGELOG_STATE_PATH, "utf8"));
+    return JSON.parse(readFileSync8(CHANGELOG_STATE_PATH, "utf8"));
   } catch {
     return {};
   }
@@ -2239,7 +2295,7 @@ function writeChangelogState(state) {
 }
 function changelogSinceLastShown(currentVersion) {
   if (!existsSync8(CHANGELOG_PATH)) return null;
-  const content = readFileSync7(CHANGELOG_PATH, "utf8");
+  const content = readFileSync8(CHANGELOG_PATH, "utf8");
   const state = readChangelogState();
   if (state.lastShownVersion === currentVersion) return null;
   const matches = [...content.matchAll(/^## \[(.+?)\].*$/gm)];
@@ -2267,7 +2323,7 @@ ${block}`;
 function shouldNudgeCalibration() {
   try {
     if (existsSync8(CALIBRATION_PROMPT_STATE_PATH)) {
-      const raw = readFileSync7(CALIBRATION_PROMPT_STATE_PATH, "utf8");
+      const raw = readFileSync8(CALIBRATION_PROMPT_STATE_PATH, "utf8");
       const { lastPromptedAt } = JSON.parse(raw);
       if (Date.now() - lastPromptedAt < CALIBRATION_PROMPT_INTERVAL_MS) {
         return false;
@@ -2393,7 +2449,7 @@ async function neuroloopExtension(pi) {
   pi.on("before_agent_start", async (event) => {
     const displaySections = [];
     const systemSections = [];
-    const statusResult = await runNeuroSkill(["status"]);
+    const statusResult = await runNeuroSkill(["--json", "status"]);
     if (statusResult.ok && statusResult.text) {
       displaySections.push(`## \u{1F9E0} Current State
 ${statusResult.text}`);
@@ -2402,8 +2458,16 @@ ${statusResult.text}`);
       const extra = await selectContextualData(event.prompt);
       displaySections.push(...extra);
       systemSections.push(...extra);
+    } else if (exgOnline) {
+      displaySections.push("## \u{1F9E0} NeuroSkill\u2122\n_Connected \u2014 live EXG data available._");
+      systemSections.push("## \u{1F9E0} NeuroSkill\u2122\n_Connected \u2014 live EXG data available. Use neuroskill_run tool for queries._");
     } else {
-      const unavailable = "## \u{1F9E0} NeuroSkill\n_Unavailable \u2014 server not running or no EXG device connected._\nUse the `neuroskill_run` tool to query once it comes online.";
+      let unavailable;
+      if (getAuthStatus() === "local") {
+        unavailable = "## \u{1F9E0} NeuroSkill\u2122\n_Daemon not running. Start it with:_ `npm run daemon`\nUse the `neuroskill_run` tool to query once it comes online.";
+      } else {
+        unavailable = "## \u{1F9E0} NeuroSkill\u2122\n_Not connected to a NeuroSkill server. Use `/connect` to set up._\nUse the `neuroskill_run` tool to query once it comes online.";
+      }
       displaySections.push(unavailable);
       systemSections.push(unavailable);
     }
@@ -2427,7 +2491,7 @@ ${memory}`;
         skillIndex = `
 
 ## \u{1F4D6} NeuroLoop Capabilities
-${readFileSync7(NEUROLOOP_MD_PATH, "utf8")}`;
+${readFileSync8(NEUROLOOP_MD_PATH, "utf8")}`;
       }
     } catch {
     }
@@ -2520,7 +2584,7 @@ ${"=".repeat(60)}`
   });
   pi.registerTool({
     name: "neuroskill_run",
-    label: "NeuroSkill",
+    label: "NeuroSkill\u2122",
     description: `Run a neuroskill EXG command and return its JSON output.
 
 Available commands and typical args:
@@ -2644,7 +2708,8 @@ Available commands and typical args:
       )
     }),
     execute: async (_id, params, _signal, _onUpdate, _ctx) => {
-      const args = [params.command, ...params.args ?? []];
+      const cmdParts = params.command.trim().split(/\s+/);
+      const args = [...cmdParts, ...params.args ?? []];
       const result = await runNeuroSkill(args);
       if (!result.ok) {
         return {
@@ -2677,14 +2742,60 @@ Available commands and typical args:
   let runtimeVersionsLoading = false;
   let skillsSyncInFlight = false;
   let skillsSyncShown = false;
+  let skillsSyncLastAt = null;
+  let skillsSyncTimer = null;
+  const SKILLS_SYNC_INTERVAL_MS = 60 * 60 * 1e3;
   let exgOnline = false;
+  let exgConnecting = false;
+  let exgConnectSpin = 0;
+  let exgConnectSpinTimer = null;
   let exgMetrics = null;
   let exgUpdatedAt = null;
   let exgLastLabel = null;
   let uiTui = null;
+  let uiNotify = null;
+  let sessionModelRegistry = null;
   let compressionSettings = loadCompressionSettings();
+  let llmDownloads = [];
+  let llmDownloadSpin = 0;
+  let llmDownloadPollTimer = null;
+  function startLlmDownloadPoll() {
+    if (llmDownloadPollTimer) return;
+    llmDownloadPollTimer = setInterval(async () => {
+      try {
+        const baseUrl = await getSkillServerBaseUrl();
+        const res = await fetch(`${baseUrl}/v1/llm/downloads`, {
+          headers: authHeaders(),
+          signal: AbortSignal.timeout(3e3)
+        });
+        if (!res.ok) return;
+        const downloads = await res.json();
+        for (const prev of llmDownloads) {
+          const cur = downloads.find((d) => d.filename === prev.filename);
+          if (!cur || cur.state === "downloaded") {
+            uiNotify?.(`${prev.filename} downloaded successfully.`, "info");
+          } else if (cur.state === "failed" || cur.state === "cancelled") {
+            uiNotify?.(`${prev.filename} download ${cur.state}.`, "error");
+          }
+        }
+        llmDownloads = downloads.filter((d) => d.state === "downloading" || d.state === "paused").map((d) => ({ filename: d.filename, progress: d.progress ?? 0, state: d.state }));
+        llmDownloadSpin++;
+        uiTui?.requestRender();
+        if (llmDownloads.length === 0) stopLlmDownloadPoll();
+      } catch {
+      }
+    }, 2e3);
+  }
+  function stopLlmDownloadPoll() {
+    if (llmDownloadPollTimer) {
+      clearInterval(llmDownloadPollTimer);
+      llmDownloadPollTimer = null;
+    }
+    llmDownloads = [];
+    uiTui?.requestRender();
+  }
   let exgWs = null;
-  let exgWsPort = 8375;
+  let exgWsPort = 18444;
   let exgWsReconnectTimer = null;
   let exgPollTimer = null;
   let exgAgoTimer = null;
@@ -2728,13 +2839,11 @@ Available commands and typical args:
 ${result.error}` : result.message, "error");
         return;
       }
-      ctx.ui.notify(result.message, "info");
-      if (result.updated) {
-        ctx.ui.notify(
-          "Skills updated. Changes to loaded skill index apply fully after restarting neuroloop.",
-          "info"
-        );
-      }
+      skillsSyncLastAt = /* @__PURE__ */ new Date();
+      ctx.ui.notify(
+        result.updated ? `Skills updated at ${skillsSyncLastAt.toLocaleTimeString()}. Restart neuroloop to apply changes to loaded skill index.` : `Skills up to date (synced at ${skillsSyncLastAt.toLocaleTimeString()})`,
+        "info"
+      );
     } finally {
       clearInterval(timer);
       ctx.ui.setStatus("skills-sync", void 0);
@@ -2790,9 +2899,11 @@ ${result.error}` : result.message, "error");
   }
   function timeAgo(ts) {
     const s = Math.round((Date.now() - ts) / 1e3);
+    if (s <= 5) return "";
     if (s < 60) return `${s}s ago`;
     if (s < 3600) return `${Math.round(s / 60)}m ago`;
-    return `${Math.round(s / 3600)}h ago`;
+    if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+    return `${Math.round(s / 86400)}d ago`;
   }
   function scoreColor(val, higherIsBetter) {
     const norm = higherIsBetter ? val : 1 - val;
@@ -2829,39 +2940,43 @@ ${result.error}` : result.message, "error");
     // teal   — high cognition
   };
   function buildHeader(_tui, theme) {
-    const versionLine = () => {
-      if (runtimeVersionsLoading) return theme.fg("dim", " versions: checking npm/github \u2026");
-      if (!runtimeVersions) return theme.fg("dim", " versions: unavailable");
-      const nl = runtimeVersions.neuroloop;
-      const ns = runtimeVersions.neuroskill;
-      const gh = runtimeVersions.github;
-      const nlStatus = nl.npmLatest ? nl.upToDate ? theme.fg("success", "latest") : theme.fg("warning", "update available") : theme.fg("dim", "npm ?");
-      const nsStatus = ns.npmLatest ? ns.upToDate ? theme.fg("success", "latest") : theme.fg("warning", "updating") : theme.fg("dim", "npm ?");
-      const ghCommit = gh.latestCommit ? gh.latestCommit : "?";
-      const ghTag = gh.latestTag ?? "?";
-      return " " + theme.fg("dim", `neuroloop v${nl.local}`) + theme.fg("dim", " \xB7 npm ") + theme.fg("muted", `v${nl.npmLatest ?? "?"}`) + theme.fg("dim", " (") + nlStatus + theme.fg("dim", ")") + theme.fg("dim", " \xB7 neuroskill local ") + theme.fg("muted", `v${ns.localInstalled ?? "none"}`) + theme.fg("dim", " / npm ") + theme.fg("muted", `v${ns.npmLatest ?? "?"}`) + theme.fg("dim", " (") + nsStatus + theme.fg("dim", ")") + theme.fg("dim", ` \xB7 github ${ghCommit} \xB7 release ${ghTag}`);
-    };
     const hints = [
       ["esc", "stop"],
       ["ctrl+d", "quit"],
-      ["shift+tab", "think"],
-      ["ctrl+l", "model"],
-      ["ctrl+o", "tools"],
-      ["/key", "api key"],
-      ["/exg", "exg"],
-      ["/exg-session", "metrics"],
-      ["/sleep", "sleep"],
-      ["!", "shell"]
+      ["/help", "commands"],
+      ["/exg", "brain"],
+      ["/connect", "server"],
+      ["/llm", "models"]
     ];
     return {
       invalidate() {
       },
       render(width) {
         const lines = [];
-        const logo = theme.fg("accent", "\u25C6") + " " + theme.bold("neuroloop") + theme.fg("dim", ` v${_pkgVersion}`);
+        const authSt = getAuthStatus();
+        let connDot;
+        if (exgOnline) {
+          if (authSt === "local") connDot = theme.fg("success", " \u25CF") + theme.fg("dim", " Local");
+          else if (authSt === "lan") connDot = theme.fg("warning", " \u25CF") + theme.fg("dim", " LAN");
+          else if (authSt === "remote") connDot = theme.fg("accent", " \u25CF") + theme.fg("dim", " Remote");
+          else connDot = theme.fg("success", " \u25CF") + theme.fg("dim", " Connected");
+        } else if (exgConnecting) {
+          const spinner = SYNC_SPINNER[exgConnectSpin % SYNC_SPINNER.length];
+          connDot = theme.fg("warning", ` ${spinner}`) + theme.fg("dim", " Connecting\u2026");
+        } else {
+          const lastSeen = exgUpdatedAt ? theme.fg("dim", ` \xB7 last seen ${timeAgo(exgUpdatedAt)}`) : "";
+          connDot = theme.fg("dim", " \u25CB Offline") + lastSeen;
+        }
+        const website = theme.fg("accent", "\u{1F310}") + " " + theme.fg("dim", "https://www.neuroskill.com");
+        lines.push(truncateToWidth(website, width));
+        const logo = theme.fg("accent", "\u25C6") + " " + theme.bold("NeuroLoop\u2122") + theme.fg("dim", ` v${_pkgVersion}`) + connDot;
         lines.push(truncateToWidth(logo, width));
-        lines.push(truncateToWidth(versionLine(), width));
-        const hintStr = hints.map(([k, a]) => theme.fg("dim", "[") + theme.fg("muted", k) + theme.fg("dim", "] ") + theme.fg("dim", a)).join(theme.fg("dim", "  "));
+        if (skillsSyncLastAt) {
+          const ago = timeAgo(skillsSyncLastAt.getTime()) || "just now";
+          const syncLine = " " + theme.bold("NeuroSkill\u2122") + theme.fg("dim", ` skills synced ${ago}`);
+          lines.push(truncateToWidth(syncLine, width));
+        }
+        const hintStr = hints.map(([k, a]) => theme.fg("muted", k) + theme.fg("dim", " " + a)).join(theme.fg("dim", " \xB7 "));
         lines.push(truncateToWidth(" " + hintStr, width));
         lines.push(sep(theme, width));
         return lines;
@@ -2872,10 +2987,37 @@ ${result.error}` : result.message, "error");
     const port = await discoverSkillServer();
     return port ?? getSkillPort();
   }
+  function startConnectSpinner() {
+    if (exgConnectSpinTimer) return;
+    exgConnecting = true;
+    exgConnectSpin = 0;
+    exgConnectSpinTimer = setInterval(() => {
+      exgConnectSpin++;
+      uiTui?.requestRender();
+    }, 80);
+    uiTui?.requestRender();
+  }
+  function stopConnectSpinner() {
+    exgConnecting = false;
+    if (exgConnectSpinTimer) {
+      clearInterval(exgConnectSpinTimer);
+      exgConnectSpinTimer = null;
+    }
+  }
   function connectExgWs() {
     if (!exgEnabled) return;
     if (exgWs) return;
-    const url = `ws://127.0.0.1:${exgWsPort}`;
+    startConnectSpinner();
+    const wsToken = (() => {
+      try {
+        const p = getDaemonTokenPath();
+        return readFileSync8(p, "utf8").trim();
+      } catch {
+        return "";
+      }
+    })();
+    const tokenParam = wsToken ? `?token=${encodeURIComponent(wsToken)}` : "";
+    const url = `ws://127.0.0.1:${exgWsPort}/v1/events${tokenParam}`;
     let ws;
     try {
       ws = new WS(url);
@@ -2885,6 +3027,18 @@ ${result.error}` : result.message, "error");
     }
     exgWs = ws;
     ws.on("open", () => {
+      stopConnectSpinner();
+      exgReconnectAttempt = 0;
+      uiNotify?.(`Connected to NeuroSkill\u2122 on port ${exgWsPort}`, "info");
+      if (sessionModelRegistry) {
+        const reg = sessionModelRegistry;
+        (async () => {
+          for (let i = 0; i < 5; i++) {
+            if (await registerSkillLlmProvider(reg)) return;
+            await new Promise((r) => setTimeout(r, 3e3));
+          }
+        })();
+      }
       ws.send(JSON.stringify({ command: "status" }));
       stopExgPoll();
       exgPollTimer = setInterval(() => {
@@ -2900,15 +3054,39 @@ ${result.error}` : result.message, "error");
       } catch {
         return;
       }
-      const event = msg.event;
-      if (event === "scores") {
-        mergeScoresEvent(msg);
+      const eventType = msg.type ?? msg.event;
+      const payload = msg.payload ?? msg;
+      if (eventType === "EegBands" || eventType === "scores") {
+        const channels = payload.channels;
+        if (channels?.length) {
+          const avg = (key) => {
+            let sum = 0;
+            let n = 0;
+            for (const ch of channels) {
+              const v = ch[key];
+              if (typeof v === "number") {
+                sum += v;
+                n++;
+              }
+            }
+            return n > 0 ? sum / n : void 0;
+          };
+          const flat = { ...payload };
+          flat.rel_delta = avg("rel_delta");
+          flat.rel_theta = avg("rel_theta");
+          flat.rel_alpha = avg("rel_alpha");
+          flat.rel_beta = avg("rel_beta");
+          flat.rel_gamma = avg("rel_gamma");
+          mergeScoresEvent(flat);
+        } else {
+          mergeScoresEvent(payload);
+        }
         uiTui?.requestRender();
         return;
       }
-      if (event === "label_created") {
-        const text = String(msg.text ?? "");
-        const createdAt = Number(msg.created_at ?? Date.now() / 1e3);
+      if (eventType === "label_created") {
+        const text = String(payload.text ?? "");
+        const createdAt = Number(payload.created_at ?? Date.now() / 1e3);
         exgLastLabel = { text, createdAt };
         uiTui?.requestRender();
         pi.sendMessage({
@@ -2937,8 +3115,14 @@ ${result.error}` : result.message, "error");
     });
     ws.on("close", () => {
       stopExgPoll();
+      const wasOnline = exgOnline;
       exgWs = null;
       exgOnline = false;
+      if (wasOnline) {
+        uiNotify?.(`Disconnected from NeuroSkill\u2122 (port ${exgWsPort})`, "warning");
+      } else if (exgReconnectAttempt === 0) {
+        uiNotify?.("Could not connect to NeuroSkill\u2122 \u2014 retrying\u2026", "error");
+      }
       uiTui?.requestRender();
       scheduleExgReconnect();
     });
@@ -2949,12 +3133,15 @@ ${result.error}` : result.message, "error");
       exgPollTimer = null;
     }
   }
-  function scheduleExgReconnect(delayMs = 5e3) {
+  let exgReconnectAttempt = 0;
+  function scheduleExgReconnect() {
     if (exgWsReconnectTimer) return;
+    const delay = Math.min(500 * Math.pow(2, exgReconnectAttempt), 5e3);
+    exgReconnectAttempt++;
     exgWsReconnectTimer = setTimeout(() => {
       exgWsReconnectTimer = null;
       if (exgEnabled) connectExgWs();
-    }, delayMs);
+    }, delay);
   }
   function disconnectExgWs() {
     stopExgPoll();
@@ -2970,13 +3157,44 @@ ${result.error}` : result.message, "error");
     exgWs = null;
   }
   pi.on("session_start", (_event, ctx) => {
+    uiNotify = (msg, level) => ctx.ui.notify(msg, level);
+    sessionModelRegistry = ctx.modelRegistry;
     if (!skillsSyncShown && process.env.NEUROLOOP_SKILLS_SYNC_STATUS) {
       const ok = process.env.NEUROLOOP_SKILLS_SYNC_OK === "1";
+      skillsSyncLastAt = /* @__PURE__ */ new Date();
+      const updated = process.env.NEUROLOOP_SKILLS_SYNC_UPDATED === "1";
       ctx.ui.notify(
-        `Skills sync: ${process.env.NEUROLOOP_SKILLS_SYNC_STATUS}`,
+        updated ? `Skills synced at ${skillsSyncLastAt.toLocaleTimeString()}` : `Skills up to date (synced at ${skillsSyncLastAt.toLocaleTimeString()})`,
         ok ? "info" : "warning"
       );
       skillsSyncShown = true;
+    }
+    if (!skillsSyncTimer) {
+      skillsSyncTimer = setInterval(async () => {
+        if (skillsSyncInFlight) return;
+        skillsSyncInFlight = true;
+        try {
+          const result = await syncSkillsFromGitHub();
+          skillsSyncLastAt = /* @__PURE__ */ new Date();
+          if (result.updated && uiNotify) {
+            uiNotify(`Skills updated at ${skillsSyncLastAt.toLocaleTimeString()}`, "info");
+          }
+        } catch {
+        } finally {
+          skillsSyncInFlight = false;
+        }
+      }, SKILLS_SYNC_INTERVAL_MS);
+    }
+    const firstRunMarker = join8(AGENT_DIR4, ".welcome-shown");
+    if (!existsSync8(firstRunMarker)) {
+      pi.sendMessage({
+        customType: NEUROSKILL_STATUS_TYPE,
+        content: "Welcome to neuroloop! \u{1F9E0}\n\nQuick start:\n- Connect your EEG device and start Skill app\n- Type naturally \u2014 I can see your brain state\n- /exg to toggle live metrics \xB7 /help for all commands\n\nLearn more at https://www.neuroskill.com",
+        display: true,
+        details: void 0
+      });
+      mkdirSync7(dirname4(firstRunMarker), { recursive: true });
+      writeFileSync5(firstRunMarker, (/* @__PURE__ */ new Date()).toISOString(), "utf8");
     }
     const changelog = changelogSinceLastShown(_pkgVersion);
     if (changelog) {
@@ -3000,6 +3218,7 @@ ${result.error}` : result.message, "error");
     }
     ctx.ui.setHeader((tui, theme) => {
       uiTui = tui;
+      checkAuthStatus().then(() => tui.requestRender());
       discoverExgPort().then((port) => {
         exgWsPort = port;
         connectExgWs();
@@ -3033,7 +3252,10 @@ ${result.error}` : result.message, "error");
               sc("mood", m.mood, "high"),
               hrPart
             ].filter(Boolean).join(theme.fg("dim", "   "));
-            lines.push(truncateToWidth(" " + scores, width));
+            const agoRaw = exgUpdatedAt ? timeAgo(exgUpdatedAt) : "";
+            const agoStr = agoRaw ? theme.fg("muted", ` ${agoRaw}`) : "";
+            lines.push(truncateToWidth(" " + scores + agoStr, width));
+            lines.push(truncateToWidth(" " + theme.fg("dim", "\u2502"), width));
             const b = m.bands ?? {};
             const bar = (label2, val, color) => theme.fg("dim", label2 + " ") + bandBar(theme, val, color);
             const bandParts = [
@@ -3048,11 +3270,24 @@ ${result.error}` : result.message, "error");
             const labelW = visibleWidth(labelStr);
             const spacer = Math.max(1, width - bandW - labelW);
             lines.push(truncateToWidth(" " + bandParts + " ".repeat(spacer) + labelStr, width));
+          } else if (exgEnabled && !exgOnline) {
+            lines.push(sep(theme, width));
+            const agoText = exgUpdatedAt != null && exgUpdatedAt > 0 ? timeAgo(exgUpdatedAt) : "";
+            const lastSeen = agoText ? ` \xB7 last seen ${agoText}` : "";
+            lines.push(truncateToWidth(" " + theme.fg("dim", `\u25CC EXG offline${lastSeen} \u2014 /connect to reconnect`), width));
+          }
+          for (const dl of llmDownloads) {
+            const icon = dl.state === "paused" ? theme.fg("warning", "\u23F8") : theme.fg("accent", SYNC_SPINNER[llmDownloadSpin % SYNC_SPINNER.length]);
+            lines.push(truncateToWidth(
+              " " + icon + " " + theme.fg("dim", dl.filename + " ") + theme.fg("muted", progressBar(dl.progress)),
+              width
+            ));
           }
           const branch = footerData.getGitBranch();
           const left = theme.fg("muted", ctx.cwd) + (branch ? " " + theme.fg("dim", `(${branch})`) : "");
           const dot = exgOnline ? theme.fg("success", "\u25C9") : theme.fg("dim", "\u25CC");
-          const ago = exgUpdatedAt ? theme.fg("dim", ` ${timeAgo(exgUpdatedAt)}`) : "";
+          const agoVal = exgUpdatedAt ? timeAgo(exgUpdatedAt) : "";
+          const ago = agoVal ? theme.fg("dim", ` ${agoVal}`) : "";
           const exgPart = exgEnabled ? dot + " " + theme.fg("dim", "EXG") + ago : theme.fg("dim", "\u25CC EXG off");
           const usage = ctx.getContextUsage();
           const ctxPart = usage?.percent != null ? theme.fg("dim", `${usage.percent.toFixed(1)}%/${Math.round(usage.contextWindow / 1e3)}k`) : "";
@@ -3064,39 +3299,83 @@ ${result.error}` : result.message, "error");
         }
       };
     });
-    ctx.ui.setWorkingMessage("\u{1F9E0} thinking\u2026");
+    ctx.ui.setWorkingMessage("thinking\u2026");
   });
   pi.on("session_shutdown", (_event, sessionCtx) => {
+    stopConnectSpinner();
+    stopLlmDownloadPoll();
     disconnectExgWs();
+    uiNotify = null;
+    sessionModelRegistry = null;
     sessionCtx.ui.setHeader(void 0);
     sessionCtx.ui.setFooter(void 0);
   });
   pi.on("before_agent_start", () => {
     if (exgEnabled && !exgWs) connectExgWs();
   });
-  pi.on("after_agent_finish", (event) => {
+  pi.on("agent_end", (event) => {
     if (compressionSettings.mode === "off") return;
-    if (event.response && typeof event.response === "string") {
-      event.response = compressText(event.response, compressionSettings.mode);
-    } else if (event.response && Array.isArray(event.response)) {
-      event.response = event.response.map((part) => {
-        if (part.type === "text" && typeof part.text === "string") {
-          return { ...part, text: compressText(part.text, compressionSettings.mode) };
-        }
-        return part;
-      });
+    for (const msg of event.messages) {
+      if (msg.content && typeof msg.content === "string") {
+        msg.content = compressText(msg.content, compressionSettings.mode);
+      } else if (msg.content && Array.isArray(msg.content)) {
+        msg.content = msg.content.map((part) => {
+          if (part.type === "text" && typeof part.text === "string") {
+            return { ...part, text: compressText(part.text, compressionSettings.mode) };
+          }
+          return part;
+        });
+      }
     }
   });
-  pi.registerCommand("settings", {
-    description: "Configure NeuroLoop settings \xB7 /settings [compression <mode>]",
+  pi.registerCommand("config", {
+    description: "Configure NeuroLoop settings \xB7 /config [compression <mode> | device <gpu|cpu>]",
     handler: async (args, handlerCtx) => {
       const parts = args.trim().split(/\s+/).filter(Boolean);
       const sub = parts[0]?.toLowerCase() ?? "";
+      if (sub === "device") {
+        const device = parts[1]?.toLowerCase();
+        if (device !== "gpu" && device !== "cpu") {
+          try {
+            const baseUrl = await getSkillServerBaseUrl();
+            const hdrs = authHeaders();
+            const res = await fetch(`${baseUrl}/v1/settings/inference-device`, { headers: hdrs, signal: AbortSignal.timeout(3e3) });
+            if (res.ok) {
+              const data = await res.json();
+              handlerCtx.ui.notify(`Inference device: ${data.device ?? "unknown"}
+Usage: /config device <gpu|cpu>`, "info");
+            } else {
+              handlerCtx.ui.notify("Usage: /config device <gpu|cpu>", "warning");
+            }
+          } catch {
+            handlerCtx.ui.notify("Usage: /config device <gpu|cpu>", "warning");
+          }
+          return;
+        }
+        try {
+          const baseUrl = await getSkillServerBaseUrl();
+          const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
+          const res = await fetch(`${baseUrl}/v1/settings/inference-device`, {
+            method: "POST",
+            headers: hdrs,
+            body: JSON.stringify({ device }),
+            signal: AbortSignal.timeout(5e3)
+          });
+          if (res.ok) {
+            handlerCtx.ui.notify(`Inference device set to ${device.toUpperCase()}.`, "info");
+          } else {
+            handlerCtx.ui.notify(`Failed to set device: HTTP ${res.status}`, "error");
+          }
+        } catch (e) {
+          handlerCtx.ui.notify(`Failed to set device: ${e instanceof Error ? e.message : String(e)}`, "error");
+        }
+        return;
+      }
       if (sub === "compression") {
         const mode2 = parts[1]?.toLowerCase() ?? "standard";
         if (mode2 !== "standard" && mode2 !== "strong" && mode2 !== "off") {
           handlerCtx.ui.notify(
-            "Usage: /settings compression <standard|strong|off>",
+            "Usage: /config compression <standard|strong|off>",
             "warning"
           );
           return;
@@ -3111,6 +3390,18 @@ ${result.error}` : result.message, "error");
       }
       const lines = ["Current NeuroLoop settings:"];
       lines.push(`  Compression: ${getCompressionModeName(compressionSettings.mode)}`);
+      try {
+        const baseUrl = await getSkillServerBaseUrl();
+        const res = await fetch(`${baseUrl}/v1/settings/inference-device`, {
+          headers: authHeaders(),
+          signal: AbortSignal.timeout(2e3)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          lines.push(`  Inference device: ${(data.device ?? "unknown").toUpperCase()}`);
+        }
+      } catch {
+      }
       handlerCtx.ui.notify(lines.join("\n"), "info");
     }
   });
@@ -3380,6 +3671,8 @@ ${result.text}
       const gh = s.github;
       const lines = [
         "## \u{1F4E6} Version Status",
+        `Learn more at https://www.neuroskill.com`,
+        "",
         `- neuroloop local: **v${nl.local}**`,
         `- neuroloop npm latest: **v${nl.npmLatest ?? "?"}** (${nl.upToDate ? "latest" : "update available"})`,
         `- neuroskill local runtime: **v${ns.localInstalled ?? "none"}**`,
@@ -3413,7 +3706,7 @@ ${result.text}
       if (sub === "all") {
         pi.sendMessage({
           customType: NEUROSKILL_STATUS_TYPE,
-          content: readFileSync7(CHANGELOG_PATH, "utf8"),
+          content: readFileSync8(CHANGELOG_PATH, "utf8"),
           display: true,
           details: void 0
         });
@@ -3561,10 +3854,10 @@ ${result.text}
     }
   });
   pi.registerCommand("llm", {
-    description: "LLM control \xB7 /llm [status|route|connect|start|stop|list|add|remove|select|download|fit|chat \u2026]",
+    description: "LLM control \xB7 /llm [models|status|route|connect|start|stop|list|add|remove|select|download|cancel|pause|resume|fit|chat \u2026]",
     handler: async (args, handlerCtx) => {
       const parts = args.trim().split(/\s+/).filter(Boolean);
-      const sub = (parts[0] ?? "status").toLowerCase();
+      const sub = (parts[0] ?? "models").toLowerCase();
       if (sub === "route") {
         const llmStatus = await runNeuroSkill(["llm", "status"]);
         let skillRoute = null;
@@ -3601,7 +3894,7 @@ fallbacks: ${fallbacks}`,
         });
         return;
       }
-      if (sub === "status" || parts.length === 0) {
+      if (sub === "status") {
         const result = await runNeuroSkill(["llm", "status"]);
         if (result.ok) {
           const data = result.data;
@@ -3623,7 +3916,7 @@ ${lines.join("\n")}`,
             details: void 0
           });
         } else {
-          handlerCtx.ui.notify(result.error ?? "LLM status failed", "error");
+          handlerCtx.ui.notify("LLM server not running. Use /llm start or /llm models to manage models.", "warning");
         }
         return;
       }
@@ -3655,9 +3948,20 @@ ${lines.join("\n")}`,
         return;
       }
       if (sub === "list" || sub === "catalog") {
-        const result = await runNeuroSkill(["llm", "catalog"]);
-        if (result.ok) {
-          const data = result.data;
+        let data;
+        try {
+          const baseUrl = await getSkillServerBaseUrl();
+          const res = await fetch(`${baseUrl}/v1/llm/catalog`, {
+            headers: authHeaders(),
+            signal: AbortSignal.timeout(5e3)
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          data = await res.json();
+        } catch (e) {
+          handlerCtx.ui.notify(`Failed to fetch catalog: ${e instanceof Error ? e.message : String(e)}`, "error");
+          return;
+        }
+        {
           const entries = data?.entries ?? [];
           const active = data?.active_model ?? "\u2013";
           const mmproj = data?.active_mmproj ?? "\u2013";
@@ -3665,25 +3969,48 @@ ${lines.join("\n")}`,
             handlerCtx.ui.notify("Model catalog is empty. Use /llm add to add a model.", "warning");
             return;
           }
-          const lines = entries.map((e) => {
-            const mark = e.filename === active ? "\u25B6 " : "  ";
-            const state = e.state ?? e.status ?? "";
-            const size = e.size_gb ? `${e.size_gb} GB` : "";
+          const downloaded = [];
+          const available = [];
+          const downloading = [];
+          for (const e of entries) {
+            if (e.is_mmproj) continue;
+            const fname = String(e.filename ?? "");
+            const state = String(e.state ?? e.status ?? "not_downloaded");
+            const size = e.size_gb ? `${Number(e.size_gb).toFixed(1)} GB` : "";
             const quant = e.quant ?? "";
-            return `${mark}**${e.filename}**  ${quant}  ${size}  \`${state}\``;
-          });
-          const header = `Active: **${active}** \xB7 mmproj: **${mmproj}**`;
+            const family = e.family_name ?? "";
+            const params = e.params_b ? `${e.params_b}B` : "";
+            const info = [quant, params, size].filter(Boolean).join("  ");
+            const rec = e.recommended ? " \u2B50" : "";
+            if (state === "downloaded") {
+              const mark = fname === active ? "\u25B6 " : "  ";
+              downloaded.push(`${mark}**${fname}**  ${info}${rec}`);
+            } else if (state === "downloading") {
+              const pct = typeof e.progress === "number" ? ` ${Math.round(e.progress)}%` : "";
+              downloading.push(`  \u2B07 **${fname}**  ${info}${pct}`);
+            } else {
+              available.push(`  \u25CB ${family ? `_${family}_  ` : ""}**${fname}**  ${info}${rec}`);
+            }
+          }
+          const sections = [];
+          sections.push(`Active: **${active}**` + (mmproj !== "\u2013" ? ` \xB7 mmproj: **${mmproj}**` : ""));
+          if (downloaded.length) {
+            sections.push("\n**Downloaded:**\n" + downloaded.join("\n"));
+          }
+          if (downloading.length) {
+            sections.push("\n**Downloading:**\n" + downloading.join("\n"));
+          }
+          if (available.length) {
+            sections.push("\n**Available to download:**\n" + available.join("\n"));
+          }
+          sections.push("\n`/llm download <file>` \xB7 `/llm pause|resume|cancel [file]` \xB7 `/llm select <file>` \xB7 `/llm start`");
           pi.sendMessage({
             customType: NEUROSKILL_STATUS_TYPE,
             content: `## \u{1F916} LLM Catalog
-${header}
-
-${lines.join("\n")}`,
+${sections.join("\n")}`,
             display: true,
             details: void 0
           });
-        } else {
-          handlerCtx.ui.notify(result.error ?? "LLM catalog failed", "error");
         }
         return;
       }
@@ -3722,8 +4049,239 @@ ${lines.join("\n")}`,
           handlerCtx.ui.notify("Usage: /llm download <filename>", "warning");
           return;
         }
-        handlerCtx.ui.notify(`Downloading ${filename} \u2014 poll /llm list for progress`, "info");
-        await neuroCmd(["llm", "download", filename], "\u{1F916} LLM \u2014 download", handlerCtx);
+        try {
+          const baseUrl = await getSkillServerBaseUrl();
+          const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
+          const startRes = await fetch(`${baseUrl}/v1/llm/download/start`, {
+            method: "POST",
+            headers: hdrs,
+            body: JSON.stringify({ filename }),
+            signal: AbortSignal.timeout(1e4)
+          });
+          if (!startRes.ok) {
+            const body = await startRes.text().catch(() => "");
+            handlerCtx.ui.notify(`Download failed: HTTP ${startRes.status} ${body}`, "error");
+            return;
+          }
+        } catch (e) {
+          handlerCtx.ui.notify(`Download failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+          return;
+        }
+        handlerCtx.ui.notify(`Downloading ${filename} \u2014 progress shown in footer`, "info");
+        if (!llmDownloads.find((d) => d.filename === filename)) {
+          llmDownloads.push({ filename, progress: 0, state: "downloading" });
+        }
+        startLlmDownloadPoll();
+        return;
+      }
+      if (sub === "cancel" || sub === "pause" || sub === "resume") {
+        const target = parts[1] ?? (llmDownloads.length === 1 ? llmDownloads[0].filename : void 0);
+        if (!target) {
+          if (llmDownloads.length > 1) {
+            const names = llmDownloads.map((d) => d.filename).join(", ");
+            handlerCtx.ui.notify(`Multiple downloads active: ${names}
+Usage: /llm ${sub} <filename>`, "warning");
+          } else {
+            handlerCtx.ui.notify(`No download in progress. Usage: /llm ${sub} <filename>`, "warning");
+          }
+          return;
+        }
+        const endpoint = sub === "cancel" ? "cancel" : sub === "pause" ? "pause" : "resume";
+        try {
+          const baseUrl = await getSkillServerBaseUrl();
+          const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
+          const res = await fetch(`${baseUrl}/v1/llm/download/${endpoint}`, {
+            method: "POST",
+            headers: hdrs,
+            body: JSON.stringify({ filename: target }),
+            signal: AbortSignal.timeout(5e3)
+          });
+          if (res.ok) {
+            if (sub === "cancel") {
+              llmDownloads = llmDownloads.filter((d) => d.filename !== target);
+              if (llmDownloads.length === 0) stopLlmDownloadPoll();
+              uiTui?.requestRender();
+            }
+            handlerCtx.ui.notify(`${target}: ${sub} OK`, "info");
+          } else {
+            handlerCtx.ui.notify(`${sub} failed: HTTP ${res.status}`, "error");
+          }
+        } catch (e) {
+          handlerCtx.ui.notify(`${sub} failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+        }
+        return;
+      }
+      if (sub === "downloads" || sub === "models") {
+        let catData;
+        try {
+          const baseUrl = await getSkillServerBaseUrl();
+          const res = await fetch(`${baseUrl}/v1/llm/catalog`, {
+            headers: authHeaders(),
+            signal: AbortSignal.timeout(5e3)
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          catData = await res.json();
+        } catch (e) {
+          handlerCtx.ui.notify(`Failed to fetch catalog: ${e instanceof Error ? e.message : String(e)}`, "error");
+          return;
+        }
+        const catEntries = catData?.entries ?? [];
+        const activeModel = String(catData?.active_model ?? "");
+        const rows = catEntries.filter((e) => !e.is_mmproj).map((e) => ({
+          filename: String(e.filename ?? ""),
+          family: String(e.family_name ?? ""),
+          quant: String(e.quant ?? ""),
+          sizeGb: e.size_gb ? `${Number(e.size_gb).toFixed(1)} GB` : "",
+          state: String(e.state ?? "not_downloaded"),
+          progress: typeof e.progress === "number" ? e.progress : 0,
+          recommended: !!e.recommended,
+          isActive: String(e.filename ?? "") === activeModel
+        }));
+        if (!rows.length) {
+          handlerCtx.ui.notify("Model catalog is empty.", "warning");
+          return;
+        }
+        const buildOptions = () => rows.map((r) => {
+          let icon;
+          if (r.state === "downloaded") icon = r.isActive ? "\u25B6" : "\u2713";
+          else if (r.state === "downloading") icon = "\u2B07";
+          else if (r.state === "paused") icon = "\u23F8";
+          else if (r.state === "failed") icon = "\u2717";
+          else icon = "\u25CB";
+          const rec = r.recommended ? " \u2B50" : "";
+          return `${icon} ${r.filename}  ${r.quant}  ${r.sizeGb}${rec}`;
+        });
+        let keepOpen = true;
+        while (keepOpen) {
+          const options = [...buildOptions(), "\u2500\u2500 Cancel \u2500\u2500"];
+          const choice = await handlerCtx.ui.select("LLM Models \u2014 pick to download/select/manage", options);
+          if (!choice || choice === "\u2500\u2500 Cancel \u2500\u2500") break;
+          const idx = options.indexOf(choice);
+          if (idx < 0 || idx >= rows.length) break;
+          const row = rows[idx];
+          const actions = [];
+          if (row.state === "downloaded" && !row.isActive) actions.push("Select as active model");
+          if (row.state === "downloaded" && row.isActive) actions.push("Start LLM server");
+          if (row.state === "downloaded") actions.push("Delete from disk");
+          if (row.state === "not_downloaded" || row.state === "failed" || row.state === "cancelled") actions.push("Download");
+          if (row.state === "downloading") actions.push("Pause");
+          if (row.state === "paused") actions.push("Resume");
+          if (row.state === "downloading" || row.state === "paused") actions.push("Cancel download");
+          actions.push("Back to list");
+          const action = await handlerCtx.ui.select(`${row.filename}`, actions);
+          if (!action || action === "Back to list") continue;
+          const baseUrl = await getSkillServerBaseUrl();
+          const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
+          if (action === "Select as active model") {
+            try {
+              const res = await fetch(`${baseUrl}/v1/llm/selection/active-model`, {
+                method: "POST",
+                headers: hdrs,
+                body: JSON.stringify({ filename: row.filename }),
+                signal: AbortSignal.timeout(5e3)
+              });
+              if (res.ok) {
+                for (const r of rows) r.isActive = false;
+                row.isActive = true;
+                handlerCtx.ui.notify(`Selected ${row.filename}`, "info");
+              } else {
+                handlerCtx.ui.notify(`Select failed: HTTP ${res.status}`, "error");
+              }
+            } catch (e) {
+              handlerCtx.ui.notify(`Select failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+            }
+          } else if (action === "Start LLM server") {
+            handlerCtx.ui.notify("Starting LLM server\u2026", "info");
+            try {
+              const res = await fetch(`${baseUrl}/v1/llm/server/start`, {
+                method: "POST",
+                headers: hdrs,
+                body: "{}",
+                signal: AbortSignal.timeout(3e4)
+              });
+              if (res.ok) {
+                handlerCtx.ui.notify("LLM server started.", "info");
+                if (sessionModelRegistry) {
+                  await registerSkillLlmProvider(sessionModelRegistry).catch(() => {
+                  });
+                }
+              } else {
+                handlerCtx.ui.notify(`Start failed: HTTP ${res.status}`, "error");
+              }
+            } catch (e) {
+              handlerCtx.ui.notify(`Start failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+            }
+            keepOpen = false;
+          } else if (action === "Download") {
+            try {
+              const res = await fetch(`${baseUrl}/v1/llm/download/start`, {
+                method: "POST",
+                headers: hdrs,
+                body: JSON.stringify({ filename: row.filename }),
+                signal: AbortSignal.timeout(1e4)
+              });
+              if (res.ok) {
+                row.state = "downloading";
+                row.progress = 0;
+                if (!llmDownloads.find((d) => d.filename === row.filename)) {
+                  llmDownloads.push({ filename: row.filename, progress: 0, state: "downloading" });
+                }
+                startLlmDownloadPoll();
+                handlerCtx.ui.notify(`Downloading ${row.filename} \u2014 progress in footer`, "info");
+              } else {
+                handlerCtx.ui.notify(`Download failed: HTTP ${res.status}`, "error");
+              }
+            } catch (e) {
+              handlerCtx.ui.notify(`Download failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+            }
+          } else if (action === "Pause") {
+            await fetch(`${baseUrl}/v1/llm/download/pause`, {
+              method: "POST",
+              headers: hdrs,
+              body: JSON.stringify({ filename: row.filename }),
+              signal: AbortSignal.timeout(5e3)
+            }).catch(() => {
+            });
+            row.state = "paused";
+            handlerCtx.ui.notify(`Paused ${row.filename}`, "info");
+          } else if (action === "Resume") {
+            await fetch(`${baseUrl}/v1/llm/download/resume`, {
+              method: "POST",
+              headers: hdrs,
+              body: JSON.stringify({ filename: row.filename }),
+              signal: AbortSignal.timeout(5e3)
+            }).catch(() => {
+            });
+            row.state = "downloading";
+            handlerCtx.ui.notify(`Resumed ${row.filename}`, "info");
+          } else if (action === "Cancel download") {
+            await fetch(`${baseUrl}/v1/llm/download/cancel`, {
+              method: "POST",
+              headers: hdrs,
+              body: JSON.stringify({ filename: row.filename }),
+              signal: AbortSignal.timeout(5e3)
+            }).catch(() => {
+            });
+            row.state = "cancelled";
+            llmDownloads = llmDownloads.filter((dl) => dl.filename !== row.filename);
+            if (llmDownloads.length === 0) stopLlmDownloadPoll();
+            handlerCtx.ui.notify(`Cancelled ${row.filename}`, "info");
+          } else if (action === "Delete from disk") {
+            const confirm = await handlerCtx.ui.confirm("Delete model", `Delete ${row.filename} from disk?`);
+            if (confirm) {
+              await fetch(`${baseUrl}/v1/llm/download/delete`, {
+                method: "POST",
+                headers: hdrs,
+                body: JSON.stringify({ filename: row.filename }),
+                signal: AbortSignal.timeout(1e4)
+              }).catch(() => {
+              });
+              row.state = "not_downloaded";
+              if (row.isActive) row.isActive = false;
+              handlerCtx.ui.notify(`Deleted ${row.filename}`, "info");
+            }
+          }
+        }
         return;
       }
       if (sub === "edit") {
@@ -3770,6 +4328,112 @@ ${lines.join("\n")}`,
       await neuroCmd(["listen", ...parts], "\u{1F4E1} Live Stream", handlerCtx);
     }
   });
+  pi.registerCommand("connect", {
+    description: "Connect to a NeuroSkill server \xB7 /connect",
+    handler: async (_args, handlerCtx) => {
+      handlerCtx.ui.notify("Checking for local daemon...", "info");
+      const authSt = await checkAuthStatus();
+      if (authSt === "local") {
+        const port = getSkillPort();
+        pi.sendMessage({
+          customType: NEUROSKILL_STATUS_TYPE,
+          content: `## Connected Locally
+
+Daemon found on \`127.0.0.1:${port}\`. Auth token loaded automatically from:
+\`${getDaemonTokenPath()}\``,
+          display: true,
+          details: void 0
+        });
+        return;
+      }
+      const options = [
+        "LAN \u2014 connect to a daemon on your network",
+        "Remote \u2014 connect via iroh relay (TOTP pairing)",
+        "Cancel"
+      ];
+      const choice = await handlerCtx.ui.select(
+        "No local daemon found. How would you like to connect?",
+        options
+      );
+      if (!choice || choice === "Cancel") return;
+      if (choice.startsWith("LAN")) {
+        const hostPort = await handlerCtx.ui.input(
+          "Enter the daemon address (host:port, e.g. 192.168.1.10:18444):"
+        );
+        if (!hostPort) return;
+        const token = await handlerCtx.ui.input(
+          "Enter the daemon auth token.\nFind it on the server machine at:\n  macOS:   ~/Library/Application Support/skill/daemon/auth.token\n  Linux:   ~/.config/skill/daemon/auth.token\n  Windows: %APPDATA%\\skill\\daemon\\auth.token"
+        );
+        if (!token) return;
+        const [host, portStr] = hostPort.includes(":") ? hostPort.split(":") : [hostPort, "18444"];
+        const port = parseInt(portStr, 10) || 18444;
+        try {
+          const res = await fetch(`http://${host}:${port}/healthz`, {
+            signal: AbortSignal.timeout(5e3),
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            setSkillPort(port);
+            pi.sendMessage({
+              customType: NEUROSKILL_STATUS_TYPE,
+              content: `## Connected via LAN
+
+Daemon reachable at \`${host}:${port}\`. Connection verified.`,
+              display: true,
+              details: void 0
+            });
+          } else {
+            handlerCtx.ui.notify(`Daemon responded with HTTP ${res.status}. Check your token.`, "error");
+          }
+        } catch (err) {
+          handlerCtx.ui.notify(`Could not reach daemon at ${host}:${port}: ${err instanceof Error ? err.message : String(err)}`, "error");
+        }
+        return;
+      }
+      if (choice.startsWith("Remote")) {
+        pi.sendMessage({
+          customType: NEUROSKILL_STATUS_TYPE,
+          content: '## Remote Connection via iroh\n\n**Step 1:** On the server machine, create a TOTP credential:\n```\nneuroskill iroh totp create "my-client"\n```\n\n**Step 2:** Open the authenticator app and get the 6-digit code.\n\n**Step 3:** Enter the iroh endpoint ID and code below.',
+          display: true,
+          details: void 0
+        });
+        const endpointId = await handlerCtx.ui.input("Enter the server's iroh endpoint ID:");
+        if (!endpointId) return;
+        const otp = await handlerCtx.ui.input("Enter the 6-digit TOTP code:");
+        if (!otp) return;
+        const scopeChoice = await handlerCtx.ui.select(
+          "Permission scope:",
+          [
+            "read",
+            "full"
+          ]
+        );
+        const scope = scopeChoice || "read";
+        handlerCtx.ui.notify("Registering with iroh relay...", "info");
+        const result = await runNeuroSkill([
+          "iroh",
+          "clients",
+          "register",
+          endpointId,
+          "--otp",
+          otp,
+          "--scope",
+          scope
+        ]);
+        if (result.ok) {
+          pi.sendMessage({
+            customType: NEUROSKILL_STATUS_TYPE,
+            content: "## Remote Connection Established\n\nSuccessfully registered via iroh.\n```json\n" + result.text + "\n```",
+            display: true,
+            details: void 0
+          });
+        } else {
+          handlerCtx.ui.notify(`Registration failed: ${result.error}`, "error");
+        }
+        return;
+      }
+    }
+  });
   pi.registerShortcut("ctrl+shift+e", {
     description: "Show live EXG snapshot in chat",
     handler: async (handlerCtx) => {
@@ -3804,7 +4468,7 @@ var AGENT_SKILLS_DIR2 = getAgentSkillsDir();
 var SKILLS_DIR = join9(NEUROLOOP_DIR2, "skills");
 var SKILLS_SCAN_DIRS = [AGENT_SKILLS_DIR2, SKILLS_DIR];
 var METRICS_MD_PATH = join9(NEUROLOOP_DIR2, "METRICS.md");
-var LOCAL_NEUROLOOP_VERSION = JSON.parse(readFileSync8(join9(NEUROLOOP_DIR2, "package.json"), "utf8")).version;
+var LOCAL_NEUROLOOP_VERSION = JSON.parse(readFileSync9(join9(NEUROLOOP_DIR2, "package.json"), "utf8")).version;
 var runtime = await refreshRuntimeVersions(LOCAL_NEUROLOOP_VERSION);
 if (runtime.neuroloop.npmLatest) {
   const badge = runtime.neuroloop.upToDate ? "up-to-date" : "update available";
@@ -3860,13 +4524,17 @@ function ollamaModelEntry(id, paramSize = "") {
   };
 }
 async function registerOllamaModels() {
-  const models = [ollamaModelEntry(DEFAULT_OLLAMA_MODEL)];
-  const seen = /* @__PURE__ */ new Set([DEFAULT_OLLAMA_MODEL]);
+  const models = [];
+  const seen = /* @__PURE__ */ new Set();
+  let ollamaOnline = false;
   try {
     const res = await fetch("http://localhost:11434/api/tags", {
       signal: AbortSignal.timeout(3e3)
     });
     if (res.ok) {
+      ollamaOnline = true;
+      models.push(ollamaModelEntry(DEFAULT_OLLAMA_MODEL));
+      seen.add(DEFAULT_OLLAMA_MODEL);
       const { models: tags = [] } = await res.json();
       for (const tag of tags) {
         if (!seen.has(tag.name)) {
@@ -3877,6 +4545,7 @@ async function registerOllamaModels() {
     }
   } catch {
   }
+  if (!ollamaOnline) return;
   modelRegistry.registerProvider("ollama", {
     baseUrl: "http://localhost:11434/v1",
     // "OLLAMA_API_KEY" is treated as an env-var name by resolveConfigValue;
@@ -3898,7 +4567,7 @@ var loader = new DefaultResourceLoader({
     const seen = new Set(base.skills.map((s) => s.name));
     const addSkill = (skillFile) => {
       if (!existsSync9(skillFile)) return;
-      const content = readFileSync8(skillFile, "utf8");
+      const content = readFileSync9(skillFile, "utf8");
       const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
       if (!fmMatch) return;
       const fm = fmMatch[1];

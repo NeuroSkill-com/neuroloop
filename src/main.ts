@@ -16,7 +16,7 @@ if (major < 20) {
  * - ./skills/* + METRICS.md injected as individual skills
  * - neuroloopExtension factory (neuroskill status hook, custom tools)
  * - All built-in pi providers available (Anthropic, OpenAI, Gemini, …)
- * - Skill app local LLM auto-discovered (port 8375, OpenAI-compatible /v1/*)
+ * - Skill app local LLM auto-discovered (port 18444, OpenAI-compatible /v1/*)
  * - All Ollama models auto-discovered; gpt-oss:20b always present as default
  * - Full interactive TUI via InteractiveMode
  *
@@ -24,7 +24,7 @@ if (major < 20) {
  *   1. Model saved in session history
  *   2. Default from ~/.neuroloop/settings.json
  *   3. First built-in provider with a valid API key / OAuth token
- *   4. Skill app local LLM (skill-llm provider — auto-discovered on port 8375)
+ *   4. Skill app local LLM (skill-llm provider — auto-discovered on port 18444)
  *   5. First Ollama model (gpt-oss:20b when no other Ollama model listed first)
  */
 
@@ -143,16 +143,22 @@ function ollamaModelEntry(id: string, paramSize = "") {
 }
 
 async function registerOllamaModels(): Promise<void> {
-	// Start with the preconfigured default so it's always available even when
-	// Ollama is unreachable, and so it appears first in the model list.
-	const models = [ollamaModelEntry(DEFAULT_OLLAMA_MODEL)];
-	const seen = new Set<string>([DEFAULT_OLLAMA_MODEL]);
+	// Only register ollama provider if ollama is actually reachable.
+	// If offline, skip entirely — user can restart neuroloop when ollama comes online.
+	const models: ReturnType<typeof ollamaModelEntry>[] = [];
+	const seen = new Set<string>();
+	let ollamaOnline = false;
 
 	try {
 		const res = await fetch("http://localhost:11434/api/tags", {
 			signal: AbortSignal.timeout(3000),
 		});
 		if (res.ok) {
+			ollamaOnline = true;
+			// Add the default model first
+			models.push(ollamaModelEntry(DEFAULT_OLLAMA_MODEL));
+			seen.add(DEFAULT_OLLAMA_MODEL);
+
 			type TagEntry = { name: string; details?: { parameter_size?: string } };
 			const { models: tags = [] } = (await res.json()) as { models?: TagEntry[] };
 			for (const tag of tags) {
@@ -163,8 +169,10 @@ async function registerOllamaModels(): Promise<void> {
 			}
 		}
 	} catch {
-		// Ollama not running — proceed with just the default model.
+		// Ollama not running — skip registration entirely.
 	}
+
+	if (!ollamaOnline) return;
 
 	modelRegistry.registerProvider("ollama", {
 		baseUrl: "http://localhost:11434/v1",
