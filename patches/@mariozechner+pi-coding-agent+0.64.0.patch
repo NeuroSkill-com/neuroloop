@@ -1,0 +1,108 @@
+diff --git a/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive/components/model-selector.js b/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive/components/model-selector.js
+index f00652f..45ad89a 100644
+--- a/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive/components/model-selector.js
++++ b/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive/components/model-selector.js
+@@ -55,7 +55,7 @@ export class ModelSelectorComponent extends Container {
+             this.addChild(this.scopeHintText);
+         }
+         else {
+-            const hintText = "Only showing models with configured API keys (see README for details)";
++            const hintText = "Models without API keys shown dimmed — select to try anyway";
+             this.addChild(new Text(theme.fg("warning", hintText), 0, 0));
+         }
+         this.addChild(new Spacer(1));
+@@ -99,13 +99,14 @@ export class ModelSelectorComponent extends Container {
+         if (loadError) {
+             this.errorMessage = loadError;
+         }
+-        // Load available models (built-in models still work even if models.json failed)
++        // Load all models (built-in + custom), including those without auth
+         try {
+-            const availableModels = await this.modelRegistry.getAvailable();
+-            models = availableModels.map((model) => ({
++            const allModels = this.modelRegistry.getAll();
++            models = allModels.map((model) => ({
+                 provider: model.provider,
+                 id: model.id,
+                 model,
++                available: this.modelRegistry.hasConfiguredAuth(model),
+             }));
+         }
+         catch (error) {
+@@ -132,7 +133,7 @@ export class ModelSelectorComponent extends Container {
+     }
+     sortModels(models) {
+         const sorted = [...models];
+-        // Sort: current model first, then by provider
++        // Sort: current model first, then available before unavailable, then by provider
+         sorted.sort((a, b) => {
+             const aIsCurrent = modelsAreEqual(this.currentModel, a.model);
+             const bIsCurrent = modelsAreEqual(this.currentModel, b.model);
+@@ -140,6 +141,10 @@ export class ModelSelectorComponent extends Container {
+                 return -1;
+             if (!aIsCurrent && bIsCurrent)
+                 return 1;
++            const aAvail = a.available !== false ? 0 : 1;
++            const bAvail = b.available !== false ? 0 : 1;
++            if (aAvail !== bAvail)
++                return aAvail - bAvail;
+             return a.provider.localeCompare(b.provider);
+         });
+         return sorted;
+@@ -182,19 +187,22 @@ export class ModelSelectorComponent extends Container {
+                 continue;
+             const isSelected = i === this.selectedIndex;
+             const isCurrent = modelsAreEqual(this.currentModel, item.model);
++            const isAvailable = item.available !== false;
+             let line = "";
+             if (isSelected) {
+                 const prefix = theme.fg("accent", "→ ");
+                 const modelText = `${item.id}`;
+                 const providerBadge = theme.fg("muted", `[${item.provider}]`);
+                 const checkmark = isCurrent ? theme.fg("success", " ✓") : "";
+-                line = `${prefix + theme.fg("accent", modelText)} ${providerBadge}${checkmark}`;
++                const noKey = !isAvailable ? theme.fg("muted", " (no key)") : "";
++                line = `${prefix + theme.fg("accent", modelText)} ${providerBadge}${checkmark}${noKey}`;
+             }
+             else {
+-                const modelText = `  ${item.id}`;
++                const modelText = isAvailable ? `  ${item.id}` : theme.fg("muted", `  ${item.id}`);
+                 const providerBadge = theme.fg("muted", `[${item.provider}]`);
+                 const checkmark = isCurrent ? theme.fg("success", " ✓") : "";
+-                line = `${modelText} ${providerBadge}${checkmark}`;
++                const noKey = !isAvailable ? theme.fg("muted", " (no key)") : "";
++                line = `${modelText} ${providerBadge}${checkmark}${noKey}`;
+             }
+             this.listContainer.addChild(new Text(line, 0, 0));
+         }
+diff --git a/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive/interactive-mode.js b/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive/interactive-mode.js
+index 2e42f6d..a8c32a9 100644
+--- a/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive/interactive-mode.js
++++ b/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive/interactive-mode.js
+@@ -225,7 +225,7 @@ export class InteractiveMode {
+                 // Get available models (scoped or from registry)
+                 const models = this.session.scopedModels.length > 0
+                     ? this.session.scopedModels.map((s) => s.model)
+-                    : this.session.modelRegistry.getAvailable();
++                    : this.session.modelRegistry.getAll();
+                 if (models.length === 0)
+                     return null;
+                 // Create items with provider/id format
+@@ -2873,7 +2873,7 @@ export class InteractiveMode {
+         }
+         this.session.modelRegistry.refresh();
+         try {
+-            return await this.session.modelRegistry.getAvailable();
++            return this.session.modelRegistry.getAll();
+         }
+         catch {
+             return [];
+@@ -2910,7 +2910,7 @@ export class InteractiveMode {
+     async showModelsSelector() {
+         // Get all available models
+         this.session.modelRegistry.refresh();
+-        const allModels = this.session.modelRegistry.getAvailable();
++        const allModels = this.session.modelRegistry.getAll();
+         if (allModels.length === 0) {
+             this.showStatus("No models available");
+             return;
