@@ -517,6 +517,33 @@ Available commands and typical args:
   daemon-version                     → show daemon version and protocol info
   daemon-log                         → show recent daemon log lines
   subscribe [--events <csv>] [--fields <csv>] [--max-hz <n>] → set broadcast filter
+  history stats                      → recording history stats
+  history daily [--limit <days>]     → daily recording minutes
+  history find --start <utc>         → find session CSV for a timestamp
+  history delete <csv_path>          → delete a session file
+  metrics --start <utc> --end <utc>  → session metrics for a time range
+  timeseries --start <utc> --end <utc> → timeseries data (band powers, scores)
+  sleep-stages --start <utc> --end <utc> → sleep stage epochs
+  csv-metrics <csv_path>             → metrics for a single CSV file
+  day-metrics <paths>                → aggregated metrics for multiple CSVs
+  location <csv_path> --start --end  → GPS location points for a session
+  embedding-count --start --end      → count EEG embeddings in a time range
+  labels list                        → list all labels
+  labels update <id> "text"          → update label text/context
+  labels delete <id>                 → delete a label
+  labels search-by-eeg --start --end → find labels near EEG embeddings
+  labels index-stats                 → label HNSW index statistics
+  labels rebuild-index               → rebuild label HNSW indices
+  index stats                        → global EEG search index stats
+  index rebuild                      → rebuild global search index
+  settings <key> [json]              → get/set daemon settings (filter, storage, tts, inference, overlap, gpu, ...)
+  activity bands                     → latest EEG band powers
+  activity window                    → current active window
+  models status|config|catalog       → EXG model management
+  models reembed                     → trigger label/embedding reprocessing
+  screenshots config|metrics|ocr-status|dir → screenshot pipeline status
+  skills list|sync|disabled          → skills management
+  web-cache stats|list|clear         → web cache management
   raw <json>                         → send arbitrary JSON to the server`,
 		parameters: Type.Object({
 			command: Type.String({ description: "The neuroskill subcommand to run." }),

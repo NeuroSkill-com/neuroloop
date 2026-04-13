@@ -2607,6 +2607,33 @@ Available commands and typical args:
   daemon-version                     \u2192 show daemon version and protocol info
   daemon-log                         \u2192 show recent daemon log lines
   subscribe [--events <csv>] [--fields <csv>] [--max-hz <n>] \u2192 set broadcast filter
+  history stats                      \u2192 recording history stats
+  history daily [--limit <days>]     \u2192 daily recording minutes
+  history find --start <utc>         \u2192 find session CSV for a timestamp
+  history delete <csv_path>          \u2192 delete a session file
+  metrics --start <utc> --end <utc>  \u2192 session metrics for a time range
+  timeseries --start <utc> --end <utc> \u2192 timeseries data (band powers, scores)
+  sleep-stages --start <utc> --end <utc> \u2192 sleep stage epochs
+  csv-metrics <csv_path>             \u2192 metrics for a single CSV file
+  day-metrics <paths>                \u2192 aggregated metrics for multiple CSVs
+  location <csv_path> --start --end  \u2192 GPS location points for a session
+  embedding-count --start --end      \u2192 count EEG embeddings in a time range
+  labels list                        \u2192 list all labels
+  labels update <id> "text"          \u2192 update label text/context
+  labels delete <id>                 \u2192 delete a label
+  labels search-by-eeg --start --end \u2192 find labels near EEG embeddings
+  labels index-stats                 \u2192 label HNSW index statistics
+  labels rebuild-index               \u2192 rebuild label HNSW indices
+  index stats                        \u2192 global EEG search index stats
+  index rebuild                      \u2192 rebuild global search index
+  settings <key> [json]              \u2192 get/set daemon settings (filter, storage, tts, inference, overlap, gpu, ...)
+  activity bands                     \u2192 latest EEG band powers
+  activity window                    \u2192 current active window
+  models status|config|catalog       \u2192 EXG model management
+  models reembed                     \u2192 trigger label/embedding reprocessing
+  screenshots config|metrics|ocr-status|dir \u2192 screenshot pipeline status
+  skills list|sync|disabled          \u2192 skills management
+  web-cache stats|list|clear         \u2192 web cache management
   raw <json>                         \u2192 send arbitrary JSON to the server`,
     parameters: Type4.Object({
       command: Type4.String({ description: "The neuroskill subcommand to run." }),
