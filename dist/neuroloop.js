@@ -3280,7 +3280,7 @@ function getCompressionModeName(mode2) {
 }
 
 // src/neuroloop.ts
-var _pkgVersion = (true ? "0.1.1" : void 0) ?? JSON.parse(readFileSync9(join9(dirname4(fileURLToPath3(import.meta.url)), "../package.json"), "utf8")).version;
+var _pkgVersion = (true ? "0.1.2" : void 0) ?? JSON.parse(readFileSync9(join9(dirname4(fileURLToPath3(import.meta.url)), "../package.json"), "utf8")).version;
 var AGENT_DIR4 = join9(homedir9(), ".neuroskill");
 var VERSION_STATE_DIR = join9(homedir9(), ".neuroloop");
 var NEUROLOOP_DIR = join9(dirname4(fileURLToPath3(import.meta.url)), "..");
