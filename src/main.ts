@@ -322,6 +322,59 @@ const mode = new InteractiveMode(session, {
 	initialMessage: process.argv[2],
 });
 
+// Patch skill display: compact comma-separated names for skills-cache items,
+// normal per-line display for everything else.
+const origFormatScopeGroups = (mode as any).formatScopeGroups.bind(mode);
+const origFmtPath = (mode as any).formatDisplayPath.bind(mode);
+(mode as any).formatScopeGroups = (groups: any[], options: any) => {
+	const lines: string[] = [];
+	for (const group of groups) {
+		lines.push(`  \x1b[36m${group.scope}\x1b[0m`);
+		const sorted = [...group.paths].sort((a: any, b: any) => a.path.localeCompare(b.path));
+		const cacheItems: string[] = [];
+		const otherItems: any[] = [];
+		let cacheRoot = "";
+		for (const item of sorted) {
+			const p: string = item.path;
+			const cacheMatch = p.match(/skills-cache\/(?:skills\/)?([^/]+)\/SKILL\.md$/);
+			if (cacheMatch) {
+				cacheItems.push(cacheMatch[1]);
+				if (!cacheRoot) {
+					cacheRoot = origFmtPath(p).replace(/(?:skills\/)?[^/]+\/SKILL\.md$/, "");
+				}
+			} else if (p.match(/skills-cache\/SKILL\.md$/)) {
+				cacheRoot = origFmtPath(p).replace(/SKILL\.md$/, "");
+			} else {
+				otherItems.push(item);
+			}
+		}
+		// Skills-cache: root line + comma-separated names
+		if (cacheRoot || cacheItems.length > 0) {
+			lines.push(`    root \x1b[2m${cacheRoot}\x1b[22m`);
+			if (cacheItems.length > 0) {
+				lines.push(`    \x1b[2m${cacheItems.join(", ")}\x1b[22m`);
+			}
+		}
+		// Non-cache items: one per line, normal color, local paths as ./
+		const cwd = process.cwd();
+		for (const item of otherItems) {
+			const p: string = item.path;
+			const display = p.startsWith(cwd) ? "./" + relative(cwd, p) : options.formatPath(item);
+			lines.push(`    ${display}`);
+		}
+		// Packages (unchanged)
+		const sortedPkgs = Array.from((group.packages as Map<string, any[]>).entries()).sort(([a]: any, [b]: any) => a.localeCompare(b));
+		for (const [source, items] of sortedPkgs) {
+			lines.push(`    ${source}`);
+			const sortedPkg = [...items].sort((a: any, b: any) => a.path.localeCompare(b.path));
+			for (const item of sortedPkg) {
+				lines.push(`\x1b[2m      ${options.formatPackagePath(item, source)}\x1b[22m`);
+			}
+		}
+	}
+	return lines.join("\n");
+};
+
 await mode.run();
 
 // ---------------------------------------------------------------------------

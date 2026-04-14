@@ -3,7 +3,7 @@
 // src/main.ts
 import { existsSync as existsSync9, readdirSync as readdirSync2, readFileSync as readFileSync9 } from "node:fs";
 import { homedir as homedir9 } from "node:os";
-import { basename, dirname as dirname5, join as join9 } from "node:path";
+import { basename, dirname as dirname5, join as join9, relative } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 import {
   AuthStorage,
@@ -3284,7 +3284,7 @@ ${result.error}` : result.message, "error");
         if (exgOnline) {
           const parsed = parseExgMetrics(msg);
           const prevBands = exgMetrics?.bands;
-          if (prevBands && parsed.bands.rel_delta == null) {
+          if (prevBands && parsed.bands?.rel_delta == null) {
             parsed.bands = prevBands;
           }
           exgMetrics = parsed;
@@ -4811,6 +4811,53 @@ var mode = new InteractiveMode(session, {
   modelFallbackMessage,
   initialMessage: process.argv[2]
 });
+var origFormatScopeGroups = mode.formatScopeGroups.bind(mode);
+var origFmtPath = mode.formatDisplayPath.bind(mode);
+mode.formatScopeGroups = (groups, options) => {
+  const lines = [];
+  for (const group of groups) {
+    lines.push(`  \x1B[36m${group.scope}\x1B[0m`);
+    const sorted = [...group.paths].sort((a, b) => a.path.localeCompare(b.path));
+    const cacheItems = [];
+    const otherItems = [];
+    let cacheRoot = "";
+    for (const item of sorted) {
+      const p = item.path;
+      const cacheMatch = p.match(/skills-cache\/(?:skills\/)?([^/]+)\/SKILL\.md$/);
+      if (cacheMatch) {
+        cacheItems.push(cacheMatch[1]);
+        if (!cacheRoot) {
+          cacheRoot = origFmtPath(p).replace(/(?:skills\/)?[^/]+\/SKILL\.md$/, "");
+        }
+      } else if (p.match(/skills-cache\/SKILL\.md$/)) {
+        cacheRoot = origFmtPath(p).replace(/SKILL\.md$/, "");
+      } else {
+        otherItems.push(item);
+      }
+    }
+    if (cacheRoot || cacheItems.length > 0) {
+      lines.push(`    root \x1B[2m${cacheRoot}\x1B[22m`);
+      if (cacheItems.length > 0) {
+        lines.push(`    \x1B[2m${cacheItems.join(", ")}\x1B[22m`);
+      }
+    }
+    const cwd = process.cwd();
+    for (const item of otherItems) {
+      const p = item.path;
+      const display = p.startsWith(cwd) ? "./" + relative(cwd, p) : options.formatPath(item);
+      lines.push(`    ${display}`);
+    }
+    const sortedPkgs = Array.from(group.packages.entries()).sort(([a], [b]) => a.localeCompare(b));
+    for (const [source, items] of sortedPkgs) {
+      lines.push(`    ${source}`);
+      const sortedPkg = [...items].sort((a, b) => a.path.localeCompare(b.path));
+      for (const item of sortedPkg) {
+        lines.push(`\x1B[2m      ${options.formatPackagePath(item, source)}\x1B[22m`);
+      }
+    }
+  }
+  return lines.join("\n");
+};
 await mode.run();
 console.log(`
 Skills loaded (${loadedSkills.length}):`);

@@ -1257,7 +1257,7 @@ Available commands and typical args:
 					// Preserve band data from EegBands stream if the status
 					// snapshot doesn't include bands (it usually doesn't).
 					const prevBands = exgMetrics?.bands;
-					if (prevBands && parsed.bands.rel_delta == null) {
+					if (prevBands && parsed.bands?.rel_delta == null) {
 						parsed.bands = prevBands;
 					}
 					exgMetrics   = parsed;
