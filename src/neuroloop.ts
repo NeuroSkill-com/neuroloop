@@ -22,7 +22,6 @@ import { fileURLToPath } from "node:url";
 
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import { matchesKey, Key } from "@mariozechner/pi-tui";
 import type { TUI } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { getMarkdownTheme } from "@mariozechner/pi-coding-agent";
@@ -38,6 +37,7 @@ import {
 	createExgPanel, pushHistory, clearHistory, type ExgPanel,
 	createOverlayManager, type OverlayManager,
 	renderLogo, renderTagline,
+	createLlmPanel, type LlmPanel, type LlmModelEntry,
 } from "./tui/index.ts";
 
 const _pkgVersion: string =
@@ -727,6 +727,10 @@ Available commands and typical args:
 		},
 	} satisfies ToolDefinition);
 
+	// NOTE: Ctrl+K clears terminal on Mac/Linux, Ctrl+E is editor line-end,
+	// Ctrl+L is model selector — all conflict with built-in shortcuts.
+	// Overlays are accessible via /commands (command palette), /exg, /llm.
+
 	// ── 4. UI extensions ──────────────────────────────────────────────────────
 
 	interface ExgMetrics {
@@ -776,8 +780,8 @@ Available commands and typical args:
 	let overlayManager: OverlayManager | null = null;
 	let commandPalette: ReturnType<typeof createCommandPalette> | null = null;
 	let exgPanel: ExgPanel | null = null;
+	let llmPanel: LlmPanel | null = null;
 	let overlayKeyCleanup: (() => void) | null = null;
-	let inputListenerCleanup: (() => void) | null = null;
 
 	// Initialize theme from persisted preference
 	initTheme();
@@ -791,9 +795,14 @@ Available commands and typical args:
 	let llmDownloadSpin = 0;
 	let llmDownloadPollTimer: ReturnType<typeof setInterval> | null = null;
 
+	let llmDownloadPollInFlight = false;
+
 	function startLlmDownloadPoll(): void {
 		if (llmDownloadPollTimer) return;
 		llmDownloadPollTimer = setInterval(async () => {
+			// Guard against overlapping polls (fetch can take > 2 s)
+			if (llmDownloadPollInFlight) return;
+			llmDownloadPollInFlight = true;
 			try {
 				const baseUrl = await getSkillServerBaseUrl();
 				const res = await fetch(`${baseUrl}/v1/llm/downloads`, {
@@ -815,13 +824,19 @@ Available commands and typical args:
 				// Keep only active downloads
 				llmDownloads = downloads
 					.filter((d) => d.state === "downloading" || d.state === "paused")
-					.map((d) => ({ filename: d.filename, progress: d.progress ?? 0, state: d.state }));
+					.map((d) => {
+						// Daemon may report progress as 0–1 or 0–100; normalise to 0–100
+						let pct = d.progress ?? 0;
+						if (pct > 0 && pct <= 1) pct *= 100;
+						return { filename: d.filename, progress: pct, state: d.state };
+					});
 				llmDownloadSpin++;
 				uiTui?.requestRender();
 
 				// Stop polling when no active downloads remain
 				if (llmDownloads.length === 0) stopLlmDownloadPoll();
 			} catch { /* retry next tick */ }
+			finally { llmDownloadPollInFlight = false; }
 		}, 2000);
 	}
 
@@ -1132,8 +1147,10 @@ Available commands and typical args:
 				lines.push(truncateToWidth(" " + hintStr, width));
 
 				// ── row 5: keybinding hints for overlays ─────────────────────
-				const overlayHints = theme.fg("muted", "ctrl+k") + theme.fg("dim", " commands")
-					+ theme.fg("dim", " · ") + theme.fg("muted", "ctrl+e") + theme.fg("dim", " EXG panel");
+				const overlayHints = theme.fg("muted", "/exg") + theme.fg("dim", " brain")
+					+ theme.fg("dim", " · ") + theme.fg("muted", "/llm") + theme.fg("dim", " models")
+					+ theme.fg("dim", " · ") + theme.fg("muted", "/theme") + theme.fg("dim", " colors")
+					+ theme.fg("dim", " · ") + theme.fg("muted", "/toasts") + theme.fg("dim", " alerts");
 				lines.push(truncateToWidth(" " + overlayHints, width));
 
 				// ── row 6: separator ────────────────────────────────────────
@@ -1387,6 +1404,9 @@ Available commands and typical args:
 	// ── 4c. session_start ─────────────────────────────────────────────────────
 
 	pi.on("session_start", (_event, ctx) => {
+		// Clear the terminal once before any output so we start fresh.
+		process.stdout.write("\x1b[2J\x1b[H");
+
 		uiNotify = (msg, level) => ctx.ui.notify(msg, level);
 		sessionModelRegistry = ctx.modelRegistry as unknown as { registerProvider: (id: string, cfg: unknown) => void };
 		if (!skillsSyncShown && process.env.NEUROLOOP_SKILLS_SYNC_STATUS) {
@@ -1538,23 +1558,148 @@ Available commands and typical args:
 				isVisible: () => exgPanel?.isVisible() ?? false,
 			});
 
+			// ── LLM manager panel (Ctrl+L or /llm) ──────────────────────
+			llmPanel?.dispose();
+			llmPanel = createLlmPanel(tui, theme, {
+				fetchCatalog: async () => {
+					try {
+						const baseUrl = await getSkillServerBaseUrl();
+						const res = await fetch(`${baseUrl}/v1/llm/catalog`, {
+							headers: authHeaders(), signal: AbortSignal.timeout(5000),
+						});
+						if (!res.ok) return null;
+						const data = (await res.json()) as Record<string, unknown>;
+						const raw = (data.entries ?? []) as Array<Record<string, unknown>>;
+						const entries: LlmModelEntry[] = raw.map(e => {
+							const fname = String(e.filename ?? "");
+							// Merge live download progress from the poll tracker
+							// (llmDownloads is already normalised to 0–100)
+							const live = llmDownloads.find(d => d.filename === fname);
+							const state = live?.state ?? String(e.state ?? e.status ?? "not_downloaded");
+							// Catalog may report 0–1 or 0–100; live data is always 0–100
+							let progress: number | undefined;
+							if (live) {
+								progress = live.progress;
+							} else if (typeof e.progress === "number") {
+								progress = e.progress <= 1 && e.progress > 0 ? e.progress * 100 : e.progress;
+							}
+							return {
+								filename:    fname,
+								state,
+								sizeGb:      typeof e.size_gb === "number" ? e.size_gb : undefined,
+								quant:       e.quant ? String(e.quant) : undefined,
+								paramsB:     e.params_b ? String(e.params_b) : undefined,
+								familyName:  e.family_name ? String(e.family_name) : undefined,
+								recommended: !!e.recommended,
+								isMmproj:    !!e.is_mmproj,
+								progress,
+							};
+						});
+						return {
+							entries,
+							activeModel:  String(data.active_model ?? "–"),
+							activeMmproj: String(data.active_mmproj ?? "–"),
+						};
+					} catch { return null; }
+				},
+				fetchStatus: async () => {
+					try {
+						const baseUrl = await getSkillServerBaseUrl();
+						const res = await fetch(`${baseUrl}/v1/llm/server/status`, {
+							headers: authHeaders(), signal: AbortSignal.timeout(3000),
+						});
+						if (!res.ok) return null;
+						const data = (await res.json()) as Record<string, unknown>;
+						return {
+							status:        String(data.status ?? "unknown"),
+							modelName:     data.model_name ? String(data.model_name) : undefined,
+							nCtx:          typeof data.n_ctx === "number" ? data.n_ctx : undefined,
+							supportsVision: !!data.supports_vision,
+						};
+					} catch { return null; }
+				},
+				onAction: async (action, filename) => {
+					// Run LLM actions directly — never send to the LLM
+					const notify = uiNotify ?? (() => {});
+					try {
+						const baseUrl = await getSkillServerBaseUrl();
+						const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
+
+						if (action === "start") {
+							notify("Starting LLM server…", "info");
+							fetch(`${baseUrl}/v1/llm/server/start`, { method: "POST", headers: hdrs, body: "{}", signal: AbortSignal.timeout(10000) })
+								.then(() => notify("LLM server starting — loading model", "info"))
+								.catch(e => notify(`Start failed: ${e instanceof Error ? e.message : String(e)}`, "error"));
+							return;
+						} else if (action === "stop") {
+							fetch(`${baseUrl}/v1/llm/server/stop`, { method: "POST", headers: hdrs, signal: AbortSignal.timeout(5000) })
+								.then(() => notify("LLM server stopped", "info"))
+								.catch(e => notify(`Stop failed: ${e instanceof Error ? e.message : String(e)}`, "error"));
+							return;
+						} else if (action === "select" && filename) {
+							await fetch(`${baseUrl}/v1/llm/select`, { method: "POST", headers: hdrs, body: JSON.stringify({ filename }), signal: AbortSignal.timeout(5000) });
+							notify(`Active model set to ${filename}`, "info");
+						} else if (action === "download" && filename) {
+							notify(`Starting download: ${filename}`, "info");
+							if (!llmDownloads.find(d => d.filename === filename)) {
+								llmDownloads.push({ filename, progress: 0, state: "downloading" });
+							}
+							startLlmDownloadPoll();
+							uiTui?.requestRender();
+							// Fire-and-forget REST call
+							fetch(`${baseUrl}/v1/llm/download/start`, { method: "POST", headers: hdrs, body: JSON.stringify({ filename }), signal: AbortSignal.timeout(10000) })
+								.then(r => { if (!r.ok) notify(`Download request failed: HTTP ${r.status}`, "error"); })
+								.catch(e => notify(`Download request failed: ${e instanceof Error ? e.message : String(e)}`, "error"));
+						} else if (action === "pause" && filename) {
+							await fetch(`${baseUrl}/v1/llm/download/pause`, { method: "POST", headers: hdrs, body: JSON.stringify({ filename }), signal: AbortSignal.timeout(5000) });
+							notify(`${filename}: paused`, "info");
+						} else if (action === "resume" && filename) {
+							await fetch(`${baseUrl}/v1/llm/download/resume`, { method: "POST", headers: hdrs, body: JSON.stringify({ filename }), signal: AbortSignal.timeout(5000) });
+							notify(`${filename}: resumed`, "info");
+						} else if (action === "connect") {
+							notify("Connecting Skill LLM…", "info");
+							const started = await startSkillLlmServer("auto");
+							notify(started.message, started.ok ? "info" : "error");
+							if (started.ok && sessionModelRegistry) {
+								await registerSkillLlmProvider(sessionModelRegistry);
+							}
+						} else if (action === "fit") {
+							const result = await runNeuroSkill(["llm", "fit"]);
+							if (result.ok && result.text) {
+								pi.sendMessage({ customType: NEUROSKILL_STATUS_TYPE, content: `## 📐 LLM Fit\n\`\`\`\n${result.text}\n\`\`\``, display: true, details: undefined });
+							} else {
+								notify("Failed to check model fit", "error");
+							}
+						} else if (action === "route") {
+							// Show route info as a chat message (read-only, not sent to LLM)
+							const llmStatus = await runNeuroSkill(["llm", "status"]);
+							let routeInfo = "unknown";
+							if (llmStatus.ok && llmStatus.data) {
+								const data = llmStatus.data as Record<string, unknown>;
+								if (String(data.status ?? "").toLowerCase() === "running") {
+									routeInfo = `skill-llm${data.mode ? ` (${data.mode})` : ""}`;
+								}
+							}
+							notify(`LLM route: ${routeInfo}`, "info");
+						}
+					} catch (e) {
+						notify(`LLM action failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+					}
+				},
+			});
+			overlayManager.register({
+				id: "llm-panel",
+				modal: true,
+				show: () => llmPanel?.show(),
+				hide: () => llmPanel?.hide(),
+				isVisible: () => llmPanel?.isVisible() ?? false,
+			});
+
 			// ── Global keyboard shortcuts ────────────────────────────────
-			inputListenerCleanup?.();
-			const keyListener = (data: string) => {
-				// Ctrl+K → command palette
-				if (matchesKey(data, Key.ctrl("k"))) {
-					overlayManager?.toggle("command-palette");
-					return { consume: true };
-				}
-				// Ctrl+E → EXG sidebar panel
-				if (matchesKey(data, Key.ctrl("e"))) {
-					overlayManager?.toggle("exg-panel");
-					return { consume: true };
-				}
-				return undefined;
-			};
-			tui.addInputListener(keyListener);
-			inputListenerCleanup = () => tui.removeInputListener(keyListener);
+			// Keyboard shortcuts are registered via registerShortcut() in
+			// the extension setup (outside session_start), not via raw
+			// addInputListener, to avoid interfering with framework
+			// handlers like Ctrl+D (quit) and Ctrl+L (model selector).
 
 			// Check auth/connection status, then discover port and open WebSocket.
 			checkAuthStatus().then(() => tui.requestRender());
@@ -1648,16 +1793,26 @@ Available commands and typical args:
 					}
 
 					// ── LLM download progress ────────────────────────────
-					for (const dl of llmDownloads) {
-						const icon = dl.state === "paused"
-							? theme.fg("warning", "⏸")
-							: theme.fg("accent", SYNC_SPINNER[llmDownloadSpin % SYNC_SPINNER.length]);
-						lines.push(truncateToWidth(
-							" " + icon + " " +
-							theme.fg("dim", dl.filename + " ") +
-							theme.fg("muted", progressBar(dl.progress)),
-							width,
-						));
+					if (llmDownloads.length) {
+						lines.push(sep(theme, width));
+						for (const dl of llmDownloads) {
+							const icon = dl.state === "paused"
+								? theme.fg("warning", "⏸")
+								: theme.fg("accent", SYNC_SPINNER[llmDownloadSpin % SYNC_SPINNER.length]);
+							const pct = Math.max(0, Math.min(100, Math.round(dl.progress)));
+							const barWidth = 20;
+							const filled = Math.round((pct / 100) * barWidth);
+							const empty = Math.max(0, barWidth - filled);
+							const bar = theme.fg("accent", "█".repeat(filled)) + theme.fg("dim", "░".repeat(empty));
+							const pctStr = theme.bold(`${pct}%`);
+							lines.push(truncateToWidth(
+								" " + icon + "  " +
+								theme.fg("accent", dl.filename) + "  " +
+								bar + " " + pctStr,
+								width,
+							));
+						}
+						lines.push(""); // spacing before status bar
 					}
 
 					// ── status bar: cwd · EXG · context · model ─────────────
@@ -1700,8 +1855,8 @@ Available commands and typical args:
 		overlayManager?.dispose(); overlayManager = null;
 		commandPalette?.dispose(); commandPalette = null;
 		exgPanel?.dispose(); exgPanel = null;
+		llmPanel?.dispose(); llmPanel = null;
 		overlayKeyCleanup?.(); overlayKeyCleanup = null;
-		inputListenerCleanup?.(); inputListenerCleanup = null;
 		clearHistory();
 		resetToastCooldowns();
 
@@ -2485,7 +2640,18 @@ Available commands and typical args:
 		},
 		handler: async (args, handlerCtx) => {
 			const parts = args.trim().split(/\s+/).filter(Boolean);
-			const sub = (parts[0] ?? "models").toLowerCase();
+			const sub = (parts[0] ?? "").toLowerCase();
+
+			// No args → open LLM manager popup
+			if (!sub) {
+				if (llmPanel) {
+					overlayManager?.show("llm-panel");
+				} else {
+					// Fallback if panel not initialized (shouldn't happen)
+					handlerCtx.ui.notify("LLM panel not available — try /llm models", "warning");
+				}
+				return;
+			}
 
 			// ── route ────────────────────────────────────────────────
 			if (sub === "route") {
@@ -2710,31 +2876,33 @@ Available commands and typical args:
 					handlerCtx.ui.notify("Usage: /llm download <filename>", "warning");
 					return;
 				}
-				// Start download via REST API
-				try {
-					const baseUrl = await getSkillServerBaseUrl();
-					const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
-					const startRes = await fetch(`${baseUrl}/v1/llm/download/start`, {
-						method: "POST", headers: hdrs,
-						body: JSON.stringify({ filename }),
-						signal: AbortSignal.timeout(10000),
-					});
-					if (!startRes.ok) {
-						const body = await startRes.text().catch(() => "");
-						handlerCtx.ui.notify(`Download failed: HTTP ${startRes.status} ${body}`, "error");
-						return;
-					}
-				} catch (e) {
-					handlerCtx.ui.notify(`Download failed: ${e instanceof Error ? e.message : String(e)}`, "error");
-					return;
-				}
-
-				// Track in footer and start polling if not already
-				handlerCtx.ui.notify(`Downloading ${filename} — progress shown in footer`, "info");
+				// Fire-and-forget: start download then immediately return
+				// so the command handler doesn't block TUI input.
+				handlerCtx.ui.notify(`Starting download: ${filename}`, "info");
 				if (!llmDownloads.find((d) => d.filename === filename)) {
 					llmDownloads.push({ filename, progress: 0, state: "downloading" });
 				}
 				startLlmDownloadPoll();
+				uiTui?.requestRender();
+
+				// Kick off the REST call in the background (non-blocking)
+				(async () => {
+					try {
+						const baseUrl = await getSkillServerBaseUrl();
+						const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
+						const startRes = await fetch(`${baseUrl}/v1/llm/download/start`, {
+							method: "POST", headers: hdrs,
+							body: JSON.stringify({ filename }),
+							signal: AbortSignal.timeout(10000),
+						});
+						if (!startRes.ok) {
+							const body = await startRes.text().catch(() => "");
+							uiNotify?.(`Download request failed: HTTP ${startRes.status} ${body}`, "error");
+						}
+					} catch (e) {
+						uiNotify?.(`Download request failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+					}
+				})();
 				return;
 			}
 

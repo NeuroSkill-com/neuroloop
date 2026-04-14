@@ -52,3 +52,11 @@ export {
 	renderLogo,
 	renderTagline,
 } from "./logo.ts";
+
+export {
+	createLlmPanel,
+	type LlmPanel,
+	type LlmModelEntry,
+	type LlmServerStatus,
+	type LlmPanelCallbacks,
+} from "./llm-panel.ts";

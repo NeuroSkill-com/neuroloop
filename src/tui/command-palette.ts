@@ -50,9 +50,12 @@ export function createCommandPalette(
 		const header = new Text();
 		header.setText(theme.fg("accent", " Commands") + theme.fg("dim", "  (type to filter, esc to close)"));
 
+		const INV = "\x1b[7m";
+		const BOLD = "\x1b[1m";
+		const RST = "\x1b[0m";
 		const list = new SelectList(items, 20, {
-			selectedPrefix: (t: string) => theme.fg("accent", t),
-			selectedText:   (t: string) => theme.fg("accent", t),
+			selectedPrefix: (t: string) => INV + BOLD + t + RST,
+			selectedText:   (t: string) => INV + BOLD + t + RST,
 			description:    (t: string) => theme.fg("dim", t),
 			scrollInfo:     (t: string) => theme.fg("muted", t),
 			noMatch:        (t: string) => theme.fg("dim", t),
@@ -69,7 +72,7 @@ export function createCommandPalette(
 		container.addChild(header);
 		container.addChild(list);
 
-		overlayHandle = tui.showOverlay(container, {
+		overlayHandle = tui.showOverlay(list, {
 			width: "60%",
 			minWidth: 40,
 			maxHeight: "50%",
@@ -77,7 +80,7 @@ export function createCommandPalette(
 			offsetY: 3,
 		});
 
-		tui.setFocus(list);
+		// Focus is automatically set to the overlay component (list) by showOverlay
 		visible = true;
 	}
 
@@ -88,7 +91,7 @@ export function createCommandPalette(
 
 	function hide() {
 		if (overlayHandle) {
-			overlayHandle.hide();
+			overlayHandle.hide(); // permanently removes + restores preFocus
 			overlayHandle = null;
 		}
 		visible = false;

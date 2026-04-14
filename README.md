@@ -85,11 +85,62 @@ The LLM receives the live EXG data, behavioural guidance, and domain-specific hi
 
 NeuroLoop extends the pi TUI with:
 
-- **Custom header** — brand logo (`◆ neuroloop vX.Y.Z`) and keybinding hints
+- **ASCII art splash** — hot-pink NeuroLoop™ block-letter logo shown at startup, auto-collapses to compact header after 8 seconds
+- **Custom header** — brand logo (`◆ NeuroLoop™ vX.Y.Z`), connection status, device info, skills sync status, and command hints
 - **Live footer metrics** — real-time scores row (`focus`, `cog.load`, `relax`, `engage`, `drowsy`, `mood`, `♥ bpm`) and EEG band bars (`δ θ α β γ`) updated via WebSocket; the most recent EXG label and its timestamp are shown right-aligned
+- **Download progress** — active LLM model downloads shown with progress bar, spinner, and percentage in the footer
 - **Status bar** — EXG connection dot (`◉` / `◌`), "last updated" age, context usage, and current model
+- **Smart brain state toasts** — automatic notifications for focus spikes/drops, drowsiness alerts, cognitive overload, heart rate anomalies, and deep relaxation (with per-rule cooldowns to avoid spam)
+- **Switchable themes** — 7 built-in color themes (Neuro Dark, Neuro Light, Calm, Focus, Matrix, Dracula, Catppuccin) with runtime switching via `/theme` and persistence to `~/.neuroloop/theme.json`
+- **LLM manager popup** — bordered overlay panel (`/llm`) showing server status, model catalog with download progress, and one-click actions (start/stop server, select/download/pause/resume models)
+- **EXG sidebar panel** — right-anchored overlay with sparkline score history, band power bars, and trend indicators
+- **Command palette** — fuzzy-searchable overlay listing all commands
+- **Overlay manager** — stacking, modal exclusivity, and Esc dismissal for all overlays
+- **Event-driven rendering** — 16ms debounced render batching for EXG data (60fps cap), 30s fallback for "ago" text
 
 ### Slash Commands
+
+#### EXG / Brain State
+
+| Command | Description |
+|---|---|
+| `/exg` | Show a full EXG snapshot in the chat |
+| `/exg on` | Re-enable the live EXG panel and reconnect WebSocket |
+| `/exg off` | Disable the live EXG panel and disconnect WebSocket |
+| `/exg <seconds>` | Change the status poll interval (e.g. `/exg 0.5`) |
+| `/exg port <n>` | Connect to the NeuroSkill™ server on a different port |
+| `/exg-session [index]` | Current or Nth session metrics (0 = latest) |
+| `/sessions` | List all recorded EXG sessions |
+| `/sleep [index]` | Sleep staging summary |
+| `/compare` | Compare last two sessions (~60 s, uses cache) |
+| `/label <text>` | Create a timestamped EXG annotation (supports `--context`) |
+| `/labels <query>` | Semantic search over EXG annotations (supports `--k`) |
+| `/calibrate` | Start EXG calibration sequence |
+| `/neuro <cmd> [args…]` | Run any neuroskill subcommand directly (output shown in chat) |
+| `/connect` | Connect to NeuroSkill™ server |
+
+#### LLM / Models
+
+| Command | Description |
+|---|---|
+| `/llm` | Open the interactive LLM manager popup (server status, model catalog, actions) |
+| `/llm models` | Show model catalog in chat (downloaded, downloading, available) |
+| `/llm status` | Show LLM server status (running/stopped, model, context, vision) |
+| `/llm route` | Show active inference route and fallback chain |
+| `/llm connect [remote\|local\|auto]` | Start/connect Skill LLM with local fallback |
+| `/llm start` | Start the Skill LLM inference server |
+| `/llm stop` | Stop the Skill LLM inference server |
+| `/llm list` | Show model catalog with active marker, quant, size, state |
+| `/llm add <repo> <file>` | Add external HuggingFace model (supports `--mmproj`) |
+| `/llm remove <file>` | Delete a locally-cached model |
+| `/llm select <file>` | Set the active text model |
+| `/llm download <file>` | Start downloading a model (progress shown in footer) |
+| `/llm pause [file]` | Pause an active download |
+| `/llm resume [file]` | Resume a paused download |
+| `/llm cancel [file]` | Cancel an active download |
+| `/llm fit` | Check which models fit in available RAM/VRAM |
+
+#### API Keys / Model Config
 
 | Command | Description |
 |---|---|
@@ -97,48 +148,42 @@ NeuroLoop extends the pi TUI with:
 | `/key list` | Show all supported providers and which ones are currently configured |
 | `/key remove` | Interactive: pick a stored key to delete |
 | `/key remove <id>` | Directly remove a specific provider key (e.g. `/key remove google`) |
-| `/exg` | Show a full EXG snapshot in the chat |
-| `/exg on` | Re-enable the live EXG panel and reconnect WebSocket |
-| `/exg off` | Disable the live EXG panel and disconnect WebSocket |
-| `/exg <seconds>` | Change the status poll interval (e.g. `/exg 0.5`) |
-| `/exg port <n>` | Connect to the NeuroSkill™ server on a different port |
-| `/neuro <cmd> [args…]` | Run any neuroskill subcommand directly (output shown in chat) |
-| `/exg-session [index]` | Current or Nth session metrics (0 = latest) |
-| `/sessions` | List all recorded EXG sessions |
-| `/sleep [index]` | Sleep staging summary |
-| `/compare` | Compare last two sessions (~60 s, uses cache) |
-| `/health [sub]` | HealthKit data — `sleep`, `workouts`, `hr`, `steps`, `summary`, `metrics` |
-| `/label <text>` | Create a timestamped EXG annotation (supports `--context`) |
-| `/labels <query>` | Semantic search over EXG annotations (supports `--k`) |
-| `/hooks [sub]` | Proactive hook rules — `list`, `add`, `remove`, `enable`, `disable`, `log` |
-| `/dnd [on\|off]` | Do Not Disturb status / toggle |
-| `/say <text>` | Speak text aloud via on-device TTS (supports `--voice`) |
-| `/notify <title> [body]` | Send an OS notification |
-| `/calibrate` | Start EXG calibration sequence |
-| `/skills-update` | Force-refresh skills submodule from GitHub |
-| `/version [refresh]` | Show local/npm/GitHub version status |
-| `/updates [all\|reset]` | Show unseen changelog updates, full changelog, or reset seen state |
-| `/llm` | On-device LLM status (model, context, vision) |
-| `/llm route` | Show active inference route and fallback chain |
-| `/llm connect [remote\|local\|auto]` | Start/connect Skill LLM via WS with local fallback |
-| `/llm start` / `/llm stop` | Start or stop the Skill LLM inference server |
-| `/llm list` | Show model catalog with active marker, quant, size, state |
-| `/llm add <repo> <file>` | Add external HuggingFace model (supports `--mmproj`) |
-| `/llm remove <file>` | Delete a locally-cached model |
-| `/llm select <file>` | Set the active text model |
-| `/llm download <file>` | Start downloading a model |
-| `/llm fit` | Check which models fit in available RAM/VRAM |
 | `/model-config [add\|open\|path\|show]` | Manage `~/.neuroloop/models.json` from TUI or open in system editor |
+
+#### Health / Wearables
+
+| Command | Description |
+|---|---|
+| `/health [sub]` | HealthKit data — `sleep`, `workouts`, `hr`, `steps`, `summary`, `metrics`, `location` |
+| `/hooks [sub]` | Proactive hook rules — `list`, `add`, `remove`, `enable`, `disable`, `update`, `suggest`, `log` |
+| `/dnd [on\|off]` | Do Not Disturb status / toggle |
+
+#### TUI / Appearance
+
+| Command | Description |
+|---|---|
+| `/theme` | Interactive theme picker (7 built-in themes) |
+| `/theme <name>` | Switch directly (e.g. `/theme dracula`, `/theme matrix`, `/theme calm`) |
+| `/toasts` | Toggle smart brain state notifications on/off |
+| `/toasts on` | Enable smart brain state toasts |
+| `/toasts off` | Disable smart brain state toasts |
+| `/config` | Show current NeuroLoop settings |
+| `/config compression <mode>` | Set response compression (`standard`, `strong`, `off`) |
+| `/config device <gpu\|cpu>` | Set inference device |
+
+#### Utilities
+
+| Command | Description |
+|---|---|
+| `/say <text>` | Speak text aloud via on-device TTS (supports `--voice`, `--http`) |
+| `/notify <title> [body]` | Send an OS notification |
 | `/screenshots [query]` | Search screenshots (OCR / CLIP) or get EEG-session screenshots |
 | `/timer` | Start focus timer |
 | `/umap` | 3D UMAP projection of EXG data |
 | `/listen [--seconds n]` | Stream live EXG broadcast events |
-
-### Keyboard Shortcuts
-
-| Shortcut | Action |
-|---|---|
-| `ctrl+shift+e` | Show live EXG snapshot in chat |
+| `/skills-update` | Force-refresh skills submodule from GitHub |
+| `/version [refresh]` | Show local/npm/GitHub version status |
+| `/updates [all\|reset]` | Show unseen changelog updates, full changelog, or reset seen state |
 
 ---
 
@@ -203,11 +248,22 @@ neuroloop/
 ├── src/
 │   ├── main.ts               # Entry point — session setup, skill loading, model registry
 │   ├── neuroloop.ts          # ExtensionFactory — tools, hooks, renderers, TUI, WebSocket
+│   ├── compression.ts        # Response compression (standard/strong/off)
 │   ├── memory.ts             # Persistent memory helpers (~/.neuroskill/memory.md)
 │   ├── model-config.ts       # models.json helpers + system-open integration
 │   ├── runtime-updates.ts    # npm/GitHub version checks + runtime installs
 │   ├── skill-llm.ts          # Skill app LLM boot/connect/register helpers
 │   ├── skills-sync.ts        # skills submodule sync helpers
+│   ├── tui/
+│   │   ├── index.ts          # Barrel export for all TUI modules
+│   │   ├── themes.ts         # 7 switchable color themes with persistence
+│   │   ├── toast.ts          # Smart brain state alert rules with cooldowns
+│   │   ├── command-palette.ts # Fuzzy-searchable command overlay (SelectList)
+│   │   ├── render-scheduler.ts # 16ms debounced render batching (replaces 30s timer)
+│   │   ├── overlay-panel.ts  # EXG sidebar with sparklines, bands, trends
+│   │   ├── overlay-manager.ts # Stacking, modal exclusivity, Esc dismissal
+│   │   ├── llm-panel.ts      # Bordered LLM manager popup with progress bars
+│   │   └── logo.ts           # ASCII art NeuroLoop™ logo (full/compact/mini)
 │   ├── neuroskill/
 │   │   ├── index.ts          # Public barrel
 │   │   ├── run.ts            # runNeuroSkill() — CLI executor + cross-platform port discovery

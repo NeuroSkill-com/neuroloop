@@ -32,46 +32,48 @@ interface AlertRule {
 	message: (val: number) => string;
 }
 
+// Scores arrive in 0–100 scale from the daemon.
+// HR is in bpm (absolute).
 const RULES: AlertRule[] = [
 	{
 		id: "focus-spike",
 		label: "Focus spike",
 		field: "focus",
-		threshold: 0.85,
+		threshold: 85,
 		direction: "above",
 		level: "info",
 		cooldownSec: 120,
-		message: (v) => `Focus spike detected (${(v * 100).toFixed(0)}%) — you're in the zone`,
+		message: (v) => `Focus spike detected (${Math.round(v)}%) — you're in the zone`,
 	},
 	{
 		id: "focus-drop",
 		label: "Focus drop",
 		field: "focus",
-		threshold: 0.20,
+		threshold: 20,
 		direction: "below",
 		level: "warning",
 		cooldownSec: 180,
-		message: (v) => `Focus dropped to ${(v * 100).toFixed(0)}% — consider a break?`,
+		message: (v) => `Focus dropped to ${Math.round(v)}% — consider a break?`,
 	},
 	{
 		id: "drowsiness-high",
 		label: "Drowsiness alert",
 		field: "drowsiness",
-		threshold: 0.70,
+		threshold: 70,
 		direction: "above",
 		level: "warning",
 		cooldownSec: 300,
-		message: (v) => `Drowsiness elevated (${(v * 100).toFixed(0)}%) — time for a stretch`,
+		message: (v) => `Drowsiness elevated (${Math.round(v)}%) — time for a stretch`,
 	},
 	{
 		id: "relaxation-deep",
 		label: "Deep relaxation",
 		field: "relaxation",
-		threshold: 0.85,
+		threshold: 85,
 		direction: "above",
 		level: "info",
 		cooldownSec: 120,
-		message: (v) => `Deep relaxation detected (${(v * 100).toFixed(0)}%)`,
+		message: (v) => `Deep relaxation detected (${Math.round(v)}%)`,
 	},
 	{
 		id: "hr-high",
@@ -97,21 +99,21 @@ const RULES: AlertRule[] = [
 		id: "engagement-high",
 		label: "High engagement",
 		field: "engagement",
-		threshold: 0.85,
+		threshold: 85,
 		direction: "above",
 		level: "info",
 		cooldownSec: 180,
-		message: (v) => `High engagement (${(v * 100).toFixed(0)}%) — great flow state`,
+		message: (v) => `High engagement (${Math.round(v)}%) — great flow state`,
 	},
 	{
 		id: "cogload-high",
 		label: "Cognitive overload",
 		field: "cognitive_load",
-		threshold: 0.80,
+		threshold: 80,
 		direction: "above",
 		level: "warning",
 		cooldownSec: 240,
-		message: (v) => `Cognitive load high (${(v * 100).toFixed(0)}%) — try simplifying`,
+		message: (v) => `Cognitive load high (${Math.round(v)}%) — try simplifying`,
 	},
 ];
 

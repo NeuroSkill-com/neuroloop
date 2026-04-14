@@ -21,9 +21,8 @@ import { existsSync as existsSync9, mkdirSync as mkdirSync8, readFileSync as rea
 import { homedir as homedir9 } from "node:os";
 import { dirname as dirname4, join as join9 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
-import { Container as Container3, Markdown, Spacer } from "@mariozechner/pi-tui";
-import { truncateToWidth as truncateToWidth3, visibleWidth as visibleWidth3 } from "@mariozechner/pi-tui";
-import { matchesKey as matchesKey2, Key as Key2 } from "@mariozechner/pi-tui";
+import { Container as Container4, Markdown, Spacer } from "@mariozechner/pi-tui";
+import { truncateToWidth as truncateToWidth4, visibleWidth as visibleWidth4 } from "@mariozechner/pi-tui";
 import { Type as Type4 } from "@sinclair/typebox";
 import { getMarkdownTheme } from "@mariozechner/pi-coding-agent";
 
@@ -220,41 +219,41 @@ var RULES = [
     id: "focus-spike",
     label: "Focus spike",
     field: "focus",
-    threshold: 0.85,
+    threshold: 85,
     direction: "above",
     level: "info",
     cooldownSec: 120,
-    message: (v) => `Focus spike detected (${(v * 100).toFixed(0)}%) \u2014 you're in the zone`
+    message: (v) => `Focus spike detected (${Math.round(v)}%) \u2014 you're in the zone`
   },
   {
     id: "focus-drop",
     label: "Focus drop",
     field: "focus",
-    threshold: 0.2,
+    threshold: 20,
     direction: "below",
     level: "warning",
     cooldownSec: 180,
-    message: (v) => `Focus dropped to ${(v * 100).toFixed(0)}% \u2014 consider a break?`
+    message: (v) => `Focus dropped to ${Math.round(v)}% \u2014 consider a break?`
   },
   {
     id: "drowsiness-high",
     label: "Drowsiness alert",
     field: "drowsiness",
-    threshold: 0.7,
+    threshold: 70,
     direction: "above",
     level: "warning",
     cooldownSec: 300,
-    message: (v) => `Drowsiness elevated (${(v * 100).toFixed(0)}%) \u2014 time for a stretch`
+    message: (v) => `Drowsiness elevated (${Math.round(v)}%) \u2014 time for a stretch`
   },
   {
     id: "relaxation-deep",
     label: "Deep relaxation",
     field: "relaxation",
-    threshold: 0.85,
+    threshold: 85,
     direction: "above",
     level: "info",
     cooldownSec: 120,
-    message: (v) => `Deep relaxation detected (${(v * 100).toFixed(0)}%)`
+    message: (v) => `Deep relaxation detected (${Math.round(v)}%)`
   },
   {
     id: "hr-high",
@@ -280,21 +279,21 @@ var RULES = [
     id: "engagement-high",
     label: "High engagement",
     field: "engagement",
-    threshold: 0.85,
+    threshold: 85,
     direction: "above",
     level: "info",
     cooldownSec: 180,
-    message: (v) => `High engagement (${(v * 100).toFixed(0)}%) \u2014 great flow state`
+    message: (v) => `High engagement (${Math.round(v)}%) \u2014 great flow state`
   },
   {
     id: "cogload-high",
     label: "Cognitive overload",
     field: "cognitive_load",
-    threshold: 0.8,
+    threshold: 80,
     direction: "above",
     level: "warning",
     cooldownSec: 240,
-    message: (v) => `Cognitive load high (${(v * 100).toFixed(0)}%) \u2014 try simplifying`
+    message: (v) => `Cognitive load high (${Math.round(v)}%) \u2014 try simplifying`
   }
 ];
 var lastFired = /* @__PURE__ */ new Map();
@@ -338,9 +337,12 @@ function createCommandPalette(tui, theme, opts) {
     }));
     const header = new Text();
     header.setText(theme.fg("accent", " Commands") + theme.fg("dim", "  (type to filter, esc to close)"));
+    const INV = "\x1B[7m";
+    const BOLD = "\x1B[1m";
+    const RST2 = "\x1B[0m";
     const list = new SelectList(items, 20, {
-      selectedPrefix: (t) => theme.fg("accent", t),
-      selectedText: (t) => theme.fg("accent", t),
+      selectedPrefix: (t) => INV + BOLD + t + RST2,
+      selectedText: (t) => INV + BOLD + t + RST2,
       description: (t) => theme.fg("dim", t),
       scrollInfo: (t) => theme.fg("muted", t),
       noMatch: (t) => theme.fg("dim", t)
@@ -354,14 +356,13 @@ function createCommandPalette(tui, theme, opts) {
     const container = new Container();
     container.addChild(header);
     container.addChild(list);
-    overlayHandle = tui.showOverlay(container, {
+    overlayHandle = tui.showOverlay(list, {
       width: "60%",
       minWidth: 40,
       maxHeight: "50%",
       anchor: "top-center",
       offsetY: 3
     });
-    tui.setFocus(list);
     visible = true;
   }
   function show() {
@@ -764,6 +765,242 @@ function renderTagline(width, theme, version) {
   const textWidth = visibleWidth2("brain-aware coding") + visibleWidth2(`  ${tag}`);
   const pad = Math.max(0, Math.floor((width - textWidth) / 2));
   return truncateToWidth2(" ".repeat(pad) + text, width);
+}
+
+// src/tui/llm-panel.ts
+import { SelectList as SelectList2 } from "@mariozechner/pi-tui";
+import { truncateToWidth as truncateToWidth3, visibleWidth as visibleWidth3 } from "@mariozechner/pi-tui";
+var HOTPINK = "\x1B[38;2;255;20;147m";
+var RST = "\x1B[0m";
+var BORDER_COLOR = "\x1B[38;2;140;100;180m";
+var BG = "\x1B[48;2;25;20;35m";
+var INVERSE = "\x1B[7m";
+var BOLD_ON = "\x1B[1m";
+var BD = { tl: "\u2554", tr: "\u2557", bl: "\u255A", br: "\u255D", h: "\u2550", v: "\u2551" };
+var BorderedPanel = class {
+  child;
+  title;
+  titleWidth;
+  hints;
+  paddingX;
+  constructor(child, opts) {
+    this.child = child;
+    this.title = opts.title;
+    this.titleWidth = opts.titleWidth;
+    this.hints = opts.hints;
+    this.paddingX = opts.paddingX ?? 1;
+  }
+  invalidate() {
+    this.child.invalidate?.();
+  }
+  handleInput(data) {
+    this.child.handleInput?.(data);
+  }
+  render(width) {
+    const innerW = Math.max(10, width - 2 - this.paddingX * 2);
+    const totalInner = width - 2;
+    const childLines = this.child.render(innerW);
+    const pad = " ".repeat(this.paddingX);
+    const lines = [];
+    const b = (s) => BORDER_COLOR + s + RST;
+    const bg = (content, contentW) => {
+      const rp = Math.max(0, totalInner - contentW);
+      return BG + content + " ".repeat(rp) + RST;
+    };
+    const titleSeg = ` ${this.title} `;
+    const afterTitle = Math.max(0, totalInner - 2 - this.titleWidth - 2 - visibleWidth3(this.hints) - 1);
+    lines.push(truncateToWidth3(
+      b(BD.tl + BD.h.repeat(2)) + BG + titleSeg + RST + b(BD.h.repeat(afterTitle)) + this.hints + " " + b(BD.tr),
+      width
+    ));
+    lines.push(b(BD.v) + bg("", 0) + b(BD.v));
+    for (const cl of childLines) {
+      const line = pad + cl;
+      lines.push(b(BD.v) + bg(line, visibleWidth3(line)) + b(BD.v));
+    }
+    lines.push(b(BD.v) + bg("", 0) + b(BD.v));
+    lines.push(b(BD.bl + BD.h.repeat(totalInner) + BD.br));
+    return lines;
+  }
+};
+function createLlmPanel(tui, theme, callbacks) {
+  let overlayHandle = null;
+  let visible = false;
+  async function buildAndShow() {
+    if (visible) {
+      hide();
+      return;
+    }
+    const [catalog, status] = await Promise.all([
+      callbacks.fetchCatalog(),
+      callbacks.fetchStatus()
+    ]);
+    const items = [];
+    const statusIcon = status?.status === "running" ? theme.fg("success", "\u25CF") : status?.status === "loading" ? theme.fg("warning", "\u25D0") : theme.fg("dim", "\u25CB");
+    const statusText = status?.status ?? "unknown";
+    const modelText = status?.modelName ? theme.fg("accent", ` ${status.modelName}`) : "";
+    const ctxText = status?.nCtx ? theme.fg("dim", ` \xB7 ${status.nCtx} ctx`) : "";
+    const visionText = status?.supportsVision ? theme.fg("dim", " \xB7 vision") : "";
+    items.push({
+      value: "__status__",
+      label: ` ${statusIcon} Server: ${theme.bold(statusText)}${modelText}${ctxText}${visionText}`,
+      description: ""
+    });
+    if (status?.status === "running") {
+      items.push({ value: "action:stop", label: `   ${theme.fg("error", "\u23F9")} Stop server`, description: "" });
+    } else {
+      items.push({ value: "action:start", label: `   ${theme.fg("success", "\u25B6")} Start server`, description: "" });
+    }
+    items.push({ value: "__sep0__", label: " ", description: "" });
+    if (catalog) {
+      const models = catalog.entries.filter((e) => !e.isMmproj);
+      const downloaded = models.filter((m) => m.state === "downloaded");
+      const downloading = models.filter((m) => m.state === "downloading" || m.state === "paused");
+      const available = models.filter((m) => m.state !== "downloaded" && m.state !== "downloading" && m.state !== "paused");
+      if (downloaded.length) {
+        items.push({
+          value: "__hdr_downloaded__",
+          label: ` ${theme.bold("Downloaded")} ${theme.fg("dim", `(${downloaded.length})`)}`,
+          description: ""
+        });
+        for (const m of downloaded) {
+          const isActive = m.filename === catalog.activeModel;
+          const marker = isActive ? theme.fg("success", " \u25B6 ") : "   ";
+          const name = isActive ? theme.fg("accent", m.filename) : m.filename;
+          const parts = [m.quant, m.paramsB ? `${m.paramsB}B` : "", m.sizeGb ? `${m.sizeGb.toFixed(1)} GB` : ""].filter(Boolean);
+          const info = parts.length ? theme.fg("dim", "  " + parts.join(" \xB7 ")) : "";
+          const rec = m.recommended ? theme.fg("warning", " \u2B50") : "";
+          items.push({ value: `select:${m.filename}`, label: `${marker}${name}${rec}${info}`, description: "" });
+        }
+      }
+      if (downloading.length) {
+        items.push({ value: "__sep1__", label: " ", description: "" });
+        items.push({
+          value: "__hdr_downloading__",
+          label: ` ${theme.bold("Downloading")} ${theme.fg("dim", `(${downloading.length})`)}  ${theme.fg("dim", "\u2014 live progress in footer \u2193")}`,
+          description: ""
+        });
+        for (const m of downloading) {
+          const icon = m.state === "paused" ? theme.fg("warning", " \u23F8 ") : theme.fg("accent", " \u2B07 ");
+          const pct = Math.max(0, Math.min(100, Math.round(m.progress ?? 0)));
+          const barW = 20;
+          const filled = Math.round(pct / 100 * barW);
+          const empty = Math.max(0, barW - filled);
+          const bar = HOTPINK + "\u2588".repeat(filled) + RST + "\x1B[90m" + "\u2591".repeat(empty) + RST;
+          const pctStr = HOTPINK + `${String(pct).padStart(3)}%` + RST;
+          const stateHint = m.state === "paused" ? theme.fg("warning", " paused") : "";
+          items.push({
+            value: `download:${m.filename}`,
+            label: `${icon}${m.filename}  ${bar} ${pctStr}${stateHint}`,
+            description: ""
+          });
+        }
+      }
+      if (available.length) {
+        items.push({ value: "__sep2__", label: " ", description: "" });
+        items.push({
+          value: "__hdr_available__",
+          label: ` ${theme.bold("Available")} ${theme.fg("dim", `(${available.length})`)}`,
+          description: ""
+        });
+        for (const m of available) {
+          const parts = [m.quant, m.paramsB ? `${m.paramsB}B` : "", m.sizeGb ? `${m.sizeGb.toFixed(1)} GB` : ""].filter(Boolean);
+          const info = parts.length ? theme.fg("dim", "  " + parts.join(" \xB7 ")) : "";
+          const rec = m.recommended ? theme.fg("warning", " \u2B50") : "";
+          const family = m.familyName ? theme.fg("muted", `${m.familyName} `) : "";
+          items.push({
+            value: `download-start:${m.filename}`,
+            label: `   ${theme.fg("dim", "\u25CB")} ${family}${m.filename}${rec}${info}`,
+            description: ""
+          });
+        }
+      }
+    } else {
+      items.push({
+        value: "__empty__",
+        label: `   ${theme.fg("dim", "catalog unavailable \u2014 is the daemon running?")}`,
+        description: ""
+      });
+    }
+    items.push({ value: "__sep3__", label: " ", description: "" });
+    items.push({ value: "action:connect", label: `   ${theme.fg("accent", "\u26A1")} Connect Skill LLM  ${theme.fg("dim", "local/remote/auto")}`, description: "" });
+    items.push({ value: "action:fit", label: `   ${theme.fg("accent", "\u{1F4D0}")} Check model fit  ${theme.fg("dim", "RAM/VRAM")}`, description: "" });
+    items.push({ value: "action:route", label: `   ${theme.fg("accent", "\u{1F9ED}")} Show LLM route  ${theme.fg("dim", "active + fallbacks")}`, description: "" });
+    const list = new SelectList2(items, 22, {
+      selectedPrefix: (t) => INVERSE + BOLD_ON + HOTPINK + t + RST,
+      selectedText: (t) => INVERSE + BOLD_ON + t + RST,
+      description: (t) => t,
+      scrollInfo: (t) => theme.fg("muted", t),
+      noMatch: (t) => theme.fg("dim", t)
+    });
+    list.onSelect = (item) => {
+      const val = item.value;
+      if (val.startsWith("__")) return;
+      if (val.startsWith("action:")) {
+        hide();
+        callbacks.onAction(val.slice(7));
+        return;
+      }
+      if (val.startsWith("select:")) {
+        hide();
+        callbacks.onAction("select", val.slice(7));
+        return;
+      }
+      if (val.startsWith("download-start:")) {
+        hide();
+        callbacks.onAction("download", val.slice(15));
+        return;
+      }
+      if (val.startsWith("download:")) {
+        const fname = val.slice(9);
+        const entry = catalog?.entries.find((e) => e.filename === fname);
+        if (entry?.state === "paused") {
+          hide();
+          callbacks.onAction("resume", fname);
+        } else if (entry?.state === "downloading") {
+          hide();
+          callbacks.onAction("pause", fname);
+        }
+        return;
+      }
+    };
+    list.onCancel = () => hide();
+    const titleStr = theme.fg("accent", "\u{1F916}") + " " + theme.bold("LLM Manager");
+    const titleW = visibleWidth3("\u{1F916} LLM Manager");
+    const hintsStr = theme.fg("muted", "esc") + theme.fg("dim", " close \xB7 ") + theme.fg("muted", "\u2191\u2193") + theme.fg("dim", " navigate \xB7 ") + theme.fg("muted", "enter") + theme.fg("dim", " select");
+    const panel = new BorderedPanel(list, {
+      title: titleStr,
+      titleWidth: titleW,
+      hints: hintsStr,
+      paddingX: 1
+    });
+    overlayHandle = tui.showOverlay(panel, {
+      width: "75%",
+      minWidth: 55,
+      maxHeight: "75%",
+      anchor: "center"
+    });
+    tui.setFocus(panel);
+    visible = true;
+  }
+  function show() {
+    buildAndShow();
+  }
+  function hide() {
+    if (overlayHandle) {
+      overlayHandle.hide();
+      overlayHandle = null;
+    }
+    visible = false;
+  }
+  function toggle() {
+    if (visible) hide();
+    else show();
+  }
+  function dispose() {
+    hide();
+  }
+  return { show, hide, toggle, isVisible: () => visible, dispose };
 }
 
 // src/neuroloop.ts
@@ -3008,7 +3245,7 @@ function getCompressionModeName(mode2) {
 }
 
 // src/neuroloop.ts
-var _pkgVersion = (true ? "0.1.0" : void 0) ?? JSON.parse(readFileSync9(join9(dirname4(fileURLToPath3(import.meta.url)), "../package.json"), "utf8")).version;
+var _pkgVersion = (true ? "0.1.1" : void 0) ?? JSON.parse(readFileSync9(join9(dirname4(fileURLToPath3(import.meta.url)), "../package.json"), "utf8")).version;
 var AGENT_DIR4 = join9(homedir9(), ".neuroskill");
 var VERSION_STATE_DIR = join9(homedir9(), ".neuroloop");
 var NEUROLOOP_DIR = join9(dirname4(fileURLToPath3(import.meta.url)), "..");
@@ -3270,7 +3507,7 @@ BOUNDARIES
 async function neuroloopExtension(pi) {
   pi.registerMessageRenderer(NEUROSKILL_STATUS_TYPE, (message, _opts, _theme) => {
     const text = typeof message.content === "string" ? message.content : message.content.filter((c) => c.type === "text").map((c) => c.text).join("\n");
-    const container = new Container3();
+    const container = new Container4();
     container.addChild(new Spacer(1));
     container.addChild(new Markdown(text, 0, 0, getMarkdownTheme()));
     return container;
@@ -3619,16 +3856,19 @@ Available commands and typical args:
   let overlayManager = null;
   let commandPalette = null;
   let exgPanel = null;
+  let llmPanel = null;
   let overlayKeyCleanup = null;
-  let inputListenerCleanup = null;
   initTheme();
   let logoShown = false;
   let llmDownloads = [];
   let llmDownloadSpin = 0;
   let llmDownloadPollTimer = null;
+  let llmDownloadPollInFlight = false;
   function startLlmDownloadPoll() {
     if (llmDownloadPollTimer) return;
     llmDownloadPollTimer = setInterval(async () => {
+      if (llmDownloadPollInFlight) return;
+      llmDownloadPollInFlight = true;
       try {
         const baseUrl = await getSkillServerBaseUrl();
         const res = await fetch(`${baseUrl}/v1/llm/downloads`, {
@@ -3645,11 +3885,17 @@ Available commands and typical args:
             uiNotify?.(`${prev.filename} download ${cur.state}.`, "error");
           }
         }
-        llmDownloads = downloads.filter((d) => d.state === "downloading" || d.state === "paused").map((d) => ({ filename: d.filename, progress: d.progress ?? 0, state: d.state }));
+        llmDownloads = downloads.filter((d) => d.state === "downloading" || d.state === "paused").map((d) => {
+          let pct = d.progress ?? 0;
+          if (pct > 0 && pct <= 1) pct *= 100;
+          return { filename: d.filename, progress: pct, state: d.state };
+        });
         llmDownloadSpin++;
         uiTui?.requestRender();
         if (llmDownloads.length === 0) stopLlmDownloadPoll();
       } catch {
+      } finally {
+        llmDownloadPollInFlight = false;
       }
     }, 2e3);
   }
@@ -3850,17 +4096,17 @@ ${result.error}` : result.message, "error");
           lines.push(renderTagline(width, theme, _pkgVersion));
           lines.push("");
           const connLine = theme.fg("accent", s.logo) + " " + theme.bold("NeuroLoop\u2122") + connDot;
-          const connWidth = visibleWidth3(s.logo + " NeuroLoop\u2122") + visibleWidth3(connDot);
+          const connWidth = visibleWidth4(s.logo + " NeuroLoop\u2122") + visibleWidth4(connDot);
           const connPad = Math.max(0, Math.floor((width - connWidth) / 2));
-          lines.push(truncateToWidth3(" ".repeat(connPad) + connLine, width));
+          lines.push(truncateToWidth4(" ".repeat(connPad) + connLine, width));
           setTimeout(() => {
             logoShown = true;
           }, 8e3);
         } else {
           const website = theme.fg("accent", "\u{1F310}") + " " + theme.fg("dim", "https://www.neuroskill.com");
-          lines.push(truncateToWidth3(website, width));
+          lines.push(truncateToWidth4(website, width));
           const logo = theme.fg("accent", s.logo) + " " + theme.bold("NeuroLoop\u2122") + theme.fg("dim", ` v${_pkgVersion}`) + connDot;
-          lines.push(truncateToWidth3(logo, width));
+          lines.push(truncateToWidth4(logo, width));
         }
         if (exgOnline && exgDeviceName) {
           const kindMap = {
@@ -3876,7 +4122,7 @@ ${result.error}` : result.message, "error");
           const chInfo = exgDeviceChannels > 0 ? theme.fg("dim", ` ${exgDeviceChannels}ch`) : "";
           const rateInfo = exgDeviceRate > 0 ? theme.fg("dim", ` @ ${Math.round(exgDeviceRate)}Hz`) : "";
           const transportTag = transport ? theme.fg("muted", ` [${transport}]`) : "";
-          lines.push(truncateToWidth3(
+          lines.push(truncateToWidth4(
             " " + theme.fg("dim", "\u2388 ") + theme.fg("accent", exgDeviceName) + transportTag + chInfo + rateInfo,
             width
           ));
@@ -3884,12 +4130,12 @@ ${result.error}` : result.message, "error");
         if (skillsSyncLastAt) {
           const ago = timeAgo(skillsSyncLastAt.getTime()) || "just now";
           const syncLine = " " + theme.bold("NeuroSkill\u2122") + theme.fg("dim", ` skills synced ${ago}`);
-          lines.push(truncateToWidth3(syncLine, width));
+          lines.push(truncateToWidth4(syncLine, width));
         }
         const hintStr = hints.map(([k, a]) => theme.fg("muted", k) + theme.fg("dim", " " + a)).join(theme.fg("dim", " \xB7 "));
-        lines.push(truncateToWidth3(" " + hintStr, width));
-        const overlayHints = theme.fg("muted", "ctrl+k") + theme.fg("dim", " commands") + theme.fg("dim", " \xB7 ") + theme.fg("muted", "ctrl+e") + theme.fg("dim", " EXG panel");
-        lines.push(truncateToWidth3(" " + overlayHints, width));
+        lines.push(truncateToWidth4(" " + hintStr, width));
+        const overlayHints = theme.fg("muted", "/exg") + theme.fg("dim", " brain") + theme.fg("dim", " \xB7 ") + theme.fg("muted", "/llm") + theme.fg("dim", " models") + theme.fg("dim", " \xB7 ") + theme.fg("muted", "/theme") + theme.fg("dim", " colors") + theme.fg("dim", " \xB7 ") + theme.fg("muted", "/toasts") + theme.fg("dim", " alerts");
+        lines.push(truncateToWidth4(" " + overlayHints, width));
         lines.push(sep(theme, width));
         return lines;
       }
@@ -4121,6 +4367,7 @@ ${result.error}` : result.message, "error");
     exgWs = null;
   }
   pi.on("session_start", (_event, ctx) => {
+    process.stdout.write("\x1B[2J\x1B[H");
     uiNotify = (msg, level) => ctx.ui.notify(msg, level);
     sessionModelRegistry = ctx.modelRegistry;
     if (!skillsSyncShown && process.env.NEUROLOOP_SKILLS_SYNC_STATUS) {
@@ -4245,20 +4492,140 @@ ${result.error}` : result.message, "error");
         hide: () => exgPanel?.hide(),
         isVisible: () => exgPanel?.isVisible() ?? false
       });
-      inputListenerCleanup?.();
-      const keyListener = (data) => {
-        if (matchesKey2(data, Key2.ctrl("k"))) {
-          overlayManager?.toggle("command-palette");
-          return { consume: true };
+      llmPanel?.dispose();
+      llmPanel = createLlmPanel(tui, theme, {
+        fetchCatalog: async () => {
+          try {
+            const baseUrl = await getSkillServerBaseUrl();
+            const res = await fetch(`${baseUrl}/v1/llm/catalog`, {
+              headers: authHeaders(),
+              signal: AbortSignal.timeout(5e3)
+            });
+            if (!res.ok) return null;
+            const data = await res.json();
+            const raw = data.entries ?? [];
+            const entries = raw.map((e) => {
+              const fname = String(e.filename ?? "");
+              const live = llmDownloads.find((d) => d.filename === fname);
+              const state = live?.state ?? String(e.state ?? e.status ?? "not_downloaded");
+              let progress;
+              if (live) {
+                progress = live.progress;
+              } else if (typeof e.progress === "number") {
+                progress = e.progress <= 1 && e.progress > 0 ? e.progress * 100 : e.progress;
+              }
+              return {
+                filename: fname,
+                state,
+                sizeGb: typeof e.size_gb === "number" ? e.size_gb : void 0,
+                quant: e.quant ? String(e.quant) : void 0,
+                paramsB: e.params_b ? String(e.params_b) : void 0,
+                familyName: e.family_name ? String(e.family_name) : void 0,
+                recommended: !!e.recommended,
+                isMmproj: !!e.is_mmproj,
+                progress
+              };
+            });
+            return {
+              entries,
+              activeModel: String(data.active_model ?? "\u2013"),
+              activeMmproj: String(data.active_mmproj ?? "\u2013")
+            };
+          } catch {
+            return null;
+          }
+        },
+        fetchStatus: async () => {
+          try {
+            const baseUrl = await getSkillServerBaseUrl();
+            const res = await fetch(`${baseUrl}/v1/llm/server/status`, {
+              headers: authHeaders(),
+              signal: AbortSignal.timeout(3e3)
+            });
+            if (!res.ok) return null;
+            const data = await res.json();
+            return {
+              status: String(data.status ?? "unknown"),
+              modelName: data.model_name ? String(data.model_name) : void 0,
+              nCtx: typeof data.n_ctx === "number" ? data.n_ctx : void 0,
+              supportsVision: !!data.supports_vision
+            };
+          } catch {
+            return null;
+          }
+        },
+        onAction: async (action, filename) => {
+          const notify2 = uiNotify ?? (() => {
+          });
+          try {
+            const baseUrl = await getSkillServerBaseUrl();
+            const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
+            if (action === "start") {
+              notify2("Starting LLM server\u2026", "info");
+              fetch(`${baseUrl}/v1/llm/server/start`, { method: "POST", headers: hdrs, body: "{}", signal: AbortSignal.timeout(1e4) }).then(() => notify2("LLM server starting \u2014 loading model", "info")).catch((e) => notify2(`Start failed: ${e instanceof Error ? e.message : String(e)}`, "error"));
+              return;
+            } else if (action === "stop") {
+              fetch(`${baseUrl}/v1/llm/server/stop`, { method: "POST", headers: hdrs, signal: AbortSignal.timeout(5e3) }).then(() => notify2("LLM server stopped", "info")).catch((e) => notify2(`Stop failed: ${e instanceof Error ? e.message : String(e)}`, "error"));
+              return;
+            } else if (action === "select" && filename) {
+              await fetch(`${baseUrl}/v1/llm/select`, { method: "POST", headers: hdrs, body: JSON.stringify({ filename }), signal: AbortSignal.timeout(5e3) });
+              notify2(`Active model set to ${filename}`, "info");
+            } else if (action === "download" && filename) {
+              notify2(`Starting download: ${filename}`, "info");
+              if (!llmDownloads.find((d) => d.filename === filename)) {
+                llmDownloads.push({ filename, progress: 0, state: "downloading" });
+              }
+              startLlmDownloadPoll();
+              uiTui?.requestRender();
+              fetch(`${baseUrl}/v1/llm/download/start`, { method: "POST", headers: hdrs, body: JSON.stringify({ filename }), signal: AbortSignal.timeout(1e4) }).then((r) => {
+                if (!r.ok) notify2(`Download request failed: HTTP ${r.status}`, "error");
+              }).catch((e) => notify2(`Download request failed: ${e instanceof Error ? e.message : String(e)}`, "error"));
+            } else if (action === "pause" && filename) {
+              await fetch(`${baseUrl}/v1/llm/download/pause`, { method: "POST", headers: hdrs, body: JSON.stringify({ filename }), signal: AbortSignal.timeout(5e3) });
+              notify2(`${filename}: paused`, "info");
+            } else if (action === "resume" && filename) {
+              await fetch(`${baseUrl}/v1/llm/download/resume`, { method: "POST", headers: hdrs, body: JSON.stringify({ filename }), signal: AbortSignal.timeout(5e3) });
+              notify2(`${filename}: resumed`, "info");
+            } else if (action === "connect") {
+              notify2("Connecting Skill LLM\u2026", "info");
+              const started = await startSkillLlmServer("auto");
+              notify2(started.message, started.ok ? "info" : "error");
+              if (started.ok && sessionModelRegistry) {
+                await registerSkillLlmProvider(sessionModelRegistry);
+              }
+            } else if (action === "fit") {
+              const result = await runNeuroSkill(["llm", "fit"]);
+              if (result.ok && result.text) {
+                pi.sendMessage({ customType: NEUROSKILL_STATUS_TYPE, content: `## \u{1F4D0} LLM Fit
+\`\`\`
+${result.text}
+\`\`\``, display: true, details: void 0 });
+              } else {
+                notify2("Failed to check model fit", "error");
+              }
+            } else if (action === "route") {
+              const llmStatus = await runNeuroSkill(["llm", "status"]);
+              let routeInfo = "unknown";
+              if (llmStatus.ok && llmStatus.data) {
+                const data = llmStatus.data;
+                if (String(data.status ?? "").toLowerCase() === "running") {
+                  routeInfo = `skill-llm${data.mode ? ` (${data.mode})` : ""}`;
+                }
+              }
+              notify2(`LLM route: ${routeInfo}`, "info");
+            }
+          } catch (e) {
+            notify2(`LLM action failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+          }
         }
-        if (matchesKey2(data, Key2.ctrl("e"))) {
-          overlayManager?.toggle("exg-panel");
-          return { consume: true };
-        }
-        return void 0;
-      };
-      tui.addInputListener(keyListener);
-      inputListenerCleanup = () => tui.removeInputListener(keyListener);
+      });
+      overlayManager.register({
+        id: "llm-panel",
+        modal: true,
+        show: () => llmPanel?.show(),
+        hide: () => llmPanel?.hide(),
+        isVisible: () => llmPanel?.isVisible() ?? false
+      });
       checkAuthStatus().then(() => tui.requestRender());
       discoverExgPort().then((port) => {
         exgWsPort = port;
@@ -4295,8 +4662,8 @@ ${result.error}` : result.message, "error");
             ].filter(Boolean).join(theme.fg("dim", "   "));
             const agoRaw = exgUpdatedAt ? timeAgo(exgUpdatedAt) : "";
             const agoStr = agoRaw ? theme.fg("muted", ` ${agoRaw}`) : "";
-            lines.push(truncateToWidth3(" " + scores + agoStr, width));
-            lines.push(truncateToWidth3(" " + theme.fg("dim", "\u2502"), width));
+            lines.push(truncateToWidth4(" " + scores + agoStr, width));
+            lines.push(truncateToWidth4(" " + theme.fg("dim", "\u2502"), width));
             const b = m.bands ?? {};
             const bandVals = [b.rel_delta, b.rel_theta, b.rel_alpha, b.rel_beta, b.rel_gamma];
             const bandScale = Math.max(...bandVals.map((v) => v ?? 0), 1e-9);
@@ -4313,22 +4680,32 @@ ${result.error}` : result.message, "error");
               bar("\u03B3", b.rel_gamma, BAND_COLORS.gamma)
             ].join("  ");
             const labelStr = exgLastLabel ? theme.fg("dim", `\u2B21 "${exgLastLabel.text}"  ${timeAgo(exgLastLabel.createdAt * 1e3)}`) : "";
-            const bandW = visibleWidth3(" " + bandParts);
-            const labelW = visibleWidth3(labelStr);
+            const bandW = visibleWidth4(" " + bandParts);
+            const labelW = visibleWidth4(labelStr);
             const spacer = Math.max(1, width - bandW - labelW);
-            lines.push(truncateToWidth3(" " + bandParts + " ".repeat(spacer) + labelStr, width));
+            lines.push(truncateToWidth4(" " + bandParts + " ".repeat(spacer) + labelStr, width));
           } else if (exgEnabled && !exgOnline) {
             lines.push(sep(theme, width));
             const agoText = exgUpdatedAt != null && exgUpdatedAt > 0 ? timeAgo(exgUpdatedAt) : "";
             const lastSeen = agoText ? ` \xB7 last seen ${agoText}` : "";
-            lines.push(truncateToWidth3(" " + theme.fg("dim", `\u25CC EXG offline${lastSeen} \u2014 /connect to reconnect`), width));
+            lines.push(truncateToWidth4(" " + theme.fg("dim", `\u25CC EXG offline${lastSeen} \u2014 /connect to reconnect`), width));
           }
-          for (const dl of llmDownloads) {
-            const icon = dl.state === "paused" ? theme.fg("warning", "\u23F8") : theme.fg("accent", SYNC_SPINNER[llmDownloadSpin % SYNC_SPINNER.length]);
-            lines.push(truncateToWidth3(
-              " " + icon + " " + theme.fg("dim", dl.filename + " ") + theme.fg("muted", progressBar(dl.progress)),
-              width
-            ));
+          if (llmDownloads.length) {
+            lines.push(sep(theme, width));
+            for (const dl of llmDownloads) {
+              const icon = dl.state === "paused" ? theme.fg("warning", "\u23F8") : theme.fg("accent", SYNC_SPINNER[llmDownloadSpin % SYNC_SPINNER.length]);
+              const pct = Math.max(0, Math.min(100, Math.round(dl.progress)));
+              const barWidth = 20;
+              const filled = Math.round(pct / 100 * barWidth);
+              const empty = Math.max(0, barWidth - filled);
+              const bar = theme.fg("accent", "\u2588".repeat(filled)) + theme.fg("dim", "\u2591".repeat(empty));
+              const pctStr = theme.bold(`${pct}%`);
+              lines.push(truncateToWidth4(
+                " " + icon + "  " + theme.fg("accent", dl.filename) + "  " + bar + " " + pctStr,
+                width
+              ));
+            }
+            lines.push("");
           }
           const branch = footerData.getGitBranch();
           const left = theme.fg("muted", ctx.cwd) + (branch ? " " + theme.fg("dim", `(${branch})`) : "");
@@ -4340,8 +4717,8 @@ ${result.error}` : result.message, "error");
           const ctxPart = usage?.percent != null ? theme.fg("dim", `${usage.percent.toFixed(1)}%/${Math.round(usage.contextWindow / 1e3)}k`) : "";
           const modelPart = ctx.model?.id ? theme.fg("dim", ctx.model.id) : "";
           const right = [exgPart, ctxPart, modelPart].filter(Boolean).join(theme.fg("dim", "  "));
-          const gap = Math.max(1, width - visibleWidth3(left) - visibleWidth3(right));
-          lines.push(truncateToWidth3(left + " ".repeat(gap) + right, width));
+          const gap = Math.max(1, width - visibleWidth4(left) - visibleWidth4(right));
+          lines.push(truncateToWidth4(left + " ".repeat(gap) + right, width));
           return lines;
         }
       };
@@ -4360,10 +4737,10 @@ ${result.error}` : result.message, "error");
     commandPalette = null;
     exgPanel?.dispose();
     exgPanel = null;
+    llmPanel?.dispose();
+    llmPanel = null;
     overlayKeyCleanup?.();
     overlayKeyCleanup = null;
-    inputListenerCleanup?.();
-    inputListenerCleanup = null;
     clearHistory();
     resetToastCooldowns();
     uiNotify = null;
@@ -5025,7 +5402,15 @@ ${result.text}
     },
     handler: async (args, handlerCtx) => {
       const parts = args.trim().split(/\s+/).filter(Boolean);
-      const sub = (parts[0] ?? "models").toLowerCase();
+      const sub = (parts[0] ?? "").toLowerCase();
+      if (!sub) {
+        if (llmPanel) {
+          overlayManager?.show("llm-panel");
+        } else {
+          handlerCtx.ui.notify("LLM panel not available \u2014 try /llm models", "warning");
+        }
+        return;
+      }
       if (sub === "route") {
         const llmStatus = await runNeuroSkill(["llm", "status"]);
         let skillRoute = null;
@@ -5217,29 +5602,30 @@ ${sections.join("\n")}`,
           handlerCtx.ui.notify("Usage: /llm download <filename>", "warning");
           return;
         }
-        try {
-          const baseUrl = await getSkillServerBaseUrl();
-          const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
-          const startRes = await fetch(`${baseUrl}/v1/llm/download/start`, {
-            method: "POST",
-            headers: hdrs,
-            body: JSON.stringify({ filename }),
-            signal: AbortSignal.timeout(1e4)
-          });
-          if (!startRes.ok) {
-            const body = await startRes.text().catch(() => "");
-            handlerCtx.ui.notify(`Download failed: HTTP ${startRes.status} ${body}`, "error");
-            return;
-          }
-        } catch (e) {
-          handlerCtx.ui.notify(`Download failed: ${e instanceof Error ? e.message : String(e)}`, "error");
-          return;
-        }
-        handlerCtx.ui.notify(`Downloading ${filename} \u2014 progress shown in footer`, "info");
+        handlerCtx.ui.notify(`Starting download: ${filename}`, "info");
         if (!llmDownloads.find((d) => d.filename === filename)) {
           llmDownloads.push({ filename, progress: 0, state: "downloading" });
         }
         startLlmDownloadPoll();
+        uiTui?.requestRender();
+        (async () => {
+          try {
+            const baseUrl = await getSkillServerBaseUrl();
+            const hdrs = { ...authHeaders(), "Content-Type": "application/json" };
+            const startRes = await fetch(`${baseUrl}/v1/llm/download/start`, {
+              method: "POST",
+              headers: hdrs,
+              body: JSON.stringify({ filename }),
+              signal: AbortSignal.timeout(1e4)
+            });
+            if (!startRes.ok) {
+              const body = await startRes.text().catch(() => "");
+              uiNotify?.(`Download request failed: HTTP ${startRes.status} ${body}`, "error");
+            }
+          } catch (e) {
+            uiNotify?.(`Download request failed: ${e instanceof Error ? e.message : String(e)}`, "error");
+          }
+        })();
         return;
       }
       if (sub === "cancel" || sub === "pause" || sub === "resume") {
