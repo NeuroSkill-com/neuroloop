@@ -45,7 +45,7 @@ const _pkgVersion: string =
 	(JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../package.json"), "utf8")) as { version: string }).version;
 
 import WS from "ws";
-import { runNeuroSkill, selectContextualData, warmCompareInBackground, getSkillPort, setSkillPort, discoverSkillServer, checkAuthStatus, getAuthStatus, getDaemonTokenPath } from "./neuroskill/index.ts";
+import { runNeuroSkill, createLabel, selectContextualData, warmCompareInBackground, getSkillPort, setSkillPort, discoverSkillServer, checkAuthStatus, getAuthStatus, getDaemonTokenPath } from "./neuroskill/index.ts";
 import { syncSkillsFromGitHub } from "./skills-sync.ts";
 import { getRuntimeVersionState, refreshRuntimeVersions, type RuntimeVersionState } from "./runtime-updates.ts";
 import { registerSkillLlmProvider, startSkillLlmServer, getSkillServerBaseUrl, authHeaders } from "./skill-llm.ts";
@@ -546,9 +546,7 @@ export async function neuroloopExtension(pi: ExtensionAPI): Promise<void> {
 			),
 		}),
 		execute: async (_id, params:any, _signal, _onUpdate, _ctx) => {
-			const args = ["label", params.text];
-			if (params.context) args.push("--context", params.context);
-			const result = await runNeuroSkill(args);
+			const result = await createLabel(params.text, params.context);
 			if (!result.ok) {
 				return {
 					content: [{ type: "text" as const, text: `neuroskill error: ${result.error}` }],
@@ -691,6 +689,29 @@ Available commands and typical args:
 			// Split command on whitespace so "hooks add" becomes ["hooks", "add"]
 			const cmdParts = (params.command as string).trim().split(/\s+/);
 			const args = [...cmdParts, ...(params.args ?? [])];
+			// Route label commands through createLabel to avoid NOT NULL constraint bug
+			if (cmdParts[0] === "label") {
+				const ctxIdx = args.indexOf("--context");
+				const ctx = ctxIdx >= 0 ? args[ctxIdx + 1] : undefined;
+				// Text is everything between "label" and the first flag
+				const textParts: string[] = [];
+				for (let i = 1; i < args.length; i++) {
+					if (args[i].startsWith("--")) break;
+					textParts.push(args[i]);
+				}
+				const result = await createLabel(textParts.join(" "), ctx);
+				if (!result.ok) {
+					return {
+						content: [{ type: "text" as const, text: `neuroskill error: ${result.error}` }],
+						details: { command: params.command, error: result.error },
+					};
+				}
+				const output = result.data !== undefined ? JSON.stringify(result.data, null, 2) : (result.text ?? "");
+				return {
+					content: [{ type: "text" as const, text: output }],
+					details: { command: params.command, args: params.args },
+				};
+			}
 			const result = await runNeuroSkill(args);
 			if (!result.ok) {
 				return {
@@ -2481,9 +2502,23 @@ Available commands and typical args:
 				handlerCtx.ui.notify("Usage: /label <text> [--context <context>]", "warning");
 				return;
 			}
-			// Pass the whole arg string through shell-style so --context works
+			// Parse --context flag if present
 			const parts = args.trim().split(/\s+/).filter(Boolean);
-			await neuroCmd(["label", ...parts], `⬡ Label`, handlerCtx);
+			const ctxIdx = parts.indexOf("--context");
+			let labelText: string;
+			let ctx: string | undefined;
+			if (ctxIdx >= 0) {
+				labelText = parts.slice(0, ctxIdx).join(" ");
+				ctx = parts.slice(ctxIdx + 1).join(" ");
+			} else {
+				labelText = parts.join(" ");
+			}
+			const result = await createLabel(labelText, ctx);
+			if (!result.ok) {
+				handlerCtx.ui.notify(`Label error: ${result.error}`, "error");
+			} else {
+				handlerCtx.ui.notify(`⬡ Labelled: "${labelText}"`, "info");
+			}
 		},
 	});
 

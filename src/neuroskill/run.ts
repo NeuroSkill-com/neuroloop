@@ -83,24 +83,45 @@ const AGENT_DIR = join(homedir(), ".neuroloop");
 const PORT_FILE = join(AGENT_DIR, "neuroskill_port.json");
 let _port = 18444;
 
-function loadPort(): number {
+// ---------------------------------------------------------------------------
+// Binary resolution priority: "bundled" (default) or "system"
+// ---------------------------------------------------------------------------
+
+export type BinPriority = "bundled" | "system";
+let _binPriority: BinPriority = "bundled";
+
+export function getBinPriority(): BinPriority { return _binPriority; }
+export function setBinPriority(p: BinPriority): void { _binPriority = p; saveConfig(); }
+
+interface ConfigFile { port?: number; binPriority?: BinPriority }
+
+function loadConfig(): { port: number; binPriority: BinPriority } {
 	try {
 		if (existsSync(PORT_FILE)) {
-			const { port } = JSON.parse(readFileSync(PORT_FILE, "utf8")) as { port: number };
-			if (typeof port === "number" && port > 0 && port <= 65535) return port;
+			const cfg = JSON.parse(readFileSync(PORT_FILE, "utf8")) as ConfigFile;
+			const port = (typeof cfg.port === "number" && cfg.port > 0 && cfg.port <= 65535) ? cfg.port : 18444;
+			const binPriority = cfg.binPriority === "system" ? "system" : "bundled";
+			return { port, binPriority };
 		}
-	} catch { /* use default */ }
-	return 18444;
+	} catch { /* use defaults */ }
+	return { port: 18444, binPriority: "bundled" };
 }
 
-function savePort(port: number): void {
+function saveConfig(): void {
 	try {
 		if (!existsSync(AGENT_DIR)) mkdirSync(AGENT_DIR, { recursive: true, mode: 0o700 });
-		writeFileSync(PORT_FILE, JSON.stringify({ port }), { encoding: "utf8", mode: 0o600 });
+		writeFileSync(PORT_FILE, JSON.stringify({ port: _port, binPriority: _binPriority }), { encoding: "utf8", mode: 0o600 });
 	} catch { /* non-fatal */ }
 }
 
-_port = loadPort();
+// Back-compat aliases
+function savePort(port: number): void { _port = port; saveConfig(); }
+
+{
+	const cfg = loadConfig();
+	_port = cfg.port;
+	_binPriority = cfg.binPriority;
+}
 
 /** Get the current Skill server port. */
 export function getSkillPort(): number { return _port; }
@@ -164,6 +185,25 @@ export async function discoverSkillServer(): Promise<number | null> {
 }
 
 // ---------------------------------------------------------------------------
+// Label helper — uses raw JSON to reliably set label_start_utc
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a label via `neuroskill raw` JSON command.
+ * This bypasses the CLI `label` subcommand which has a bug where `--at`
+ * doesn't forward `label_start` to the server, causing NOT NULL violations.
+ */
+export async function createLabel(text: string, context?: string): Promise<NeuroSkillResult> {
+	const payload: Record<string, unknown> = {
+		command: "label",
+		text,
+		label_start_utc: Math.floor(Date.now() / 1000),
+	};
+	if (context) payload.context = context;
+	return runNeuroSkill(["raw", JSON.stringify(payload)]);
+}
+
+// ---------------------------------------------------------------------------
 // Run neuroskill CLI
 // ---------------------------------------------------------------------------
 
@@ -203,7 +243,25 @@ export async function runNeuroSkill<T = unknown>(args: string[]): Promise<NeuroS
 		const hasLocalBin = existsSync(localBin);
 		const cliArgs = ["--port", String(_port), ...args.map(escapeArg)];
 
-		const { stdout } = await execFileAsync(hasLocalBin ? localBin : "npx", hasLocalBin ? cliArgs : ["neuroskill", ...cliArgs], {
+		// Resolve binary: bundled-first (default) prefers the local install,
+		// system-first prefers npx/global and falls back to bundled.
+		let bin: string;
+		let finalArgs: string[];
+		if (_binPriority === "bundled" && hasLocalBin) {
+			bin = localBin;
+			finalArgs = cliArgs;
+		} else if (_binPriority === "system") {
+			bin = "npx";
+			finalArgs = ["neuroskill", ...cliArgs];
+		} else if (hasLocalBin) {
+			bin = localBin;
+			finalArgs = cliArgs;
+		} else {
+			bin = "npx";
+			finalArgs = ["neuroskill", ...cliArgs];
+		}
+
+		const { stdout } = await execFileAsync(bin, finalArgs, {
 			timeout: NEUROSKILL_TIMEOUT_MS,
 			maxBuffer: MAX_BUFFER,
 			env: { ...process.env },

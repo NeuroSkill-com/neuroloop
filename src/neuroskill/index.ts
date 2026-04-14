@@ -5,12 +5,15 @@
  * between run / signals / context is an implementation detail.
  */
 
-export type { NeuroSkillResult, AuthStatus } from "./run.ts";
+export type { NeuroSkillResult, AuthStatus, BinPriority } from "./run.ts";
 export {
 	NEUROSKILL_TIMEOUT_MS,
 	runNeuroSkill,
+	createLabel,
 	getSkillPort,
 	setSkillPort,
+	getBinPriority,
+	setBinPriority,
 	probeSkillServer,
 	discoverSkillServer,
 	checkAuthStatus,

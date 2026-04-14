@@ -17,7 +17,7 @@
 
 import { Type } from "@sinclair/typebox";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
-import { runNeuroSkill } from "../neuroskill/run.ts";
+import { runNeuroSkill, createLabel } from "../neuroskill/run.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -49,7 +49,7 @@ async function notify(title: string, body?: string): Promise<void> {
 
 /** Create an EXG label via neuroskill. Non-fatal if neuroskill is unavailable. */
 async function label(text: string, context?: string): Promise<void> {
-	await runNeuroSkill(["label", text, ...(context ? ["--context", context] : [])]);
+	await createLabel(text, context);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

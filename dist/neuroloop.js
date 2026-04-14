@@ -1178,24 +1178,35 @@ var NEUROSKILL_TIMEOUT_MS = 3e4;
 var AGENT_DIR2 = join3(homedir3(), ".neuroloop");
 var PORT_FILE = join3(AGENT_DIR2, "neuroskill_port.json");
 var _port = 18444;
-function loadPort() {
+var _binPriority = "bundled";
+function loadConfig() {
   try {
     if (existsSync3(PORT_FILE)) {
-      const { port } = JSON.parse(readFileSync3(PORT_FILE, "utf8"));
-      if (typeof port === "number" && port > 0 && port <= 65535) return port;
+      const cfg = JSON.parse(readFileSync3(PORT_FILE, "utf8"));
+      const port = typeof cfg.port === "number" && cfg.port > 0 && cfg.port <= 65535 ? cfg.port : 18444;
+      const binPriority = cfg.binPriority === "system" ? "system" : "bundled";
+      return { port, binPriority };
     }
   } catch {
   }
-  return 18444;
+  return { port: 18444, binPriority: "bundled" };
 }
-function savePort(port) {
+function saveConfig() {
   try {
     if (!existsSync3(AGENT_DIR2)) mkdirSync3(AGENT_DIR2, { recursive: true, mode: 448 });
-    writeFileSync2(PORT_FILE, JSON.stringify({ port }), { encoding: "utf8", mode: 384 });
+    writeFileSync2(PORT_FILE, JSON.stringify({ port: _port, binPriority: _binPriority }), { encoding: "utf8", mode: 384 });
   } catch {
   }
 }
-_port = loadPort();
+function savePort(port) {
+  _port = port;
+  saveConfig();
+}
+{
+  const cfg = loadConfig();
+  _port = cfg.port;
+  _binPriority = cfg.binPriority;
+}
 function getSkillPort() {
   return _port;
 }
@@ -1249,6 +1260,15 @@ async function discoverSkillServer() {
   }
   return null;
 }
+async function createLabel(text, context) {
+  const payload = {
+    command: "label",
+    text,
+    label_start_utc: Math.floor(Date.now() / 1e3)
+  };
+  if (context) payload.context = context;
+  return runNeuroSkill(["raw", JSON.stringify(payload)]);
+}
 var IS_WINDOWS2 = process.platform === "win32";
 var MAX_BUFFER = 8 * 1024 * 1024;
 function escapeArg(arg) {
@@ -1262,7 +1282,22 @@ async function runNeuroSkill(args) {
     const localBin = getLocalNeuroSkillBinPath();
     const hasLocalBin = existsSync3(localBin);
     const cliArgs = ["--port", String(_port), ...args.map(escapeArg)];
-    const { stdout } = await execFileAsync2(hasLocalBin ? localBin : "npx", hasLocalBin ? cliArgs : ["neuroskill", ...cliArgs], {
+    let bin;
+    let finalArgs;
+    if (_binPriority === "bundled" && hasLocalBin) {
+      bin = localBin;
+      finalArgs = cliArgs;
+    } else if (_binPriority === "system") {
+      bin = "npx";
+      finalArgs = ["neuroskill", ...cliArgs];
+    } else if (hasLocalBin) {
+      bin = localBin;
+      finalArgs = cliArgs;
+    } else {
+      bin = "npx";
+      finalArgs = ["neuroskill", ...cliArgs];
+    }
+    const { stdout } = await execFileAsync2(bin, finalArgs, {
       timeout: NEUROSKILL_TIMEOUT_MS,
       maxBuffer: MAX_BUFFER,
       env: { ...process.env },
@@ -2788,7 +2823,7 @@ async function notify(title, body) {
   await runNeuroSkill(["notify", title, ...body ? [body] : []]);
 }
 async function label(text, context) {
-  await runNeuroSkill(["label", text, ...context ? ["--context", context] : []]);
+  await createLabel(text, context);
 }
 var StepSchema = Type3.Object({
   name: Type3.String({
@@ -3659,9 +3694,7 @@ ${"=".repeat(60)}`
       )
     }),
     execute: async (_id, params, _signal, _onUpdate, _ctx) => {
-      const args = ["label", params.text];
-      if (params.context) args.push("--context", params.context);
-      const result = await runNeuroSkill(args);
+      const result = await createLabel(params.text, params.context);
       if (!result.ok) {
         return {
           content: [{ type: "text", text: `neuroskill error: ${result.error}` }],
@@ -3802,6 +3835,27 @@ Available commands and typical args:
     execute: async (_id, params, _signal, _onUpdate, _ctx) => {
       const cmdParts = params.command.trim().split(/\s+/);
       const args = [...cmdParts, ...params.args ?? []];
+      if (cmdParts[0] === "label") {
+        const ctxIdx = args.indexOf("--context");
+        const ctx = ctxIdx >= 0 ? args[ctxIdx + 1] : void 0;
+        const textParts = [];
+        for (let i = 1; i < args.length; i++) {
+          if (args[i].startsWith("--")) break;
+          textParts.push(args[i]);
+        }
+        const result2 = await createLabel(textParts.join(" "), ctx);
+        if (!result2.ok) {
+          return {
+            content: [{ type: "text", text: `neuroskill error: ${result2.error}` }],
+            details: { command: params.command, error: result2.error }
+          };
+        }
+        const output2 = result2.data !== void 0 ? JSON.stringify(result2.data, null, 2) : result2.text ?? "";
+        return {
+          content: [{ type: "text", text: output2 }],
+          details: { command: params.command, args: params.args }
+        };
+      }
       const result = await runNeuroSkill(args);
       if (!result.ok) {
         return {
@@ -5270,7 +5324,21 @@ ${result.text}
         return;
       }
       const parts = args.trim().split(/\s+/).filter(Boolean);
-      await neuroCmd(["label", ...parts], `\u2B21 Label`, handlerCtx);
+      const ctxIdx = parts.indexOf("--context");
+      let labelText;
+      let ctx;
+      if (ctxIdx >= 0) {
+        labelText = parts.slice(0, ctxIdx).join(" ");
+        ctx = parts.slice(ctxIdx + 1).join(" ");
+      } else {
+        labelText = parts.join(" ");
+      }
+      const result = await createLabel(labelText, ctx);
+      if (!result.ok) {
+        handlerCtx.ui.notify(`Label error: ${result.error}`, "error");
+      } else {
+        handlerCtx.ui.notify(`\u2B21 Labelled: "${labelText}"`, "info");
+      }
     }
   });
   pi.registerCommand("labels", {
