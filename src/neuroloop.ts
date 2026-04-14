@@ -22,12 +22,22 @@ import { fileURLToPath } from "node:url";
 
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { matchesKey, Key } from "@mariozechner/pi-tui";
 import type { TUI } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { getMarkdownTheme } from "@mariozechner/pi-coding-agent";
 
 declare const __NEUROLOOP_VERSION__: string | undefined;
 import type { ExtensionAPI, Theme, ThemeColor, ToolDefinition } from "@mariozechner/pi-coding-agent";
+
+import {
+	initTheme, wrapTheme, symbols, getActiveTheme, setActiveTheme, BUILTIN_THEMES,
+	evaluateToasts, resetToastCooldowns, setSmartToastsEnabled, isSmartToastsEnabled,
+	createCommandPalette, type PaletteCommand,
+	createRenderScheduler, type RenderScheduler,
+	createExgPanel, pushHistory, clearHistory, type ExgPanel,
+	createOverlayManager, type OverlayManager,
+} from "./tui/index.ts";
 
 const _pkgVersion: string =
 	(typeof __NEUROLOOP_VERSION__ !== "undefined" ? __NEUROLOOP_VERSION__ : undefined) ??
@@ -760,6 +770,17 @@ Available commands and typical args:
 	let sessionModelRegistry: { registerProvider: (id: string, cfg: unknown) => void } | null = null;
 	let compressionSettings = loadCompressionSettings();
 
+	// ── TUI overlay state ────────────────────────────────────────────────────
+	let renderScheduler: RenderScheduler | null = null;
+	let overlayManager: OverlayManager | null = null;
+	let commandPalette: ReturnType<typeof createCommandPalette> | null = null;
+	let exgPanel: ExgPanel | null = null;
+	let overlayKeyCleanup: (() => void) | null = null;
+	let inputListenerCleanup: (() => void) | null = null;
+
+	// Initialize theme from persisted preference
+	initTheme();
+
 	// LLM download progress (rendered in footer)
 	interface LlmDownloadEntry { filename: string; progress: number; state: string }
 	let llmDownloads: LlmDownloadEntry[] = [];
@@ -811,7 +832,7 @@ Available commands and typical args:
 	let exgWsPort:           number = 18444;  // discovered once, then reused
 	let exgWsReconnectTimer: ReturnType<typeof setTimeout>  | null = null;
 	let exgPollTimer:        ReturnType<typeof setInterval> | null = null; // status poll
-	let exgAgoTimer:         ReturnType<typeof setInterval> | null = null; // "ago" refresh
+	// exgAgoTimer removed — render scheduling is now handled by RenderScheduler
 	let exgPollMs:           number = 1_000;  // default 1 s; user-configurable
 
 	const SYNC_SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -936,6 +957,16 @@ Available commands and typical args:
 		};
 		exgOnline    = true;
 		exgUpdatedAt = Date.now();
+
+		// Smart toast notifications for notable brain state events
+		if (uiNotify && exgMetrics) {
+			evaluateToasts(exgMetrics, uiNotify);
+		}
+
+		// Push to history for sparklines in the EXG sidebar panel
+		if (exgMetrics) {
+			pushHistory({ ...exgMetrics, ts: exgUpdatedAt });
+		}
 	}
 
 	// ── Render helpers ────────────────────────────────────────────────────────
@@ -999,7 +1030,9 @@ Available commands and typical args:
 
 	// ── 4a. Custom header ────────────────────────────────────────────────────
 
-	function buildHeader(_tui: TUI, theme: Theme) {
+	function buildHeader(_tui: TUI, baseTheme: Theme) {
+		const theme = wrapTheme(baseTheme);
+		const s = symbols();
 		// Only the 5 most important shortcuts — keeps the hint row clean.
 		const hints: [string, string][] = [
 			["esc",       "stop"],
@@ -1033,7 +1066,7 @@ Available commands and typical args:
 				const website = theme.fg("accent", "🌐") + " " + theme.fg("dim", "https://www.neuroskill.com");
 				lines.push(truncateToWidth(website, width));
 
-				const logo = theme.fg("accent", "◆") + " " + theme.bold("NeuroLoop™")
+				const logo = theme.fg("accent", s.logo) + " " + theme.bold("NeuroLoop™")
 					+ theme.fg("dim", ` v${_pkgVersion}`) + connDot;
 				lines.push(truncateToWidth(logo, width));
 
@@ -1075,7 +1108,12 @@ Available commands and typical args:
 					.join(theme.fg("dim", " · "));
 				lines.push(truncateToWidth(" " + hintStr, width));
 
-				// ── row 5: separator ────────────────────────────────────────
+				// ── row 5: keybinding hints for overlays ─────────────────────
+				const overlayHints = theme.fg("muted", "ctrl+k") + theme.fg("dim", " commands")
+					+ theme.fg("dim", " · ") + theme.fg("muted", "ctrl+e") + theme.fg("dim", " EXG panel");
+				lines.push(truncateToWidth(" " + overlayHints, width));
+
+				// ── row 6: separator ────────────────────────────────────────
 				lines.push(sep(theme, width));
 
 				return lines;
@@ -1230,7 +1268,8 @@ Available commands and typical args:
 						mergeScoresEvent(payload);
 					}
 				}
-				uiTui?.requestRender();
+				if (renderScheduler) renderScheduler.requestDataRender(); else uiTui?.requestRender();
+				exgPanel?.refresh();
 				return;
 			}
 
@@ -1317,7 +1356,7 @@ Available commands and typical args:
 	function disconnectExgWs(): void {
 		stopExgPoll();
 		if (exgWsReconnectTimer) { clearTimeout(exgWsReconnectTimer); exgWsReconnectTimer = null; }
-		if (exgAgoTimer)         { clearInterval(exgAgoTimer);        exgAgoTimer        = null; }
+		// ago timer now handled by renderScheduler
 		exgWs?.close();
 		exgWs = null;
 	}
@@ -1401,21 +1440,112 @@ Available commands and typical args:
 					uiTui?.requestRender();
 				});
 		}
-		ctx.ui.setHeader((tui, theme) => {
+		ctx.ui.setHeader((tui, baseTheme) => {
 			uiTui = tui;
+			const theme = wrapTheme(baseTheme);
+
+			// ── Render scheduler (replaces blunt 30s timer) ──────────────
+			renderScheduler?.stop();
+			renderScheduler = createRenderScheduler(tui);
+			renderScheduler.start();
+
+			// ── Overlay manager ──────────────────────────────────────────
+			overlayManager?.dispose();
+			overlayManager = createOverlayManager();
+			overlayKeyCleanup?.();
+			overlayKeyCleanup = overlayManager.installKeyHandler(tui);
+
+			// ── Command palette (Ctrl+K) ─────────────────────────────────
+			commandPalette?.dispose();
+			const paletteCommands: PaletteCommand[] = [
+				{ name: "exg",           description: "EXG panel on/off/settings" },
+				{ name: "connect",       description: "Connect to NeuroSkill server" },
+				{ name: "llm",           description: "LLM server management" },
+				{ name: "key",           description: "Manage API provider keys" },
+				{ name: "model-config",  description: "Custom model configuration" },
+				{ name: "config",        description: "NeuroLoop settings" },
+				{ name: "theme",         description: "Switch color theme" },
+				{ name: "neuro",         description: "Run neuroskill subcommand" },
+				{ name: "version",       description: "Show version status" },
+				{ name: "updates",       description: "Show changelog updates" },
+				{ name: "skills-update", description: "Force sync skills from GitHub" },
+				{ name: "calibrate",     description: "Start EXG calibration" },
+				{ name: "label",         description: "Create EXG annotation" },
+				{ name: "labels",        description: "Label management" },
+				{ name: "timer",         description: "Focus timer" },
+				{ name: "say",           description: "Text-to-speech" },
+				{ name: "notify",        description: "Send OS notification" },
+				{ name: "health",        description: "HealthKit data queries" },
+				{ name: "sleep",         description: "Sleep staging" },
+				{ name: "compare",       description: "Compare EXG sessions" },
+				{ name: "toasts",        description: "Toggle brain state notifications" },
+				{ name: "help",          description: "Show all commands" },
+			];
+			commandPalette = createCommandPalette(tui, theme, {
+				commands: paletteCommands,
+				onSelect: (cmd) => {
+					// Send as user message so the command handler picks it up
+					if (cmd.action) {
+						cmd.action();
+					} else {
+						pi.sendUserMessage(`/${cmd.name}`);
+					}
+				},
+			});
+			overlayManager.register({
+				id: "command-palette",
+				modal: true,
+				show: () => commandPalette?.show(),
+				hide: () => commandPalette?.hide(),
+				isVisible: () => commandPalette?.isVisible() ?? false,
+			});
+
+			// ── EXG sidebar panel (Ctrl+E) ───────────────────────────────
+			exgPanel?.dispose();
+			exgPanel = createExgPanel(tui, theme, {
+				getMetrics: () => exgMetrics ? { ...exgMetrics, ts: exgUpdatedAt ?? Date.now() } : null,
+				getOnline: () => exgOnline,
+				getDeviceName: () => exgDeviceName,
+			});
+			overlayManager.register({
+				id: "exg-panel",
+				modal: false,
+				show: () => exgPanel?.show(),
+				hide: () => exgPanel?.hide(),
+				isVisible: () => exgPanel?.isVisible() ?? false,
+			});
+
+			// ── Global keyboard shortcuts ────────────────────────────────
+			inputListenerCleanup?.();
+			const keyListener = (data: string) => {
+				// Ctrl+K → command palette
+				if (matchesKey(data, Key.ctrl("k"))) {
+					overlayManager?.toggle("command-palette");
+					return { consume: true };
+				}
+				// Ctrl+E → EXG sidebar panel
+				if (matchesKey(data, Key.ctrl("e"))) {
+					overlayManager?.toggle("exg-panel");
+					return { consume: true };
+				}
+				return undefined;
+			};
+			tui.addInputListener(keyListener);
+			inputListenerCleanup = () => tui.removeInputListener(keyListener);
+
 			// Check auth/connection status, then discover port and open WebSocket.
 			checkAuthStatus().then(() => tui.requestRender());
 			discoverExgPort().then((port) => {
 				exgWsPort = port;
 				connectExgWs();
 			});
-			// Re-render every 30 s so "X ago" stays fresh between score events.
-			exgAgoTimer = setInterval(() => tui.requestRender(), 30_000);
+
 			return buildHeader(tui, theme);
 		});
 
-		ctx.ui.setFooter((tui, theme, footerData) => {
+		ctx.ui.setFooter((tui, baseTheme, footerData) => {
 			uiTui = tui;
+			const theme = wrapTheme(baseTheme);
 			const unsub = footerData.onBranchChange(() => tui.requestRender());
 			return {
 				dispose: unsub,
@@ -1541,6 +1671,17 @@ Available commands and typical args:
 		stopConnectSpinner();
 		stopLlmDownloadPoll();
 		disconnectExgWs();
+
+		// Clean up TUI overlays and schedulers
+		renderScheduler?.stop(); renderScheduler = null;
+		overlayManager?.dispose(); overlayManager = null;
+		commandPalette?.dispose(); commandPalette = null;
+		exgPanel?.dispose(); exgPanel = null;
+		overlayKeyCleanup?.(); overlayKeyCleanup = null;
+		inputListenerCleanup?.(); inputListenerCleanup = null;
+		clearHistory();
+		resetToastCooldowns();
+
 		uiNotify = null;
 		sessionModelRegistry = null;
 		sessionCtx.ui.setHeader(undefined);
@@ -1838,6 +1979,61 @@ Available commands and typical args:
 
 			handlerCtx.modelRegistry.refresh();
 			handlerCtx.ui.notify(`Saved ${provider}/${modelId} to models.json. Open /model to use it.`, "info");
+		},
+	});
+
+	// ── /theme — switch color theme ──────────────────────────────────────────
+	pi.registerCommand("theme", {
+		description: "Switch color theme · /theme [name]",
+		handler: async (args, handlerCtx) => {
+			const name = args.trim().toLowerCase();
+
+			if (!name) {
+				// Interactive: show theme picker
+				const choices = BUILTIN_THEMES.map(t => {
+					const active = t.id === getActiveTheme().id ? "● " : "  ";
+					return `${active}${t.name} — ${t.description}`;
+				});
+				const choice = await handlerCtx.ui.select("Select Theme", choices);
+				if (!choice) return;
+				const idx = choices.indexOf(choice);
+				const theme = BUILTIN_THEMES[idx];
+				if (theme) {
+					setActiveTheme(theme.id);
+					uiTui?.requestRender(true);
+					handlerCtx.ui.notify(`Theme set to ${theme.name}`, "info");
+				}
+				return;
+			}
+
+			// Direct name match
+			const result = setActiveTheme(name);
+			if (result) {
+				uiTui?.requestRender(true);
+				handlerCtx.ui.notify(`Theme set to ${result.name}`, "info");
+			} else {
+				const available = BUILTIN_THEMES.map(t => t.id).join(", ");
+				handlerCtx.ui.notify(`Unknown theme "${name}". Available: ${available}`, "warning");
+			}
+		},
+	});
+
+	// ── /toasts — toggle smart brain state notifications ─────────────────────
+	pi.registerCommand("toasts", {
+		description: "Toggle brain state notifications · /toasts [on|off]",
+		handler: async (args, handlerCtx) => {
+			const arg = args.trim().toLowerCase();
+			if (arg === "on") {
+				setSmartToastsEnabled(true);
+				handlerCtx.ui.notify("Smart brain state toasts enabled", "info");
+			} else if (arg === "off") {
+				setSmartToastsEnabled(false);
+				handlerCtx.ui.notify("Smart brain state toasts disabled", "info");
+			} else {
+				const current = isSmartToastsEnabled();
+				setSmartToastsEnabled(!current);
+				handlerCtx.ui.notify(`Smart brain state toasts ${!current ? "enabled" : "disabled"}`, "info");
+			}
 		},
 	});
 

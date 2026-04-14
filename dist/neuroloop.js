@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 // src/main.ts
-import { existsSync as existsSync9, readdirSync as readdirSync2, readFileSync as readFileSync9 } from "node:fs";
-import { homedir as homedir9 } from "node:os";
-import { basename, dirname as dirname5, join as join9, relative } from "node:path";
+import { existsSync as existsSync10, readdirSync as readdirSync2, readFileSync as readFileSync10 } from "node:fs";
+import { homedir as homedir10 } from "node:os";
+import { basename, dirname as dirname5, join as join10, relative } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 import {
   AuthStorage,
@@ -17,33 +17,703 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 // src/neuroloop.ts
-import { existsSync as existsSync8, mkdirSync as mkdirSync7, readFileSync as readFileSync8, writeFileSync as writeFileSync5 } from "node:fs";
-import { homedir as homedir8 } from "node:os";
-import { dirname as dirname4, join as join8 } from "node:path";
+import { existsSync as existsSync9, mkdirSync as mkdirSync8, readFileSync as readFileSync9, writeFileSync as writeFileSync6 } from "node:fs";
+import { homedir as homedir9 } from "node:os";
+import { dirname as dirname4, join as join9 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
-import { Container, Markdown, Spacer } from "@mariozechner/pi-tui";
-import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { Container as Container3, Markdown, Spacer } from "@mariozechner/pi-tui";
+import { truncateToWidth as truncateToWidth2, visibleWidth as visibleWidth2 } from "@mariozechner/pi-tui";
+import { matchesKey as matchesKey2, Key as Key2 } from "@mariozechner/pi-tui";
 import { Type as Type4 } from "@sinclair/typebox";
 import { getMarkdownTheme } from "@mariozechner/pi-coding-agent";
+
+// src/tui/themes.ts
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
+var DEFAULT_SYMBOLS = {
+  logo: "\u25C6",
+  connected: "\u25CF",
+  connecting: "\u280B",
+  offline: "\u25CB",
+  device: "\u2388",
+  heart: "\u2665",
+  label: "\u2B21",
+  exgOnline: "\u25C9",
+  exgOffline: "\u25CC",
+  separator: "\u2500",
+  barFilled: "\u2588",
+  barEmpty: "\u2591",
+  bandDelta: "\u03B4",
+  bandTheta: "\u03B8",
+  bandAlpha: "\u03B1",
+  bandBeta: "\u03B2",
+  bandGamma: "\u03B3"
+};
+var rgb = (r, g, b) => (text) => `\x1B[38;2;${r};${g};${b}m${text}\x1B[0m`;
+var BUILTIN_THEMES = [
+  {
+    id: "neuro-dark",
+    name: "Neuro Dark",
+    description: "Default dark theme with blue accents",
+    colors: {}
+    // uses framework defaults
+  },
+  {
+    id: "neuro-light",
+    name: "Neuro Light",
+    description: "Light-friendly with muted tones",
+    colors: {
+      accent: rgb(30, 90, 180),
+      success: rgb(30, 140, 60),
+      warning: rgb(180, 120, 0),
+      error: rgb(180, 40, 40),
+      dim: rgb(120, 120, 120),
+      muted: rgb(100, 100, 100),
+      syntaxType: rgb(0, 130, 130)
+    }
+  },
+  {
+    id: "calm",
+    name: "Calm",
+    description: "Soft greens and blues for relaxed sessions",
+    colors: {
+      accent: rgb(100, 180, 200),
+      success: rgb(120, 200, 140),
+      warning: rgb(220, 200, 100),
+      error: rgb(200, 120, 120),
+      dim: rgb(80, 100, 100),
+      muted: rgb(60, 80, 80),
+      syntaxType: rgb(140, 200, 180)
+    },
+    symbols: { logo: "\u25C7", separator: "\u254C" }
+  },
+  {
+    id: "focus",
+    name: "Focus",
+    description: "High-contrast amber on dark for deep work",
+    colors: {
+      accent: rgb(255, 180, 0),
+      success: rgb(0, 220, 100),
+      warning: rgb(255, 200, 50),
+      error: rgb(255, 60, 60),
+      dim: rgb(100, 80, 50),
+      muted: rgb(80, 60, 40),
+      syntaxType: rgb(200, 150, 50)
+    },
+    symbols: { logo: "\u25C8" }
+  },
+  {
+    id: "matrix",
+    name: "Matrix",
+    description: "Green phosphor terminal aesthetic",
+    colors: {
+      accent: rgb(0, 255, 65),
+      success: rgb(0, 200, 50),
+      warning: rgb(0, 180, 40),
+      error: rgb(200, 0, 0),
+      dim: rgb(0, 80, 20),
+      muted: rgb(0, 60, 15),
+      syntaxType: rgb(0, 220, 55)
+    },
+    symbols: { logo: "\u25C6", separator: "\xB7" }
+  },
+  {
+    id: "dracula",
+    name: "Dracula",
+    description: "Popular dark theme with purple accents",
+    colors: {
+      accent: rgb(189, 147, 249),
+      // purple
+      success: rgb(80, 250, 123),
+      // green
+      warning: rgb(255, 184, 108),
+      // orange
+      error: rgb(255, 85, 85),
+      // red
+      dim: rgb(98, 114, 164),
+      // comment
+      muted: rgb(68, 71, 90),
+      // current line
+      syntaxType: rgb(139, 233, 253)
+      // cyan
+    }
+  },
+  {
+    id: "catppuccin",
+    name: "Catppuccin",
+    description: "Warm pastel tones",
+    colors: {
+      accent: rgb(137, 180, 250),
+      // blue
+      success: rgb(166, 227, 161),
+      // green
+      warning: rgb(249, 226, 175),
+      // yellow
+      error: rgb(243, 139, 168),
+      // red
+      dim: rgb(147, 153, 178),
+      // overlay1
+      muted: rgb(108, 112, 134),
+      // overlay0
+      syntaxType: rgb(148, 226, 213)
+      // teal
+    }
+  }
+];
+var THEME_STATE_PATH = join(homedir(), ".neuroloop", "theme.json");
+function loadThemeId() {
+  try {
+    if (existsSync(THEME_STATE_PATH)) {
+      const data = JSON.parse(readFileSync(THEME_STATE_PATH, "utf8"));
+      if (data.id && BUILTIN_THEMES.some((t) => t.id === data.id)) return data.id;
+    }
+  } catch {
+  }
+  return "neuro-dark";
+}
+function saveThemeId(id) {
+  const dir = join(homedir(), ".neuroloop");
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  writeFileSync(THEME_STATE_PATH, JSON.stringify({ id }), "utf8");
+}
+var activeTheme = BUILTIN_THEMES[0];
+function getActiveTheme() {
+  return activeTheme;
+}
+function setActiveTheme(id) {
+  const found = BUILTIN_THEMES.find((t) => t.id === id);
+  if (!found) return null;
+  activeTheme = found;
+  saveThemeId(id);
+  return found;
+}
+function initTheme() {
+  const id = loadThemeId();
+  const found = BUILTIN_THEMES.find((t) => t.id === id);
+  if (found) activeTheme = found;
+}
+function wrapTheme(base) {
+  if (activeTheme.id === "neuro-dark" && !Object.keys(activeTheme.colors).length) {
+    return base;
+  }
+  return new Proxy(base, {
+    get(target, prop, receiver) {
+      if (prop === "fg") {
+        return (color, text) => {
+          const override = activeTheme.colors[color];
+          if (override) return override(text);
+          return target.fg(color, text);
+        };
+      }
+      return Reflect.get(target, prop, receiver);
+    }
+  });
+}
+function symbols() {
+  return { ...DEFAULT_SYMBOLS, ...activeTheme.symbols };
+}
+
+// src/tui/toast.ts
+var RULES = [
+  {
+    id: "focus-spike",
+    label: "Focus spike",
+    field: "focus",
+    threshold: 0.85,
+    direction: "above",
+    level: "info",
+    cooldownSec: 120,
+    message: (v) => `Focus spike detected (${(v * 100).toFixed(0)}%) \u2014 you're in the zone`
+  },
+  {
+    id: "focus-drop",
+    label: "Focus drop",
+    field: "focus",
+    threshold: 0.2,
+    direction: "below",
+    level: "warning",
+    cooldownSec: 180,
+    message: (v) => `Focus dropped to ${(v * 100).toFixed(0)}% \u2014 consider a break?`
+  },
+  {
+    id: "drowsiness-high",
+    label: "Drowsiness alert",
+    field: "drowsiness",
+    threshold: 0.7,
+    direction: "above",
+    level: "warning",
+    cooldownSec: 300,
+    message: (v) => `Drowsiness elevated (${(v * 100).toFixed(0)}%) \u2014 time for a stretch`
+  },
+  {
+    id: "relaxation-deep",
+    label: "Deep relaxation",
+    field: "relaxation",
+    threshold: 0.85,
+    direction: "above",
+    level: "info",
+    cooldownSec: 120,
+    message: (v) => `Deep relaxation detected (${(v * 100).toFixed(0)}%)`
+  },
+  {
+    id: "hr-high",
+    label: "Heart rate elevated",
+    field: "hr",
+    threshold: 100,
+    direction: "above",
+    level: "warning",
+    cooldownSec: 300,
+    message: (v) => `Heart rate elevated (${Math.round(v)} bpm) \u2014 take a breath`
+  },
+  {
+    id: "hr-low",
+    label: "Heart rate low",
+    field: "hr",
+    threshold: 50,
+    direction: "below",
+    level: "warning",
+    cooldownSec: 300,
+    message: (v) => `Heart rate low (${Math.round(v)} bpm)`
+  },
+  {
+    id: "engagement-high",
+    label: "High engagement",
+    field: "engagement",
+    threshold: 0.85,
+    direction: "above",
+    level: "info",
+    cooldownSec: 180,
+    message: (v) => `High engagement (${(v * 100).toFixed(0)}%) \u2014 great flow state`
+  },
+  {
+    id: "cogload-high",
+    label: "Cognitive overload",
+    field: "cognitive_load",
+    threshold: 0.8,
+    direction: "above",
+    level: "warning",
+    cooldownSec: 240,
+    message: (v) => `Cognitive load high (${(v * 100).toFixed(0)}%) \u2014 try simplifying`
+  }
+];
+var lastFired = /* @__PURE__ */ new Map();
+var enabled = true;
+function setSmartToastsEnabled(on) {
+  enabled = on;
+}
+function isSmartToastsEnabled() {
+  return enabled;
+}
+function evaluateToasts(metrics, notify2) {
+  if (!enabled) return;
+  const now = Date.now();
+  for (const rule of RULES) {
+    const val = metrics[rule.field];
+    if (val == null) continue;
+    const triggered = rule.direction === "above" ? val >= rule.threshold : val <= rule.threshold;
+    if (!triggered) continue;
+    const last = lastFired.get(rule.id) ?? 0;
+    if (now - last < rule.cooldownSec * 1e3) continue;
+    lastFired.set(rule.id, now);
+    notify2(rule.message(val), rule.level);
+  }
+}
+function resetToastCooldowns() {
+  lastFired.clear();
+}
+
+// src/tui/command-palette.ts
+import { Container, Text } from "@mariozechner/pi-tui";
+import { SelectList } from "@mariozechner/pi-tui";
+function createCommandPalette(tui, theme, opts) {
+  let commands = opts.commands;
+  let overlayHandle = null;
+  let visible = false;
+  function buildOverlay() {
+    const items = commands.map((cmd) => ({
+      value: cmd.name,
+      label: `/${cmd.name}`,
+      description: cmd.description
+    }));
+    const header = new Text();
+    header.setText(theme.fg("accent", " Commands") + theme.fg("dim", "  (type to filter, esc to close)"));
+    const list = new SelectList(items, 20, {
+      selectedPrefix: (t) => theme.fg("accent", t),
+      selectedText: (t) => theme.fg("accent", t),
+      description: (t) => theme.fg("dim", t),
+      scrollInfo: (t) => theme.fg("muted", t),
+      noMatch: (t) => theme.fg("dim", t)
+    });
+    list.onSelect = (item) => {
+      const cmd = commands.find((c) => c.name === item.value);
+      hide();
+      if (cmd) opts.onSelect(cmd);
+    };
+    list.onCancel = () => hide();
+    const container = new Container();
+    container.addChild(header);
+    container.addChild(list);
+    overlayHandle = tui.showOverlay(container, {
+      width: "60%",
+      minWidth: 40,
+      maxHeight: "50%",
+      anchor: "top-center",
+      offsetY: 3
+    });
+    tui.setFocus(list);
+    visible = true;
+  }
+  function show() {
+    if (visible) {
+      hide();
+      return;
+    }
+    buildOverlay();
+  }
+  function hide() {
+    if (overlayHandle) {
+      overlayHandle.hide();
+      overlayHandle = null;
+    }
+    visible = false;
+  }
+  function updateCommands(cmds) {
+    commands = cmds;
+  }
+  function dispose() {
+    hide();
+  }
+  return { show, hide, isVisible: () => visible, updateCommands, dispose };
+}
+
+// src/tui/render-scheduler.ts
+function createRenderScheduler(tui) {
+  let debounceTimer = null;
+  let agoTimer = null;
+  let lastDataRender = 0;
+  function requestDataRender() {
+    const now = Date.now();
+    const elapsed = now - lastDataRender;
+    if (elapsed >= 16) {
+      lastDataRender = now;
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      tui.requestRender();
+      return;
+    }
+    if (!debounceTimer) {
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        lastDataRender = Date.now();
+        tui.requestRender();
+      }, 16 - elapsed);
+    }
+  }
+  function requestImmediateRender() {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
+    lastDataRender = Date.now();
+    tui.requestRender();
+  }
+  function start() {
+    if (!agoTimer) {
+      agoTimer = setInterval(() => tui.requestRender(), 3e4);
+    }
+  }
+  function stop() {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
+    if (agoTimer) {
+      clearInterval(agoTimer);
+      agoTimer = null;
+    }
+  }
+  return { requestDataRender, requestImmediateRender, start, stop };
+}
+
+// src/tui/overlay-panel.ts
+import { Container as Container2, Text as Text2 } from "@mariozechner/pi-tui";
+import { truncateToWidth } from "@mariozechner/pi-tui";
+var SPARK_CHARS = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
+function sparkline(values, width = 20) {
+  if (!values.length) return "";
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const recent = values.slice(-width);
+  return recent.map((v) => {
+    const idx = Math.round((v - min) / range * (SPARK_CHARS.length - 1));
+    return SPARK_CHARS[idx];
+  }).join("");
+}
+var HISTORY_SIZE = 60;
+var history = [];
+function pushHistory(entry) {
+  history.push(entry);
+  if (history.length > HISTORY_SIZE) history.shift();
+}
+function clearHistory() {
+  history.length = 0;
+}
+function createExgPanel(tui, theme, state) {
+  let overlayHandle = null;
+  let visible = false;
+  let panelText = null;
+  function renderContent(width) {
+    const lines = [];
+    const s = symbols();
+    const w = width - 4;
+    lines.push(theme.fg("accent", ` ${s.logo} EXG Monitor`));
+    lines.push(theme.fg("dim", " " + s.separator.repeat(Math.max(0, w))));
+    if (!state.getOnline()) {
+      lines.push("");
+      lines.push(theme.fg("dim", "  " + s.exgOffline + " Device offline"));
+      lines.push(theme.fg("dim", "  /connect to reconnect"));
+      return lines;
+    }
+    const m = state.getMetrics();
+    if (!m) {
+      lines.push(theme.fg("dim", "  Waiting for data..."));
+      return lines;
+    }
+    const dev = state.getDeviceName();
+    if (dev) {
+      lines.push(theme.fg("dim", `  ${s.device} `) + theme.fg("accent", dev));
+    }
+    lines.push("");
+    const scoreRow = (label2, field, color, pct = true) => {
+      const val = m[field];
+      if (val == null) return;
+      const hist = history.map((h) => h[field] ?? 0);
+      const spark = theme.fg(color, sparkline(hist, Math.min(20, w - 18)));
+      const valStr = pct ? `${(val * 100).toFixed(0)}%` : String(Math.round(val));
+      lines.push(truncateToWidth(
+        `  ${theme.fg("dim", label2.padEnd(10))} ${theme.fg(color, valStr.padStart(4))} ${spark}`,
+        width
+      ));
+    };
+    scoreRow("Focus", "focus", "success");
+    scoreRow("Cog.Load", "cognitive_load", "warning");
+    scoreRow("Relax", "relaxation", "success");
+    scoreRow("Engage", "engagement", "accent");
+    scoreRow("Drowsy", "drowsiness", "error");
+    scoreRow("Mood", "mood", "success");
+    if (m.hr != null) {
+      scoreRow("Heart", "hr", "error", false);
+    }
+    lines.push("");
+    lines.push(theme.fg("dim", " " + s.separator.repeat(Math.max(0, w))));
+    lines.push(theme.fg("accent", "  Bands"));
+    const b = m.bands ?? {};
+    const vals = [b.rel_delta, b.rel_theta, b.rel_alpha, b.rel_beta, b.rel_gamma];
+    const scale = Math.max(...vals.map((v) => v ?? 0), 1e-9);
+    const barW = Math.max(5, Math.min(15, w - 14));
+    const bandRow = (sym, label2, val, color) => {
+      if (val == null) return;
+      const filled = Math.min(barW, Math.round(val / scale * barW));
+      const empty = Math.max(0, barW - filled);
+      const bar = theme.fg(color, s.barFilled.repeat(filled)) + theme.fg("dim", s.barEmpty.repeat(empty));
+      const pct = `${Math.round(val * 100)}%`.padStart(4);
+      lines.push(truncateToWidth(`  ${theme.fg("dim", sym)} ${bar} ${theme.fg(color, pct)}`, width));
+    };
+    bandRow(s.bandDelta, "delta", b.rel_delta, "accent");
+    bandRow(s.bandTheta, "theta", b.rel_theta, "warning");
+    bandRow(s.bandAlpha, "alpha", b.rel_alpha, "success");
+    bandRow(s.bandBeta, "beta", b.rel_beta, "error");
+    bandRow(s.bandGamma, "gamma", b.rel_gamma, "syntaxType");
+    if (history.length >= 5) {
+      lines.push("");
+      lines.push(theme.fg("dim", " " + s.separator.repeat(Math.max(0, w))));
+      lines.push(theme.fg("accent", "  Trends") + theme.fg("dim", ` (${history.length} samples)`));
+      const trend = (field, label2) => {
+        const vals2 = history.map((h) => h[field] ?? 0).filter((v) => v > 0);
+        if (vals2.length < 3) return;
+        const recent = vals2.slice(-5);
+        const earlier = vals2.slice(-10, -5);
+        if (!earlier.length || !recent.length) return;
+        const avgRecent = recent.reduce((a, b2) => a + b2, 0) / recent.length;
+        const avgEarlier = earlier.reduce((a, b2) => a + b2, 0) / earlier.length;
+        const delta = avgRecent - avgEarlier;
+        const arrow = delta > 0.05 ? theme.fg("success", "\u2191") : delta < -0.05 ? theme.fg("error", "\u2193") : theme.fg("dim", "\u2192");
+        lines.push(`  ${theme.fg("dim", label2.padEnd(10))} ${arrow}`);
+      };
+      trend("focus", "Focus");
+      trend("relaxation", "Relax");
+      trend("engagement", "Engage");
+    }
+    lines.push("");
+    lines.push(theme.fg("muted", "  ctrl+e close  /exg details"));
+    return lines;
+  }
+  function buildPanel() {
+    panelText = new Text2();
+    panelText.setText("");
+    const container = new Container2();
+    container.addChild(panelText);
+    overlayHandle = tui.showOverlay(container, {
+      width: "30%",
+      minWidth: 32,
+      maxHeight: "80%",
+      anchor: "right-center",
+      offsetX: -1,
+      nonCapturing: true
+    });
+    visible = true;
+    refresh();
+  }
+  function refresh() {
+    if (!visible || !panelText) return;
+    const width = 38;
+    const content = renderContent(width);
+    panelText.setText(content.join("\n"));
+    tui.requestRender();
+  }
+  function show() {
+    if (visible) return;
+    buildPanel();
+  }
+  function hide() {
+    if (overlayHandle) {
+      overlayHandle.hide();
+      overlayHandle = null;
+    }
+    panelText = null;
+    visible = false;
+  }
+  function toggle() {
+    if (visible) hide();
+    else show();
+  }
+  function dispose() {
+    hide();
+    clearHistory();
+  }
+  return { show, hide, toggle, isVisible: () => visible, refresh, dispose };
+}
+
+// src/tui/overlay-manager.ts
+import { matchesKey, Key } from "@mariozechner/pi-tui";
+function createOverlayManager() {
+  const overlays = /* @__PURE__ */ new Map();
+  const showOrder = [];
+  function register(overlay) {
+    overlays.set(overlay.id, overlay);
+  }
+  function unregister(id) {
+    const o = overlays.get(id);
+    if (o?.isVisible()) o.hide();
+    overlays.delete(id);
+    const idx = showOrder.indexOf(id);
+    if (idx >= 0) showOrder.splice(idx, 1);
+  }
+  function show(id) {
+    const o = overlays.get(id);
+    if (!o) return;
+    if (o.modal) {
+      for (const other of overlays.values()) {
+        if (other.id !== id && other.modal && other.isVisible()) {
+          other.hide();
+          const idx2 = showOrder.indexOf(other.id);
+          if (idx2 >= 0) showOrder.splice(idx2, 1);
+        }
+      }
+    }
+    o.show();
+    const idx = showOrder.indexOf(id);
+    if (idx >= 0) showOrder.splice(idx, 1);
+    showOrder.push(id);
+  }
+  function hide(id) {
+    const o = overlays.get(id);
+    if (o?.isVisible()) o.hide();
+    const idx = showOrder.indexOf(id);
+    if (idx >= 0) showOrder.splice(idx, 1);
+  }
+  function toggle(id) {
+    const o = overlays.get(id);
+    if (!o) return;
+    if (o.isVisible()) hide(id);
+    else show(id);
+  }
+  function dismissTopModal() {
+    for (let i = showOrder.length - 1; i >= 0; i--) {
+      const o = overlays.get(showOrder[i]);
+      if (o?.modal && o.isVisible()) {
+        hide(o.id);
+        return true;
+      }
+    }
+    return false;
+  }
+  function hasModalVisible() {
+    for (const o of overlays.values()) {
+      if (o.modal && o.isVisible()) return true;
+    }
+    return false;
+  }
+  function get(id) {
+    return overlays.get(id);
+  }
+  function installKeyHandler(tui) {
+    const listener = (data) => {
+      if (matchesKey(data, Key.escape)) {
+        if (dismissTopModal()) {
+          return { consume: true };
+        }
+      }
+      return void 0;
+    };
+    tui.addInputListener(listener);
+    return () => tui.removeInputListener(listener);
+  }
+  function dispose() {
+    for (const o of overlays.values()) {
+      if (o.isVisible()) o.hide();
+    }
+    overlays.clear();
+    showOrder.length = 0;
+  }
+  return {
+    register,
+    unregister,
+    show,
+    hide,
+    toggle,
+    dismissTopModal,
+    hasModalVisible,
+    get,
+    installKeyHandler,
+    dispose
+  };
+}
+
+// src/neuroloop.ts
 import WS from "ws";
 
 // src/neuroskill/run.ts
 import { execFile as execFile2 } from "node:child_process";
-import { existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync2, writeFileSync } from "node:fs";
-import { homedir as homedir2 } from "node:os";
-import { join as join2 } from "node:path";
+import { existsSync as existsSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync3, writeFileSync as writeFileSync2 } from "node:fs";
+import { homedir as homedir3 } from "node:os";
+import { join as join3 } from "node:path";
 import { promisify as promisify2 } from "node:util";
 
 // src/runtime-updates.ts
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync2 } from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import { join as join2 } from "node:path";
 import { promisify } from "node:util";
 var execFileAsync = promisify(execFile);
-var AGENT_DIR = join(homedir(), ".neuroloop");
-var RUNTIME_PREFIX = join(AGENT_DIR, "runtime");
-var RUNTIME_NODE_MODULES = join(RUNTIME_PREFIX, "node_modules");
+var AGENT_DIR = join2(homedir2(), ".neuroloop");
+var RUNTIME_PREFIX = join2(AGENT_DIR, "runtime");
+var RUNTIME_NODE_MODULES = join2(RUNTIME_PREFIX, "node_modules");
 var IS_WINDOWS = process.platform === "win32";
 var runtimeState = null;
 function parseSemver(v) {
@@ -83,19 +753,19 @@ async function getNpmLatestVersion(pkg) {
 }
 function getInstalledRuntimeVersion(pkg) {
   try {
-    const p = join(RUNTIME_NODE_MODULES, pkg, "package.json");
-    if (!existsSync(p)) return void 0;
-    const data = JSON.parse(readFileSync(p, "utf8"));
+    const p = join2(RUNTIME_NODE_MODULES, pkg, "package.json");
+    if (!existsSync2(p)) return void 0;
+    const data = JSON.parse(readFileSync2(p, "utf8"));
     return data.version;
   } catch {
     return void 0;
   }
 }
 function getLocalNeuroSkillBinPath() {
-  return join(RUNTIME_NODE_MODULES, ".bin", IS_WINDOWS ? "neuroskill.cmd" : "neuroskill");
+  return join2(RUNTIME_NODE_MODULES, ".bin", IS_WINDOWS ? "neuroskill.cmd" : "neuroskill");
 }
 async function installRuntimePackage(pkg, version) {
-  if (!existsSync(RUNTIME_PREFIX)) mkdirSync(RUNTIME_PREFIX, { recursive: true, mode: 448 });
+  if (!existsSync2(RUNTIME_PREFIX)) mkdirSync2(RUNTIME_PREFIX, { recursive: true, mode: 448 });
   await execFileAsync("npm", ["install", "--prefix", RUNTIME_PREFIX, "--no-save", `${pkg}@${version}`], {
     timeout: 18e4,
     maxBuffer: 4 * 1024 * 1024,
@@ -191,18 +861,18 @@ async function checkAuthStatus() {
   return "none";
 }
 function getDaemonTokenPath() {
-  const configDir = process.env.XDG_CONFIG_HOME || (process.platform === "win32" ? join2(process.env.APPDATA || join2(homedir2(), "AppData", "Roaming")) : join2(homedir2(), process.platform === "darwin" ? "Library/Application Support" : ".config"));
-  return join2(configDir, "skill", "daemon", "auth.token");
+  const configDir = process.env.XDG_CONFIG_HOME || (process.platform === "win32" ? join3(process.env.APPDATA || join3(homedir3(), "AppData", "Roaming")) : join3(homedir3(), process.platform === "darwin" ? "Library/Application Support" : ".config"));
+  return join3(configDir, "skill", "daemon", "auth.token");
 }
 var execFileAsync2 = promisify2(execFile2);
 var NEUROSKILL_TIMEOUT_MS = 3e4;
-var AGENT_DIR2 = join2(homedir2(), ".neuroloop");
-var PORT_FILE = join2(AGENT_DIR2, "neuroskill_port.json");
+var AGENT_DIR2 = join3(homedir3(), ".neuroloop");
+var PORT_FILE = join3(AGENT_DIR2, "neuroskill_port.json");
 var _port = 18444;
 function loadPort() {
   try {
-    if (existsSync2(PORT_FILE)) {
-      const { port } = JSON.parse(readFileSync2(PORT_FILE, "utf8"));
+    if (existsSync3(PORT_FILE)) {
+      const { port } = JSON.parse(readFileSync3(PORT_FILE, "utf8"));
       if (typeof port === "number" && port > 0 && port <= 65535) return port;
     }
   } catch {
@@ -211,8 +881,8 @@ function loadPort() {
 }
 function savePort(port) {
   try {
-    if (!existsSync2(AGENT_DIR2)) mkdirSync2(AGENT_DIR2, { recursive: true, mode: 448 });
-    writeFileSync(PORT_FILE, JSON.stringify({ port }), { encoding: "utf8", mode: 384 });
+    if (!existsSync3(AGENT_DIR2)) mkdirSync3(AGENT_DIR2, { recursive: true, mode: 448 });
+    writeFileSync2(PORT_FILE, JSON.stringify({ port }), { encoding: "utf8", mode: 384 });
   } catch {
   }
 }
@@ -281,7 +951,7 @@ function escapeArg(arg) {
 async function runNeuroSkill(args) {
   try {
     const localBin = getLocalNeuroSkillBinPath();
-    const hasLocalBin = existsSync2(localBin);
+    const hasLocalBin = existsSync3(localBin);
     const cliArgs = ["--port", String(_port), ...args.map(escapeArg)];
     const { stdout } = await execFileAsync2(hasLocalBin ? localBin : "npx", hasLocalBin ? cliArgs : ["neuroskill", ...cliArgs], {
       timeout: NEUROSKILL_TIMEOUT_MS,
@@ -897,29 +1567,29 @@ function detectSignals(lp) {
 }
 
 // src/neuroskill/context.ts
-import { existsSync as existsSync3, readFileSync as readFileSync3 } from "node:fs";
-import { dirname, join as join3 } from "node:path";
-import { homedir as homedir3 } from "node:os";
+import { existsSync as existsSync4, readFileSync as readFileSync4 } from "node:fs";
+import { dirname, join as join4 } from "node:path";
+import { homedir as homedir4 } from "node:os";
 import { fileURLToPath } from "node:url";
-var BUNDLED_SKILLS_ROOT = join3(
+var BUNDLED_SKILLS_ROOT = join4(
   dirname(fileURLToPath(import.meta.url)),
   "..",
   "..",
   "skills"
 );
-var AGENT_SKILLS_ROOT = join3(homedir3(), ".neuroloop", "skills-cache");
-var LEGACY_AGENT_SKILLS_ROOT = join3(homedir3(), ".neuroloop", "skills");
+var AGENT_SKILLS_ROOT = join4(homedir4(), ".neuroloop", "skills-cache");
+var LEGACY_AGENT_SKILLS_ROOT = join4(homedir4(), ".neuroloop", "skills");
 var PROTOCOLS_SKILL_PATHS = [
-  join3(AGENT_SKILLS_ROOT, "skills", "neuroskill-protocols", "SKILL.md"),
-  join3(AGENT_SKILLS_ROOT, "neuroskill-protocols", "SKILL.md"),
-  join3(LEGACY_AGENT_SKILLS_ROOT, "skills", "neuroskill-protocols", "SKILL.md"),
-  join3(LEGACY_AGENT_SKILLS_ROOT, "neuroskill-protocols", "SKILL.md"),
-  join3(BUNDLED_SKILLS_ROOT, "skills", "neuroskill-protocols", "SKILL.md"),
-  join3(BUNDLED_SKILLS_ROOT, "neuroskill-protocols", "SKILL.md")
+  join4(AGENT_SKILLS_ROOT, "skills", "neuroskill-protocols", "SKILL.md"),
+  join4(AGENT_SKILLS_ROOT, "neuroskill-protocols", "SKILL.md"),
+  join4(LEGACY_AGENT_SKILLS_ROOT, "skills", "neuroskill-protocols", "SKILL.md"),
+  join4(LEGACY_AGENT_SKILLS_ROOT, "neuroskill-protocols", "SKILL.md"),
+  join4(BUNDLED_SKILLS_ROOT, "skills", "neuroskill-protocols", "SKILL.md"),
+  join4(BUNDLED_SKILLS_ROOT, "neuroskill-protocols", "SKILL.md")
 ];
 function resolveProtocolsSkillPath() {
   for (const p of PROTOCOLS_SKILL_PATHS) {
-    if (existsSync3(p)) return p;
+    if (existsSync4(p)) return p;
   }
   return null;
 }
@@ -950,7 +1620,7 @@ async function selectContextualData(prompt) {
   const protocolsSkillPath = s.protocols ? resolveProtocolsSkillPath() : null;
   if (protocolsSkillPath) {
     try {
-      const skillContent = readFileSync3(protocolsSkillPath, "utf8");
+      const skillContent = readFileSync4(protocolsSkillPath, "utf8");
       extras.push(`## \u{1F9D8} Protocol Repertoire
 ${skillContent}`);
     } catch {
@@ -1237,14 +1907,14 @@ ${r.text}` : null);
 
 // src/skills-sync.ts
 import { execFileSync } from "node:child_process";
-import { existsSync as existsSync4, mkdirSync as mkdirSync3, readdirSync, renameSync } from "node:fs";
-import { homedir as homedir4 } from "node:os";
-import { dirname as dirname2, join as join4 } from "node:path";
+import { existsSync as existsSync5, mkdirSync as mkdirSync4, readdirSync, renameSync } from "node:fs";
+import { homedir as homedir5 } from "node:os";
+import { dirname as dirname2, join as join5 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var SRC_DIR = dirname2(fileURLToPath2(import.meta.url));
-var BUNDLED_SKILLS_DIR = join4(SRC_DIR, "..", "skills");
-var AGENT_SKILLS_DIR = join4(homedir4(), ".neuroloop", "skills-cache");
-var LEGACY_AGENT_SKILLS_DIR = join4(homedir4(), ".neuroloop", "skills");
+var BUNDLED_SKILLS_DIR = join5(SRC_DIR, "..", "skills");
+var AGENT_SKILLS_DIR = join5(homedir5(), ".neuroloop", "skills-cache");
+var LEGACY_AGENT_SKILLS_DIR = join5(homedir5(), ".neuroloop", "skills");
 var SKILLS_REPO_URL = "https://github.com/NeuroSkill-com/skills.git";
 function git(args, cwd) {
   return execFileSync("git", args, {
@@ -1261,15 +1931,15 @@ function maybeRev(cwd) {
   }
 }
 function hasSkillsContent(root) {
-  if (!existsSync4(root)) return false;
-  if (existsSync4(join4(root, "SKILL.md"))) return true;
-  const containers = [root, join4(root, "skills")];
+  if (!existsSync5(root)) return false;
+  if (existsSync5(join5(root, "SKILL.md"))) return true;
+  const containers = [root, join5(root, "skills")];
   for (const container of containers) {
-    if (!existsSync4(container)) continue;
+    if (!existsSync5(container)) continue;
     try {
       for (const entry of readdirSync(container, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue;
-        if (existsSync4(join4(container, entry.name, "SKILL.md"))) return true;
+        if (existsSync5(join5(container, entry.name, "SKILL.md"))) return true;
       }
     } catch {
     }
@@ -1287,14 +1957,14 @@ async function syncSkillsFromGitHub(opts = {}) {
   const onProgress = opts.onProgress;
   const report = (stage, percent) => onProgress?.({ stage, percent });
   const parentDir = dirname2(AGENT_SKILLS_DIR);
-  mkdirSync3(parentDir, { recursive: true });
-  if (existsSync4(LEGACY_AGENT_SKILLS_DIR)) {
+  mkdirSync4(parentDir, { recursive: true });
+  if (existsSync5(LEGACY_AGENT_SKILLS_DIR)) {
     try {
-      if (!existsSync4(AGENT_SKILLS_DIR)) {
+      if (!existsSync5(AGENT_SKILLS_DIR)) {
         renameSync(LEGACY_AGENT_SKILLS_DIR, AGENT_SKILLS_DIR);
       } else {
-        const legacyDisabled = join4(parentDir, "skills-legacy-disabled");
-        if (!existsSync4(legacyDisabled)) {
+        const legacyDisabled = join5(parentDir, "skills-legacy-disabled");
+        if (!existsSync5(legacyDisabled)) {
           renameSync(LEGACY_AGENT_SKILLS_DIR, legacyDisabled);
         }
       }
@@ -1303,7 +1973,7 @@ async function syncSkillsFromGitHub(opts = {}) {
   }
   report("Preparing skills sync", 5);
   try {
-    const hasGitClone = existsSync4(join4(AGENT_SKILLS_DIR, ".git"));
+    const hasGitClone = existsSync5(join5(AGENT_SKILLS_DIR, ".git"));
     if (hasGitClone) {
       report("Fetching latest skills", 20);
       const before = maybeRev(AGENT_SKILLS_DIR);
@@ -1367,10 +2037,10 @@ async function syncSkillsFromGitHub(opts = {}) {
 }
 
 // src/skill-llm.ts
-import { readFileSync as readFileSync4 } from "node:fs";
+import { readFileSync as readFileSync5 } from "node:fs";
 function loadToken() {
   try {
-    return readFileSync4(getDaemonTokenPath(), "utf8").trim();
+    return readFileSync5(getDaemonTokenPath(), "utf8").trim();
   } catch {
     return "";
   }
@@ -1507,19 +2177,19 @@ async function getSkillServerBaseUrl() {
 
 // src/model-config.ts
 import { execFile as execFile3 } from "node:child_process";
-import { existsSync as existsSync5, mkdirSync as mkdirSync4, readFileSync as readFileSync5, writeFileSync as writeFileSync2 } from "node:fs";
-import { homedir as homedir5 } from "node:os";
-import { join as join5 } from "node:path";
+import { existsSync as existsSync6, mkdirSync as mkdirSync5, readFileSync as readFileSync6, writeFileSync as writeFileSync3 } from "node:fs";
+import { homedir as homedir6 } from "node:os";
+import { join as join6 } from "node:path";
 import { promisify as promisify3 } from "node:util";
 var execFileAsync3 = promisify3(execFile3);
-var MODEL_CONFIG_PATH = join5(homedir5(), ".neuroloop", "models.json");
+var MODEL_CONFIG_PATH = join6(homedir6(), ".neuroloop", "models.json");
 function defaultModelsFile() {
   return { providers: {} };
 }
 function readModelsFile() {
   try {
-    if (!existsSync5(MODEL_CONFIG_PATH)) return defaultModelsFile();
-    const parsed = JSON.parse(readFileSync5(MODEL_CONFIG_PATH, "utf8"));
+    if (!existsSync6(MODEL_CONFIG_PATH)) return defaultModelsFile();
+    const parsed = JSON.parse(readFileSync6(MODEL_CONFIG_PATH, "utf8"));
     if (!parsed.providers || typeof parsed.providers !== "object") return defaultModelsFile();
     return parsed;
   } catch {
@@ -1527,9 +2197,9 @@ function readModelsFile() {
   }
 }
 function writeModelsFile(file) {
-  const dir = join5(homedir5(), ".neuroloop");
-  if (!existsSync5(dir)) mkdirSync4(dir, { recursive: true, mode: 448 });
-  writeFileSync2(MODEL_CONFIG_PATH, JSON.stringify(file, null, 2) + "\n", {
+  const dir = join6(homedir6(), ".neuroloop");
+  if (!existsSync6(dir)) mkdirSync5(dir, { recursive: true, mode: 448 });
+  writeFileSync3(MODEL_CONFIG_PATH, JSON.stringify(file, null, 2) + "\n", {
     encoding: "utf8",
     mode: 384
   });
@@ -1572,28 +2242,28 @@ async function openModelsFileInSystem() {
 }
 
 // src/memory.ts
-import { existsSync as existsSync6, mkdirSync as mkdirSync5, readFileSync as readFileSync6, writeFileSync as writeFileSync3 } from "node:fs";
-import { homedir as homedir6 } from "node:os";
-import { dirname as dirname3, join as join6 } from "node:path";
-var MEMORY_PATH = join6(homedir6(), ".neuroskill", "memory.md");
+import { existsSync as existsSync7, mkdirSync as mkdirSync6, readFileSync as readFileSync7, writeFileSync as writeFileSync4 } from "node:fs";
+import { homedir as homedir7 } from "node:os";
+import { dirname as dirname3, join as join7 } from "node:path";
+var MEMORY_PATH = join7(homedir7(), ".neuroskill", "memory.md");
 function readMemory(path = MEMORY_PATH) {
-  if (!existsSync6(path)) return void 0;
-  return readFileSync6(path, "utf-8").trim() || void 0;
+  if (!existsSync7(path)) return void 0;
+  return readFileSync7(path, "utf-8").trim() || void 0;
 }
 var MAX_MEMORY_BYTES = 512 * 1024;
 function writeMemory(content, mode2, path = MEMORY_PATH) {
-  mkdirSync5(dirname3(path), { recursive: true, mode: 448 });
+  mkdirSync6(dirname3(path), { recursive: true, mode: 448 });
   if (mode2 === "append") {
-    const existing = existsSync6(path) ? readFileSync6(path, "utf-8") : "";
+    const existing = existsSync7(path) ? readFileSync7(path, "utf-8") : "";
     const sep = existing && !existing.endsWith("\n") ? "\n" : "";
     const combined = existing + sep + content;
     if (Buffer.byteLength(combined, "utf-8") > MAX_MEMORY_BYTES) {
       throw new Error(`Memory file would exceed ${MAX_MEMORY_BYTES / 1024} KB limit. Use mode "overwrite" to replace, or trim old entries first.`);
     }
-    writeFileSync3(path, combined, { encoding: "utf-8", mode: 384 });
+    writeFileSync4(path, combined, { encoding: "utf-8", mode: 384 });
   } else {
     const trimmed = Buffer.byteLength(content, "utf-8") > MAX_MEMORY_BYTES ? content.slice(0, MAX_MEMORY_BYTES) : content;
-    writeFileSync3(path, trimmed, { encoding: "utf-8", mode: 384 });
+    writeFileSync4(path, trimmed, { encoding: "utf-8", mode: 384 });
   }
 }
 
@@ -2162,15 +2832,15 @@ ${step.instruction}`);
 };
 
 // src/compression.ts
-import { existsSync as existsSync7, mkdirSync as mkdirSync6, readFileSync as readFileSync7, writeFileSync as writeFileSync4 } from "node:fs";
-import { homedir as homedir7 } from "node:os";
-import { join as join7 } from "node:path";
-var AGENT_DIR3 = join7(homedir7(), ".neuroloop");
-var COMPRESSION_SETTINGS_PATH = join7(AGENT_DIR3, "compression.json");
+import { existsSync as existsSync8, mkdirSync as mkdirSync7, readFileSync as readFileSync8, writeFileSync as writeFileSync5 } from "node:fs";
+import { homedir as homedir8 } from "node:os";
+import { join as join8 } from "node:path";
+var AGENT_DIR3 = join8(homedir8(), ".neuroloop");
+var COMPRESSION_SETTINGS_PATH = join8(AGENT_DIR3, "compression.json");
 function loadCompressionSettings() {
   try {
-    if (existsSync7(COMPRESSION_SETTINGS_PATH)) {
-      const raw = readFileSync7(COMPRESSION_SETTINGS_PATH, "utf8");
+    if (existsSync8(COMPRESSION_SETTINGS_PATH)) {
+      const raw = readFileSync8(COMPRESSION_SETTINGS_PATH, "utf8");
       const settings = JSON.parse(raw);
       if (settings.mode === "standard" || settings.mode === "strong" || settings.mode === "off") {
         return settings;
@@ -2182,10 +2852,10 @@ function loadCompressionSettings() {
 }
 function saveCompressionSettings(settings) {
   try {
-    if (!existsSync7(AGENT_DIR3)) {
-      mkdirSync6(AGENT_DIR3, { recursive: true, mode: 448 });
+    if (!existsSync8(AGENT_DIR3)) {
+      mkdirSync7(AGENT_DIR3, { recursive: true, mode: 448 });
     }
-    writeFileSync4(
+    writeFileSync5(
       COMPRESSION_SETTINGS_PATH,
       JSON.stringify(settings, null, 2),
       { encoding: "utf8", mode: 384 }
@@ -2266,13 +2936,13 @@ function getCompressionModeName(mode2) {
 }
 
 // src/neuroloop.ts
-var _pkgVersion = (true ? "0.1.0" : void 0) ?? JSON.parse(readFileSync8(join8(dirname4(fileURLToPath3(import.meta.url)), "../package.json"), "utf8")).version;
-var AGENT_DIR4 = join8(homedir8(), ".neuroskill");
-var VERSION_STATE_DIR = join8(homedir8(), ".neuroloop");
-var NEUROLOOP_DIR = join8(dirname4(fileURLToPath3(import.meta.url)), "..");
-var NEUROLOOP_MD_PATH = join8(NEUROLOOP_DIR, "NEUROLOOP.md");
-var CHANGELOG_PATH = join8(NEUROLOOP_DIR, "CHANGELOG.md");
-var CHANGELOG_STATE_PATH = join8(VERSION_STATE_DIR, "changelog_state.json");
+var _pkgVersion = (true ? "0.1.0" : void 0) ?? JSON.parse(readFileSync9(join9(dirname4(fileURLToPath3(import.meta.url)), "../package.json"), "utf8")).version;
+var AGENT_DIR4 = join9(homedir9(), ".neuroskill");
+var VERSION_STATE_DIR = join9(homedir9(), ".neuroloop");
+var NEUROLOOP_DIR = join9(dirname4(fileURLToPath3(import.meta.url)), "..");
+var NEUROLOOP_MD_PATH = join9(NEUROLOOP_DIR, "NEUROLOOP.md");
+var CHANGELOG_PATH = join9(NEUROLOOP_DIR, "CHANGELOG.md");
+var CHANGELOG_STATE_PATH = join9(VERSION_STATE_DIR, "changelog_state.json");
 var NEUROSKILL_STATUS_TYPE = "neuroskill-status";
 function formatStatusText(d) {
   const lines = [];
@@ -2361,28 +3031,28 @@ function formatStatusText(d) {
   }
   return lines.join("\n");
 }
-var CALIBRATION_PROMPT_STATE_PATH = join8(AGENT_DIR4, "last_calibration_prompt.json");
+var CALIBRATION_PROMPT_STATE_PATH = join9(AGENT_DIR4, "last_calibration_prompt.json");
 var CALIBRATION_PROMPT_INTERVAL_MS = 24 * 60 * 60 * 1e3;
 function readChangelogState() {
   try {
-    if (!existsSync8(CHANGELOG_STATE_PATH)) return {};
-    return JSON.parse(readFileSync8(CHANGELOG_STATE_PATH, "utf8"));
+    if (!existsSync9(CHANGELOG_STATE_PATH)) return {};
+    return JSON.parse(readFileSync9(CHANGELOG_STATE_PATH, "utf8"));
   } catch {
     return {};
   }
 }
 function writeChangelogState(state) {
   try {
-    if (!existsSync8(VERSION_STATE_DIR)) {
-      mkdirSync7(VERSION_STATE_DIR, { recursive: true, mode: 448 });
+    if (!existsSync9(VERSION_STATE_DIR)) {
+      mkdirSync8(VERSION_STATE_DIR, { recursive: true, mode: 448 });
     }
-    writeFileSync5(CHANGELOG_STATE_PATH, JSON.stringify(state), { encoding: "utf8", mode: 384 });
+    writeFileSync6(CHANGELOG_STATE_PATH, JSON.stringify(state), { encoding: "utf8", mode: 384 });
   } catch {
   }
 }
 function changelogSinceLastShown(currentVersion) {
-  if (!existsSync8(CHANGELOG_PATH)) return null;
-  const content = readFileSync8(CHANGELOG_PATH, "utf8");
+  if (!existsSync9(CHANGELOG_PATH)) return null;
+  const content = readFileSync9(CHANGELOG_PATH, "utf8");
   const state = readChangelogState();
   if (state.lastShownVersion === currentVersion) return null;
   const matches = [...content.matchAll(/^## \[(.+?)\].*$/gm)];
@@ -2409,8 +3079,8 @@ ${block}`;
 }
 function shouldNudgeCalibration() {
   try {
-    if (existsSync8(CALIBRATION_PROMPT_STATE_PATH)) {
-      const raw = readFileSync8(CALIBRATION_PROMPT_STATE_PATH, "utf8");
+    if (existsSync9(CALIBRATION_PROMPT_STATE_PATH)) {
+      const raw = readFileSync9(CALIBRATION_PROMPT_STATE_PATH, "utf8");
       const { lastPromptedAt } = JSON.parse(raw);
       if (Date.now() - lastPromptedAt < CALIBRATION_PROMPT_INTERVAL_MS) {
         return false;
@@ -2422,7 +3092,7 @@ function shouldNudgeCalibration() {
 }
 function markCalibrationNudgeSent() {
   try {
-    writeFileSync5(
+    writeFileSync6(
       CALIBRATION_PROMPT_STATE_PATH,
       JSON.stringify({ lastPromptedAt: Date.now() }),
       { encoding: "utf8", mode: 384 }
@@ -2528,7 +3198,7 @@ BOUNDARIES
 async function neuroloopExtension(pi) {
   pi.registerMessageRenderer(NEUROSKILL_STATUS_TYPE, (message, _opts, _theme) => {
     const text = typeof message.content === "string" ? message.content : message.content.filter((c) => c.type === "text").map((c) => c.text).join("\n");
-    const container = new Container();
+    const container = new Container3();
     container.addChild(new Spacer(1));
     container.addChild(new Markdown(text, 0, 0, getMarkdownTheme()));
     return container;
@@ -2600,11 +3270,11 @@ ${memory}`;
     const systemBody = systemSections.join("\n\n---\n\n");
     let skillIndex = "";
     try {
-      if (existsSync8(NEUROLOOP_MD_PATH)) {
+      if (existsSync9(NEUROLOOP_MD_PATH)) {
         skillIndex = `
 
 ## \u{1F4D6} NeuroLoop Capabilities
-${readFileSync8(NEUROLOOP_MD_PATH, "utf8")}`;
+${readFileSync9(NEUROLOOP_MD_PATH, "utf8")}`;
       }
     } catch {
     }
@@ -2873,6 +3543,13 @@ Available commands and typical args:
   let uiNotify = null;
   let sessionModelRegistry = null;
   let compressionSettings = loadCompressionSettings();
+  let renderScheduler = null;
+  let overlayManager = null;
+  let commandPalette = null;
+  let exgPanel = null;
+  let overlayKeyCleanup = null;
+  let inputListenerCleanup = null;
+  initTheme();
   let llmDownloads = [];
   let llmDownloadSpin = 0;
   let llmDownloadPollTimer = null;
@@ -2915,7 +3592,6 @@ Available commands and typical args:
   let exgWsPort = 18444;
   let exgWsReconnectTimer = null;
   let exgPollTimer = null;
-  let exgAgoTimer = null;
   let exgPollMs = 1e3;
   const SYNC_SPINNER = ["\u280B", "\u2819", "\u2839", "\u2838", "\u283C", "\u2834", "\u2826", "\u2827", "\u2807", "\u280F"];
   function progressBar(percent, width = 14) {
@@ -3015,6 +3691,12 @@ ${result.error}` : result.message, "error");
     };
     exgOnline = true;
     exgUpdatedAt = Date.now();
+    if (uiNotify && exgMetrics) {
+      evaluateToasts(exgMetrics, uiNotify);
+    }
+    if (exgMetrics) {
+      pushHistory({ ...exgMetrics, ts: exgUpdatedAt });
+    }
   }
   function timeAgo(ts) {
     const s = Math.round((Date.now() - ts) / 1e3);
@@ -3059,7 +3741,9 @@ ${result.error}` : result.message, "error");
     gamma: "syntaxType"
     // teal   — high cognition
   };
-  function buildHeader(_tui, theme) {
+  function buildHeader(_tui, baseTheme) {
+    const theme = wrapTheme(baseTheme);
+    const s = symbols();
     const hints = [
       ["esc", "stop"],
       ["ctrl+d", "quit"],
@@ -3088,9 +3772,9 @@ ${result.error}` : result.message, "error");
           connDot = theme.fg("dim", " \u25CB Offline") + lastSeen;
         }
         const website = theme.fg("accent", "\u{1F310}") + " " + theme.fg("dim", "https://www.neuroskill.com");
-        lines.push(truncateToWidth(website, width));
-        const logo = theme.fg("accent", "\u25C6") + " " + theme.bold("NeuroLoop\u2122") + theme.fg("dim", ` v${_pkgVersion}`) + connDot;
-        lines.push(truncateToWidth(logo, width));
+        lines.push(truncateToWidth2(website, width));
+        const logo = theme.fg("accent", s.logo) + " " + theme.bold("NeuroLoop\u2122") + theme.fg("dim", ` v${_pkgVersion}`) + connDot;
+        lines.push(truncateToWidth2(logo, width));
         if (exgOnline && exgDeviceName) {
           const kindMap = {
             muse: "BLE",
@@ -3105,7 +3789,7 @@ ${result.error}` : result.message, "error");
           const chInfo = exgDeviceChannels > 0 ? theme.fg("dim", ` ${exgDeviceChannels}ch`) : "";
           const rateInfo = exgDeviceRate > 0 ? theme.fg("dim", ` @ ${Math.round(exgDeviceRate)}Hz`) : "";
           const transportTag = transport ? theme.fg("muted", ` [${transport}]`) : "";
-          lines.push(truncateToWidth(
+          lines.push(truncateToWidth2(
             " " + theme.fg("dim", "\u2388 ") + theme.fg("accent", exgDeviceName) + transportTag + chInfo + rateInfo,
             width
           ));
@@ -3113,10 +3797,12 @@ ${result.error}` : result.message, "error");
         if (skillsSyncLastAt) {
           const ago = timeAgo(skillsSyncLastAt.getTime()) || "just now";
           const syncLine = " " + theme.bold("NeuroSkill\u2122") + theme.fg("dim", ` skills synced ${ago}`);
-          lines.push(truncateToWidth(syncLine, width));
+          lines.push(truncateToWidth2(syncLine, width));
         }
         const hintStr = hints.map(([k, a]) => theme.fg("muted", k) + theme.fg("dim", " " + a)).join(theme.fg("dim", " \xB7 "));
-        lines.push(truncateToWidth(" " + hintStr, width));
+        lines.push(truncateToWidth2(" " + hintStr, width));
+        const overlayHints = theme.fg("muted", "ctrl+k") + theme.fg("dim", " commands") + theme.fg("dim", " \xB7 ") + theme.fg("muted", "ctrl+e") + theme.fg("dim", " EXG panel");
+        lines.push(truncateToWidth2(" " + overlayHints, width));
         lines.push(sep(theme, width));
         return lines;
       }
@@ -3150,7 +3836,7 @@ ${result.error}` : result.message, "error");
     const wsToken = (() => {
       try {
         const p = getDaemonTokenPath();
-        return readFileSync8(p, "utf8").trim();
+        return readFileSync9(p, "utf8").trim();
       } catch {
         return "";
       }
@@ -3262,7 +3948,9 @@ ${result.error}` : result.message, "error");
             mergeScoresEvent(payload);
           }
         }
-        uiTui?.requestRender();
+        if (renderScheduler) renderScheduler.requestDataRender();
+        else uiTui?.requestRender();
+        exgPanel?.refresh();
         return;
       }
       if (eventType === "label_created") {
@@ -3342,10 +4030,6 @@ ${result.error}` : result.message, "error");
       clearTimeout(exgWsReconnectTimer);
       exgWsReconnectTimer = null;
     }
-    if (exgAgoTimer) {
-      clearInterval(exgAgoTimer);
-      exgAgoTimer = null;
-    }
     exgWs?.close();
     exgWs = null;
   }
@@ -3378,16 +4062,16 @@ ${result.error}` : result.message, "error");
         }
       }, SKILLS_SYNC_INTERVAL_MS);
     }
-    const firstRunMarker = join8(AGENT_DIR4, ".welcome-shown");
-    if (!existsSync8(firstRunMarker)) {
+    const firstRunMarker = join9(AGENT_DIR4, ".welcome-shown");
+    if (!existsSync9(firstRunMarker)) {
       pi.sendMessage({
         customType: NEUROSKILL_STATUS_TYPE,
         content: "Welcome to neuroloop! \u{1F9E0}\n\nQuick start:\n- Connect your EEG device and start Skill app\n- Type naturally \u2014 I can see your brain state\n- /exg to toggle live metrics \xB7 /help for all commands\n\nLearn more at https://www.neuroskill.com",
         display: true,
         details: void 0
       });
-      mkdirSync7(dirname4(firstRunMarker), { recursive: true });
-      writeFileSync5(firstRunMarker, (/* @__PURE__ */ new Date()).toISOString(), "utf8");
+      mkdirSync8(dirname4(firstRunMarker), { recursive: true });
+      writeFileSync6(firstRunMarker, (/* @__PURE__ */ new Date()).toISOString(), "utf8");
     }
     const changelog = changelogSinceLastShown(_pkgVersion);
     if (changelog) {
@@ -3409,18 +4093,95 @@ ${result.error}` : result.message, "error");
         uiTui?.requestRender();
       });
     }
-    ctx.ui.setHeader((tui, theme) => {
+    ctx.ui.setHeader((tui, baseTheme) => {
       uiTui = tui;
+      const theme = wrapTheme(baseTheme);
+      renderScheduler?.stop();
+      renderScheduler = createRenderScheduler(tui);
+      renderScheduler.start();
+      overlayManager?.dispose();
+      overlayManager = createOverlayManager();
+      overlayKeyCleanup?.();
+      overlayKeyCleanup = overlayManager.installKeyHandler(tui);
+      commandPalette?.dispose();
+      const paletteCommands = [
+        { name: "exg", description: "EXG panel on/off/settings" },
+        { name: "connect", description: "Connect to NeuroSkill server" },
+        { name: "llm", description: "LLM server management" },
+        { name: "key", description: "Manage API provider keys" },
+        { name: "model-config", description: "Custom model configuration" },
+        { name: "config", description: "NeuroLoop settings" },
+        { name: "theme", description: "Switch color theme" },
+        { name: "neuro", description: "Run neuroskill subcommand" },
+        { name: "version", description: "Show version status" },
+        { name: "updates", description: "Show changelog updates" },
+        { name: "skills-update", description: "Force sync skills from GitHub" },
+        { name: "calibrate", description: "Start EXG calibration" },
+        { name: "label", description: "Create EXG annotation" },
+        { name: "labels", description: "Label management" },
+        { name: "timer", description: "Focus timer" },
+        { name: "say", description: "Text-to-speech" },
+        { name: "notify", description: "Send OS notification" },
+        { name: "health", description: "HealthKit data queries" },
+        { name: "sleep", description: "Sleep staging" },
+        { name: "compare", description: "Compare EXG sessions" },
+        { name: "toasts", description: "Toggle brain state notifications" },
+        { name: "help", description: "Show all commands" }
+      ];
+      commandPalette = createCommandPalette(tui, theme, {
+        commands: paletteCommands,
+        onSelect: (cmd) => {
+          if (cmd.action) {
+            cmd.action();
+          } else {
+            pi.sendUserMessage(`/${cmd.name}`);
+          }
+        }
+      });
+      overlayManager.register({
+        id: "command-palette",
+        modal: true,
+        show: () => commandPalette?.show(),
+        hide: () => commandPalette?.hide(),
+        isVisible: () => commandPalette?.isVisible() ?? false
+      });
+      exgPanel?.dispose();
+      exgPanel = createExgPanel(tui, theme, {
+        getMetrics: () => exgMetrics ? { ...exgMetrics, ts: exgUpdatedAt ?? Date.now() } : null,
+        getOnline: () => exgOnline,
+        getDeviceName: () => exgDeviceName
+      });
+      overlayManager.register({
+        id: "exg-panel",
+        modal: false,
+        show: () => exgPanel?.show(),
+        hide: () => exgPanel?.hide(),
+        isVisible: () => exgPanel?.isVisible() ?? false
+      });
+      inputListenerCleanup?.();
+      const keyListener = (data) => {
+        if (matchesKey2(data, Key2.ctrl("k"))) {
+          overlayManager?.toggle("command-palette");
+          return { consume: true };
+        }
+        if (matchesKey2(data, Key2.ctrl("e"))) {
+          overlayManager?.toggle("exg-panel");
+          return { consume: true };
+        }
+        return void 0;
+      };
+      tui.addInputListener(keyListener);
+      inputListenerCleanup = () => tui.removeInputListener(keyListener);
       checkAuthStatus().then(() => tui.requestRender());
       discoverExgPort().then((port) => {
         exgWsPort = port;
         connectExgWs();
       });
-      exgAgoTimer = setInterval(() => tui.requestRender(), 3e4);
       return buildHeader(tui, theme);
     });
-    ctx.ui.setFooter((tui, theme, footerData) => {
+    ctx.ui.setFooter((tui, baseTheme, footerData) => {
       uiTui = tui;
+      const theme = wrapTheme(baseTheme);
       const unsub = footerData.onBranchChange(() => tui.requestRender());
       return {
         dispose: unsub,
@@ -3447,8 +4208,8 @@ ${result.error}` : result.message, "error");
             ].filter(Boolean).join(theme.fg("dim", "   "));
             const agoRaw = exgUpdatedAt ? timeAgo(exgUpdatedAt) : "";
             const agoStr = agoRaw ? theme.fg("muted", ` ${agoRaw}`) : "";
-            lines.push(truncateToWidth(" " + scores + agoStr, width));
-            lines.push(truncateToWidth(" " + theme.fg("dim", "\u2502"), width));
+            lines.push(truncateToWidth2(" " + scores + agoStr, width));
+            lines.push(truncateToWidth2(" " + theme.fg("dim", "\u2502"), width));
             const b = m.bands ?? {};
             const bandVals = [b.rel_delta, b.rel_theta, b.rel_alpha, b.rel_beta, b.rel_gamma];
             const bandScale = Math.max(...bandVals.map((v) => v ?? 0), 1e-9);
@@ -3465,19 +4226,19 @@ ${result.error}` : result.message, "error");
               bar("\u03B3", b.rel_gamma, BAND_COLORS.gamma)
             ].join("  ");
             const labelStr = exgLastLabel ? theme.fg("dim", `\u2B21 "${exgLastLabel.text}"  ${timeAgo(exgLastLabel.createdAt * 1e3)}`) : "";
-            const bandW = visibleWidth(" " + bandParts);
-            const labelW = visibleWidth(labelStr);
+            const bandW = visibleWidth2(" " + bandParts);
+            const labelW = visibleWidth2(labelStr);
             const spacer = Math.max(1, width - bandW - labelW);
-            lines.push(truncateToWidth(" " + bandParts + " ".repeat(spacer) + labelStr, width));
+            lines.push(truncateToWidth2(" " + bandParts + " ".repeat(spacer) + labelStr, width));
           } else if (exgEnabled && !exgOnline) {
             lines.push(sep(theme, width));
             const agoText = exgUpdatedAt != null && exgUpdatedAt > 0 ? timeAgo(exgUpdatedAt) : "";
             const lastSeen = agoText ? ` \xB7 last seen ${agoText}` : "";
-            lines.push(truncateToWidth(" " + theme.fg("dim", `\u25CC EXG offline${lastSeen} \u2014 /connect to reconnect`), width));
+            lines.push(truncateToWidth2(" " + theme.fg("dim", `\u25CC EXG offline${lastSeen} \u2014 /connect to reconnect`), width));
           }
           for (const dl of llmDownloads) {
             const icon = dl.state === "paused" ? theme.fg("warning", "\u23F8") : theme.fg("accent", SYNC_SPINNER[llmDownloadSpin % SYNC_SPINNER.length]);
-            lines.push(truncateToWidth(
+            lines.push(truncateToWidth2(
               " " + icon + " " + theme.fg("dim", dl.filename + " ") + theme.fg("muted", progressBar(dl.progress)),
               width
             ));
@@ -3492,8 +4253,8 @@ ${result.error}` : result.message, "error");
           const ctxPart = usage?.percent != null ? theme.fg("dim", `${usage.percent.toFixed(1)}%/${Math.round(usage.contextWindow / 1e3)}k`) : "";
           const modelPart = ctx.model?.id ? theme.fg("dim", ctx.model.id) : "";
           const right = [exgPart, ctxPart, modelPart].filter(Boolean).join(theme.fg("dim", "  "));
-          const gap = Math.max(1, width - visibleWidth(left) - visibleWidth(right));
-          lines.push(truncateToWidth(left + " ".repeat(gap) + right, width));
+          const gap = Math.max(1, width - visibleWidth2(left) - visibleWidth2(right));
+          lines.push(truncateToWidth2(left + " ".repeat(gap) + right, width));
           return lines;
         }
       };
@@ -3504,6 +4265,20 @@ ${result.error}` : result.message, "error");
     stopConnectSpinner();
     stopLlmDownloadPoll();
     disconnectExgWs();
+    renderScheduler?.stop();
+    renderScheduler = null;
+    overlayManager?.dispose();
+    overlayManager = null;
+    commandPalette?.dispose();
+    commandPalette = null;
+    exgPanel?.dispose();
+    exgPanel = null;
+    overlayKeyCleanup?.();
+    overlayKeyCleanup = null;
+    inputListenerCleanup?.();
+    inputListenerCleanup = null;
+    clearHistory();
+    resetToastCooldowns();
     uiNotify = null;
     sessionModelRegistry = null;
     sessionCtx.ui.setHeader(void 0);
@@ -3757,6 +4532,53 @@ ${JSON.stringify(file, null, 2)}
       handlerCtx.ui.notify(`Saved ${provider}/${modelId} to models.json. Open /model to use it.`, "info");
     }
   });
+  pi.registerCommand("theme", {
+    description: "Switch color theme \xB7 /theme [name]",
+    handler: async (args, handlerCtx) => {
+      const name = args.trim().toLowerCase();
+      if (!name) {
+        const choices = BUILTIN_THEMES.map((t) => {
+          const active = t.id === getActiveTheme().id ? "\u25CF " : "  ";
+          return `${active}${t.name} \u2014 ${t.description}`;
+        });
+        const choice = await handlerCtx.ui.select("Select Theme", choices);
+        if (!choice) return;
+        const idx = choices.indexOf(choice);
+        const theme = BUILTIN_THEMES[idx];
+        if (theme) {
+          setActiveTheme(theme.id);
+          uiTui?.requestRender(true);
+          handlerCtx.ui.notify(`Theme set to ${theme.name}`, "info");
+        }
+        return;
+      }
+      const result = setActiveTheme(name);
+      if (result) {
+        uiTui?.requestRender(true);
+        handlerCtx.ui.notify(`Theme set to ${result.name}`, "info");
+      } else {
+        const available = BUILTIN_THEMES.map((t) => t.id).join(", ");
+        handlerCtx.ui.notify(`Unknown theme "${name}". Available: ${available}`, "warning");
+      }
+    }
+  });
+  pi.registerCommand("toasts", {
+    description: "Toggle brain state notifications \xB7 /toasts [on|off]",
+    handler: async (args, handlerCtx) => {
+      const arg = args.trim().toLowerCase();
+      if (arg === "on") {
+        setSmartToastsEnabled(true);
+        handlerCtx.ui.notify("Smart brain state toasts enabled", "info");
+      } else if (arg === "off") {
+        setSmartToastsEnabled(false);
+        handlerCtx.ui.notify("Smart brain state toasts disabled", "info");
+      } else {
+        const current = isSmartToastsEnabled();
+        setSmartToastsEnabled(!current);
+        handlerCtx.ui.notify(`Smart brain state toasts ${!current ? "enabled" : "disabled"}`, "info");
+      }
+    }
+  });
   pi.registerCommand("exg", {
     description: "EXG panel \xB7 /exg [on|off|<seconds>|port <n>]",
     handler: async (args, handlerCtx) => {
@@ -3898,14 +4720,14 @@ ${result.text}
         handlerCtx.ui.notify("Changelog state reset. New updates will be shown on next launch.", "info");
         return;
       }
-      if (!existsSync8(CHANGELOG_PATH)) {
+      if (!existsSync9(CHANGELOG_PATH)) {
         handlerCtx.ui.notify("CHANGELOG.md not found.", "warning");
         return;
       }
       if (sub === "all") {
         pi.sendMessage({
           customType: NEUROSKILL_STATUS_TYPE,
-          content: readFileSync8(CHANGELOG_PATH, "utf8"),
+          content: readFileSync9(CHANGELOG_PATH, "utf8"),
           display: true,
           details: void 0
         });
@@ -4612,13 +5434,13 @@ if (major < 20) {
 }
 var MAIN_FILE = fileURLToPath4(import.meta.url);
 var SRC_DIR2 = dirname5(MAIN_FILE);
-var NEUROLOOP_DIR2 = join9(SRC_DIR2, "..");
-var AGENT_DIR5 = join9(homedir9(), ".neuroloop");
+var NEUROLOOP_DIR2 = join10(SRC_DIR2, "..");
+var AGENT_DIR5 = join10(homedir10(), ".neuroloop");
 var AGENT_SKILLS_DIR2 = getAgentSkillsDir();
-var SKILLS_DIR = join9(NEUROLOOP_DIR2, "skills");
+var SKILLS_DIR = join10(NEUROLOOP_DIR2, "skills");
 var SKILLS_SCAN_DIRS = [AGENT_SKILLS_DIR2, SKILLS_DIR];
-var METRICS_MD_PATH = join9(NEUROLOOP_DIR2, "METRICS.md");
-var LOCAL_NEUROLOOP_VERSION = JSON.parse(readFileSync9(join9(NEUROLOOP_DIR2, "package.json"), "utf8")).version;
+var METRICS_MD_PATH = join10(NEUROLOOP_DIR2, "METRICS.md");
+var LOCAL_NEUROLOOP_VERSION = JSON.parse(readFileSync10(join10(NEUROLOOP_DIR2, "package.json"), "utf8")).version;
 var runtime = await refreshRuntimeVersions(LOCAL_NEUROLOOP_VERSION);
 if (runtime.neuroloop.npmLatest) {
   const badge = runtime.neuroloop.upToDate ? "up-to-date" : "update available";
@@ -4648,8 +5470,8 @@ console.log(`skills: ${skillsSync.message}`);
 if (!skillsSync.ok && skillsSync.error) {
   console.warn(`skills: ${skillsSync.error}`);
 }
-var authStorage = AuthStorage.create(join9(AGENT_DIR5, "auth.json"));
-var modelRegistry = ModelRegistry.create(authStorage, join9(AGENT_DIR5, "models.json"));
+var authStorage = AuthStorage.create(join10(AGENT_DIR5, "auth.json"));
+var modelRegistry = ModelRegistry.create(authStorage, join10(AGENT_DIR5, "models.json"));
 var settingsManager = SettingsManager.create(process.cwd(), AGENT_DIR5);
 await autoBootSkillLlmIfConfigured();
 await registerSkillLlmProvider(modelRegistry);
@@ -4716,8 +5538,8 @@ var loader = new DefaultResourceLoader({
     const extra = [];
     const seen = new Set(base.skills.map((s) => s.name));
     const addSkill = (skillFile) => {
-      if (!existsSync9(skillFile)) return;
-      const content = readFileSync9(skillFile, "utf8");
+      if (!existsSync10(skillFile)) return;
+      const content = readFileSync10(skillFile, "utf8");
       const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
       if (!fmMatch) return;
       const fm = fmMatch[1];
@@ -4743,17 +5565,17 @@ var loader = new DefaultResourceLoader({
       });
     };
     for (const root of SKILLS_SCAN_DIRS) {
-      if (!existsSync9(root)) continue;
-      addSkill(join9(root, "SKILL.md"));
-      for (const container of [root, join9(root, "skills")]) {
-        if (!existsSync9(container)) continue;
+      if (!existsSync10(root)) continue;
+      addSkill(join10(root, "SKILL.md"));
+      for (const container of [root, join10(root, "skills")]) {
+        if (!existsSync10(container)) continue;
         for (const entry of readdirSync2(container, { withFileTypes: true })) {
           if (!entry.isDirectory()) continue;
-          addSkill(join9(container, entry.name, "SKILL.md"));
+          addSkill(join10(container, entry.name, "SKILL.md"));
         }
       }
     }
-    if (existsSync9(METRICS_MD_PATH)) {
+    if (existsSync10(METRICS_MD_PATH)) {
       extra.push({
         name: "neuroskill-metrics",
         description: "NeuroSkill EXG metrics reference \u2014 all indices, band powers, scores, and their scientific basis.",
@@ -4801,7 +5623,7 @@ var { session, modelFallbackMessage } = await createAgentSession({
   authStorage,
   modelRegistry,
   resourceLoader: loader,
-  sessionManager: SessionManager.create(process.cwd(), join9(AGENT_DIR5, "sessions")),
+  sessionManager: SessionManager.create(process.cwd(), join10(AGENT_DIR5, "sessions")),
   settingsManager
   // No explicit model — let findInitialModel choose:
   //   built-in providers win if they have API keys / OAuth tokens,
