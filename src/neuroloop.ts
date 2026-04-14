@@ -55,6 +55,87 @@ const CHANGELOG_STATE_PATH = join(VERSION_STATE_DIR, "changelog_state.json");
 const NEUROSKILL_STATUS_TYPE = "neuroskill-status";
 
 // ---------------------------------------------------------------------------
+// Compact text formatter for status JSON — saves tokens vs raw JSON
+// ---------------------------------------------------------------------------
+
+function formatStatusText(d: Record<string, any>): string {
+	const lines: string[] = [];
+	const r = (v: number, dec = 1) => typeof v === "number" ? v.toFixed(dec) : "–";
+
+	// Device
+	if (d.device) {
+		const dev = d.device;
+		lines.push(`**Device** ${dev.name ?? "unknown"} · ${dev.state ?? "?"} · battery ${r(dev.battery, 0)}% · ${dev.eeg_samples ?? 0} EEG samples`);
+	}
+
+	// Session
+	if (d.session) {
+		const s = d.session;
+		const dur = s.duration_secs != null ? `${Math.floor(s.duration_secs / 60)}m${s.duration_secs % 60}s` : "?";
+		lines.push(`**Session** duration ${dur}`);
+	}
+
+	// Scores (key metrics only)
+	if (d.scores) {
+		const s = d.scores;
+		const items: string[] = [];
+		const add = (label: string, key: string, dec = 1) => { if (s[key] != null) items.push(`${label} ${r(s[key], dec)}`); };
+		add("focus", "focus"); add("relax", "relaxation"); add("engage", "engagement");
+		add("meditation", "meditation"); add("drowsiness", "drowsiness"); add("mood", "mood");
+		add("cog.load", "cognitive_load"); add("snr", "snr");
+		if (items.length) lines.push(`**Scores** ${items.join(" · ")}`);
+
+		// Bands (relative %)
+		const bands: string[] = [];
+		const addB = (sym: string, key: string) => { if (s[key] != null) bands.push(`${sym} ${(s[key] * 100).toFixed(1)}%`); };
+		addB("δ", "rel_delta"); addB("θ", "rel_theta"); addB("α", "rel_alpha"); addB("β", "rel_beta"); addB("γ", "rel_gamma");
+		if (bands.length) lines.push(`**Bands** ${bands.join(" · ")}`);
+
+		// Ratios (compact)
+		const ratios: string[] = [];
+		const addR = (label: string, key: string, dec = 2) => { if (s[key] != null && s[key] !== 0) ratios.push(`${label} ${r(s[key], dec)}`); };
+		addR("FAA", "faa"); addR("TAR", "tar"); addR("BAR", "bar"); addR("TBR", "tbr");
+		addR("DTR", "dtr"); addR("PSE", "pse"); addR("APF", "apf", 1);
+		addR("coherence", "coherence"); addR("SEF95", "sef95", 1); addR("laterality", "laterality_index");
+		if (ratios.length) lines.push(`**Ratios** ${ratios.join(" · ")}`);
+
+		// Complexity
+		const cx: string[] = [];
+		const addC = (label: string, key: string, dec = 3) => { if (s[key] != null && s[key] !== 0) cx.push(`${label} ${r(s[key], dec)}`); };
+		addC("Hjorth-act", "hjorth_activity", 1); addC("Hjorth-mob", "hjorth_mobility");
+		addC("Hjorth-cplx", "hjorth_complexity"); addC("perm.ent", "permutation_entropy");
+		addC("Higuchi", "higuchi_fd"); addC("DFA", "dfa_exponent"); addC("samp.ent", "sample_entropy");
+		addC("PAC-θγ", "pac_theta_gamma");
+		if (cx.length) lines.push(`**Complexity** ${cx.join(" · ")}`);
+
+		// Per-channel summary (dominant band only)
+		if (Array.isArray(s.channels) && s.channels.length > 0) {
+			const chSummary = s.channels.map((ch: any) =>
+				`${ch.channel}:${ch.dominant_symbol ?? ch.dominant ?? "?"}`
+			).join(" ");
+			lines.push(`**Channels** ${chSummary}`);
+		}
+
+		// Consciousness / headache / migraine
+		const extra: string[] = [];
+		const addE = (label: string, key: string, dec = 1) => { if (s[key] != null) extra.push(`${label} ${r(s[key], dec)}`); };
+		addE("consciousness", "consciousness_integration");
+		addE("wakefulness", "consciousness_wakefulness");
+		addE("LZC", "consciousness_lzc");
+		addE("headache", "headache_index");
+		addE("migraine", "migraine_index");
+		if (extra.length) lines.push(`**Neuro** ${extra.join(" · ")}`);
+	}
+
+	// Embeddings
+	if (d.embeddings) {
+		lines.push(`**Embeddings** total ${d.embeddings.total ?? 0}`);
+	}
+
+	return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
 // Calibration prompt throttle — remind the user to calibrate at most once/day
 // ---------------------------------------------------------------------------
 const CALIBRATION_PROMPT_STATE_PATH = join(AGENT_DIR, "last_calibration_prompt.json");
@@ -274,12 +355,43 @@ export async function neuroloopExtension(pi: ExtensionAPI): Promise<void> {
 		const displaySections: string[] = [];
 		const systemSections: string[] = [];
 
-		const statusResult = await runNeuroSkill(["--json", "status"]);
+		// Get status: prefer the already-open WS connection (instant),
+		// fall back to the neuroskill CLI (slower, may timeout).
+		let statusResult: { ok: boolean; data?: any } = { ok: false };
 
-		if (statusResult.ok && statusResult.text) {
-			// Clean display: just the live data, no instruction prose.
-			displaySections.push(`## 🧠 Current State\n${statusResult.text}`);
-			systemSections.push(`## Current EXG State\n${statusResult.text}`);
+		if (exgWs && exgWs.readyState === WS.OPEN) {
+			// CLI failed — try direct WS status command on our existing connection.
+			try {
+				const wsData = await new Promise<Record<string, unknown>>((resolve, reject) => {
+					const timeout = setTimeout(() => reject(new Error("ws status timeout")), 5000);
+					const handler = (raw: { toString(): string }) => {
+						try {
+							const m = JSON.parse(raw.toString()) as Record<string, unknown>;
+							if ((m as any).command === "status") {
+								clearTimeout(timeout);
+								exgWs!.off("message", handler);
+								resolve(m);
+							}
+						} catch {}
+					};
+					exgWs!.on("message", handler);
+					exgWs!.send(JSON.stringify({ command: "status" }));
+				});
+				statusResult = { ok: true, data: wsData as any };
+			} catch { /* fall through to CLI */ }
+		}
+
+		// Fall back to CLI only if WS didn't work
+		if (!statusResult.ok) {
+			statusResult = await runNeuroSkill(["--json", "status"]);
+		}
+
+		if (statusResult.ok && statusResult.data) {
+			// Compact human-readable summary for the chat bubble (saves tokens).
+			const summary = formatStatusText(statusResult.data as Record<string, any>);
+			displaySections.push(`## 🧠 Current State\n${summary}`);
+			// LLM gets the same compact summary — raw JSON wastes too many tokens.
+			systemSections.push(`## Current EXG State\n${summary}`);
 
 			// Contextual extras keyed off the user's prompt.
 			const extra = await selectContextualData(event.prompt);
@@ -772,10 +884,11 @@ Available commands and typical args:
 		return !(typeof state === "string" && notReady.has(state));
 	}
 
-	/** Parse metrics from a full `status` response (scores nested under .scores). */
+	/** Parse metrics from a full `status` response (scores nested under .scores).
+	 *  Band powers are available as top-level rel_delta..rel_gamma on the scores
+	 *  object (BandSnapshot fields), not under a nested .bands key. */
 	function parseExgMetrics(json: Record<string, unknown>): ExgMetrics {
 		const s = (json.scores ?? {}) as Record<string, unknown>;
-		const b = (s.bands   ?? {}) as Record<string, unknown>;
 		const num = (v: unknown) => (typeof v === "number" ? v : undefined);
 		return {
 			focus:          num(s.focus),
@@ -786,11 +899,11 @@ Available commands and typical args:
 			mood:           num(s.mood),
 			hr:             num(s.hr),
 			bands: {
-				rel_delta: num(b.rel_delta),
-				rel_theta: num(b.rel_theta),
-				rel_alpha: num(b.rel_alpha),
-				rel_beta:  num(b.rel_beta),
-				rel_gamma: num(b.rel_gamma),
+				rel_delta: num(s.rel_delta),
+				rel_theta: num(s.rel_theta),
+				rel_alpha: num(s.rel_alpha),
+				rel_beta:  num(s.rel_beta),
+				rel_gamma: num(s.rel_gamma),
 			},
 		};
 	}
@@ -806,10 +919,13 @@ Available commands and typical args:
 		const prev = exgMetrics ?? {};
 		exgMetrics = {
 			...prev,
-			focus:      num(ev.focus)      ?? prev.focus,
-			relaxation: num(ev.relaxation) ?? prev.relaxation,
-			engagement: num(ev.engagement) ?? prev.engagement,
-			hr:         num(ev.hr)         ?? prev.hr,
+			focus:          num(ev.focus)          ?? prev.focus,
+			cognitive_load: num(ev.cognitive_load) ?? prev.cognitive_load,
+			relaxation:     num(ev.relaxation)     ?? prev.relaxation,
+			engagement:     num(ev.engagement)     ?? prev.engagement,
+			drowsiness:     num(ev.drowsiness)     ?? prev.drowsiness,
+			mood:           num(ev.mood)           ?? prev.mood,
+			hr:             num(ev.hr)             ?? prev.hr,
 			bands: {
 				rel_delta: num(ev.rel_delta) ?? prev.bands?.rel_delta,
 				rel_theta: num(ev.rel_theta) ?? prev.bands?.rel_theta,
@@ -855,10 +971,14 @@ Available commands and typical args:
 	const BAR_FILLED = "█";
 	const BAR_EMPTY  = "░";
 
-	/** Band bar "███░░░" with a fixed per-band color, width = 10. */
-	function bandBar(theme: Theme, val: number | undefined, color: ThemeColor, barWidth = 10): string {
-		if (val == null) return theme.fg("dim", BAR_EMPTY.repeat(barWidth));
-		const filled = Math.min(barWidth, Math.round(val * barWidth * 3));
+	/** Band bar "███░░░" with a fixed per-band color, width = 10.
+	 *  `scale` is the max value among the displayed bands (δ–γ),
+	 *  so bars are always relative to each other — not squished by
+	 *  high_gamma dominating the total power. */
+	function bandBar(theme: Theme, val: number | undefined, color: ThemeColor, scale: number, barWidth = 10): string {
+		if (val == null || scale <= 0) return theme.fg("dim", BAR_EMPTY.repeat(barWidth));
+		const norm = val / scale;  // 0..1 relative to the strongest displayed band
+		const filled = Math.min(barWidth, Math.round(norm * barWidth));
 		const empty  = Math.max(0, barWidth - filled);
 		return theme.fg(color, BAR_FILLED.repeat(filled)) + theme.fg("dim", BAR_EMPTY.repeat(empty));
 	}
@@ -1015,6 +1135,32 @@ Available commands and typical args:
 			stopConnectSpinner();
 			exgReconnectAttempt = 0; // reset backoff on successful connect
 			uiNotify?.(`Connected to NeuroSkill™ on port ${exgWsPort}`, "info");
+			// Check LLM server status — auto-start if stopped and notify user.
+			(async () => {
+				try {
+					const hdrs = authHeaders();
+					const baseUrl = await getSkillServerBaseUrl();
+					const r = await fetch(`${baseUrl}/v1/llm/server/status`, {
+						signal: AbortSignal.timeout(3000), headers: hdrs,
+					});
+					if (r.ok) {
+						const status = (await r.json()) as { status: string; model_name?: string };
+						if (status.status === "stopped") {
+							uiNotify?.("LLM server is stopped — use /llm start to load a model", "warning");
+							// Auto-start: try to start the server so chat works immediately
+							try {
+								await fetch(`${baseUrl}/v1/llm/server/start`, {
+									method: "POST", headers: { ...hdrs, "Content-Type": "application/json" },
+									body: "{}", signal: AbortSignal.timeout(5000),
+								});
+								uiNotify?.("LLM server starting…", "info");
+							} catch { /* user can /llm start manually */ }
+						} else if (status.status === "running" && status.model_name) {
+							uiNotify?.(`LLM: ${status.model_name}`, "info");
+						}
+					}
+				} catch { /* daemon may not support this endpoint */ }
+			})();
 			// Try to register the LLM provider now that daemon is reachable.
 			// Retry a few times since the LLM server may still be loading.
 			if (sessionModelRegistry) {
@@ -1047,27 +1193,42 @@ Available commands and typical args:
 			const payload = (msg.payload ?? msg) as Record<string, unknown>;
 
 			if (eventType === "EegBands" || eventType === "scores") {
-				// Average per-channel band powers if they arrive as channels array
-				const channels = payload.channels as Array<Record<string, unknown>> | undefined;
-				if (channels?.length) {
-					const avg = (key: string) => {
-						let sum = 0; let n = 0;
-						for (const ch of channels) {
-							const v = ch[key];
-							if (typeof v === "number") { sum += v; n++; }
-						}
-						return n > 0 ? sum / n : undefined;
-					};
-					// Merge averaged bands + any top-level scores into metrics
-					const flat: Record<string, unknown> = { ...payload };
-					flat.rel_delta = avg("rel_delta");
-					flat.rel_theta = avg("rel_theta");
-					flat.rel_alpha = avg("rel_alpha");
-					flat.rel_beta  = avg("rel_beta");
-					flat.rel_gamma = avg("rel_gamma");
-					mergeScoresEvent(flat);
-				} else {
+				// The daemon now includes top-level rel_delta..rel_gamma
+				// (averaged across channels, normalised to δ–γ only).
+				// Use those directly; fall back to per-channel averaging
+				// for older daemon versions.
+				if (typeof payload.rel_delta === "number") {
 					mergeScoresEvent(payload);
+				} else {
+					const channels = payload.channels as Array<Record<string, unknown>> | undefined;
+					if (channels?.length) {
+						const avg = (key: string) => {
+							let sum = 0; let n = 0;
+							for (const ch of channels) {
+								const v = ch[key];
+								if (typeof v === "number") { sum += v; n++; }
+							}
+							return n > 0 ? sum / n : undefined;
+						};
+						const absDelta     = avg("delta") ?? 0;
+						const absTheta     = avg("theta") ?? 0;
+						const absAlpha     = avg("alpha") ?? 0;
+						const absBeta      = avg("beta")  ?? 0;
+						const absGamma     = avg("gamma") ?? 0;
+						const absHighGamma = avg("high_gamma") ?? 0;
+						const total = absDelta + absTheta + absAlpha + absBeta + absGamma + absHighGamma;
+						const flat: Record<string, unknown> = { ...payload };
+						if (total > 0) {
+							flat.rel_delta = absDelta / total;
+							flat.rel_theta = absTheta / total;
+							flat.rel_alpha = absAlpha / total;
+							flat.rel_beta  = absBeta  / total;
+							flat.rel_gamma = absGamma / total;
+						}
+						mergeScoresEvent(flat);
+					} else {
+						mergeScoresEvent(payload);
+					}
 				}
 				uiTui?.requestRender();
 				return;
@@ -1092,7 +1253,14 @@ Available commands and typical args:
 				const wasOnline = exgOnline;
 				exgOnline = isExgConnected(msg);
 				if (exgOnline) {
-					exgMetrics   = parseExgMetrics(msg);
+					const parsed = parseExgMetrics(msg);
+					// Preserve band data from EegBands stream if the status
+					// snapshot doesn't include bands (it usually doesn't).
+					const prevBands = exgMetrics?.bands;
+					if (prevBands && parsed.bands.rel_delta == null) {
+						parsed.bands = prevBands;
+					}
+					exgMetrics   = parsed;
 					exgUpdatedAt = Date.now();
 				}
 				// Extract device info
@@ -1289,10 +1457,18 @@ Available commands and typical args:
 						// divider between scores and bands
 						lines.push(truncateToWidth(" " + theme.fg("dim", "│"), width));
 
-						// band bars row
+						// band bars row — scale bars relative to the strongest
+						// displayed band (δ–γ) so they're always visible even when
+						// high_gamma dominates the total relative power.
+						// Show percentage next to each bar to match Tauri's display.
 						const b = m.bands ?? {};
-						const bar = (label: string, val: number | undefined, color: ThemeColor) =>
-							theme.fg("dim", label + " ") + bandBar(theme, val, color);
+						const bandVals = [b.rel_delta, b.rel_theta, b.rel_alpha, b.rel_beta, b.rel_gamma];
+						const bandScale = Math.max(...bandVals.map(v => v ?? 0), 1e-9);
+						const bar = (label: string, val: number | undefined, color: ThemeColor) => {
+							const pct = val != null ? Math.round(val * 100) : 0;
+							const pctStr = theme.fg(color, String(pct).padStart(2) + "%");
+							return theme.fg("dim", label + " ") + bandBar(theme, val, color, bandScale) + " " + pctStr;
+						};
 
 						const bandParts = [
 							bar("δ", b.rel_delta, BAND_COLORS.delta),
@@ -1300,7 +1476,7 @@ Available commands and typical args:
 							bar("α", b.rel_alpha, BAND_COLORS.alpha),
 							bar("β", b.rel_beta,  BAND_COLORS.beta),
 							bar("γ", b.rel_gamma, BAND_COLORS.gamma),
-						].join("   ");
+						].join("  ");
 
 						// last label (right-aligned on the same row as bands)
 						const labelStr = exgLastLabel

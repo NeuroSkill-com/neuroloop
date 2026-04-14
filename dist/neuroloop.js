@@ -2274,6 +2274,93 @@ var NEUROLOOP_MD_PATH = join8(NEUROLOOP_DIR, "NEUROLOOP.md");
 var CHANGELOG_PATH = join8(NEUROLOOP_DIR, "CHANGELOG.md");
 var CHANGELOG_STATE_PATH = join8(VERSION_STATE_DIR, "changelog_state.json");
 var NEUROSKILL_STATUS_TYPE = "neuroskill-status";
+function formatStatusText(d) {
+  const lines = [];
+  const r = (v, dec = 1) => typeof v === "number" ? v.toFixed(dec) : "\u2013";
+  if (d.device) {
+    const dev = d.device;
+    lines.push(`**Device** ${dev.name ?? "unknown"} \xB7 ${dev.state ?? "?"} \xB7 battery ${r(dev.battery, 0)}% \xB7 ${dev.eeg_samples ?? 0} EEG samples`);
+  }
+  if (d.session) {
+    const s = d.session;
+    const dur = s.duration_secs != null ? `${Math.floor(s.duration_secs / 60)}m${s.duration_secs % 60}s` : "?";
+    lines.push(`**Session** duration ${dur}`);
+  }
+  if (d.scores) {
+    const s = d.scores;
+    const items = [];
+    const add = (label2, key, dec = 1) => {
+      if (s[key] != null) items.push(`${label2} ${r(s[key], dec)}`);
+    };
+    add("focus", "focus");
+    add("relax", "relaxation");
+    add("engage", "engagement");
+    add("meditation", "meditation");
+    add("drowsiness", "drowsiness");
+    add("mood", "mood");
+    add("cog.load", "cognitive_load");
+    add("snr", "snr");
+    if (items.length) lines.push(`**Scores** ${items.join(" \xB7 ")}`);
+    const bands = [];
+    const addB = (sym, key) => {
+      if (s[key] != null) bands.push(`${sym} ${(s[key] * 100).toFixed(1)}%`);
+    };
+    addB("\u03B4", "rel_delta");
+    addB("\u03B8", "rel_theta");
+    addB("\u03B1", "rel_alpha");
+    addB("\u03B2", "rel_beta");
+    addB("\u03B3", "rel_gamma");
+    if (bands.length) lines.push(`**Bands** ${bands.join(" \xB7 ")}`);
+    const ratios = [];
+    const addR = (label2, key, dec = 2) => {
+      if (s[key] != null && s[key] !== 0) ratios.push(`${label2} ${r(s[key], dec)}`);
+    };
+    addR("FAA", "faa");
+    addR("TAR", "tar");
+    addR("BAR", "bar");
+    addR("TBR", "tbr");
+    addR("DTR", "dtr");
+    addR("PSE", "pse");
+    addR("APF", "apf", 1);
+    addR("coherence", "coherence");
+    addR("SEF95", "sef95", 1);
+    addR("laterality", "laterality_index");
+    if (ratios.length) lines.push(`**Ratios** ${ratios.join(" \xB7 ")}`);
+    const cx = [];
+    const addC = (label2, key, dec = 3) => {
+      if (s[key] != null && s[key] !== 0) cx.push(`${label2} ${r(s[key], dec)}`);
+    };
+    addC("Hjorth-act", "hjorth_activity", 1);
+    addC("Hjorth-mob", "hjorth_mobility");
+    addC("Hjorth-cplx", "hjorth_complexity");
+    addC("perm.ent", "permutation_entropy");
+    addC("Higuchi", "higuchi_fd");
+    addC("DFA", "dfa_exponent");
+    addC("samp.ent", "sample_entropy");
+    addC("PAC-\u03B8\u03B3", "pac_theta_gamma");
+    if (cx.length) lines.push(`**Complexity** ${cx.join(" \xB7 ")}`);
+    if (Array.isArray(s.channels) && s.channels.length > 0) {
+      const chSummary = s.channels.map(
+        (ch) => `${ch.channel}:${ch.dominant_symbol ?? ch.dominant ?? "?"}`
+      ).join(" ");
+      lines.push(`**Channels** ${chSummary}`);
+    }
+    const extra = [];
+    const addE = (label2, key, dec = 1) => {
+      if (s[key] != null) extra.push(`${label2} ${r(s[key], dec)}`);
+    };
+    addE("consciousness", "consciousness_integration");
+    addE("wakefulness", "consciousness_wakefulness");
+    addE("LZC", "consciousness_lzc");
+    addE("headache", "headache_index");
+    addE("migraine", "migraine_index");
+    if (extra.length) lines.push(`**Neuro** ${extra.join(" \xB7 ")}`);
+  }
+  if (d.embeddings) {
+    lines.push(`**Embeddings** total ${d.embeddings.total ?? 0}`);
+  }
+  return lines.join("\n");
+}
 var CALIBRATION_PROMPT_STATE_PATH = join8(AGENT_DIR4, "last_calibration_prompt.json");
 var CALIBRATION_PROMPT_INTERVAL_MS = 24 * 60 * 60 * 1e3;
 function readChangelogState() {
@@ -2449,12 +2536,38 @@ async function neuroloopExtension(pi) {
   pi.on("before_agent_start", async (event) => {
     const displaySections = [];
     const systemSections = [];
-    const statusResult = await runNeuroSkill(["--json", "status"]);
-    if (statusResult.ok && statusResult.text) {
+    let statusResult = { ok: false };
+    if (exgWs && exgWs.readyState === WS.OPEN) {
+      try {
+        const wsData = await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("ws status timeout")), 5e3);
+          const handler = (raw) => {
+            try {
+              const m = JSON.parse(raw.toString());
+              if (m.command === "status") {
+                clearTimeout(timeout);
+                exgWs.off("message", handler);
+                resolve(m);
+              }
+            } catch {
+            }
+          };
+          exgWs.on("message", handler);
+          exgWs.send(JSON.stringify({ command: "status" }));
+        });
+        statusResult = { ok: true, data: wsData };
+      } catch {
+      }
+    }
+    if (!statusResult.ok) {
+      statusResult = await runNeuroSkill(["--json", "status"]);
+    }
+    if (statusResult.ok && statusResult.data) {
+      const summary = formatStatusText(statusResult.data);
       displaySections.push(`## \u{1F9E0} Current State
-${statusResult.text}`);
+${summary}`);
       systemSections.push(`## Current EXG State
-${statusResult.text}`);
+${summary}`);
       const extra = await selectContextualData(event.prompt);
       displaySections.push(...extra);
       systemSections.push(...extra);
@@ -2862,7 +2975,6 @@ ${result.error}` : result.message, "error");
   }
   function parseExgMetrics(json) {
     const s = json.scores ?? {};
-    const b = s.bands ?? {};
     const num = (v) => typeof v === "number" ? v : void 0;
     return {
       focus: num(s.focus),
@@ -2873,11 +2985,11 @@ ${result.error}` : result.message, "error");
       mood: num(s.mood),
       hr: num(s.hr),
       bands: {
-        rel_delta: num(b.rel_delta),
-        rel_theta: num(b.rel_theta),
-        rel_alpha: num(b.rel_alpha),
-        rel_beta: num(b.rel_beta),
-        rel_gamma: num(b.rel_gamma)
+        rel_delta: num(s.rel_delta),
+        rel_theta: num(s.rel_theta),
+        rel_alpha: num(s.rel_alpha),
+        rel_beta: num(s.rel_beta),
+        rel_gamma: num(s.rel_gamma)
       }
     };
   }
@@ -2887,8 +2999,11 @@ ${result.error}` : result.message, "error");
     exgMetrics = {
       ...prev,
       focus: num(ev.focus) ?? prev.focus,
+      cognitive_load: num(ev.cognitive_load) ?? prev.cognitive_load,
       relaxation: num(ev.relaxation) ?? prev.relaxation,
       engagement: num(ev.engagement) ?? prev.engagement,
+      drowsiness: num(ev.drowsiness) ?? prev.drowsiness,
+      mood: num(ev.mood) ?? prev.mood,
       hr: num(ev.hr) ?? prev.hr,
       bands: {
         rel_delta: num(ev.rel_delta) ?? prev.bands?.rel_delta,
@@ -2922,9 +3037,10 @@ ${result.error}` : result.message, "error");
   }
   const BAR_FILLED = "\u2588";
   const BAR_EMPTY = "\u2591";
-  function bandBar(theme, val, color, barWidth = 10) {
-    if (val == null) return theme.fg("dim", BAR_EMPTY.repeat(barWidth));
-    const filled = Math.min(barWidth, Math.round(val * barWidth * 3));
+  function bandBar(theme, val, color, scale, barWidth = 10) {
+    if (val == null || scale <= 0) return theme.fg("dim", BAR_EMPTY.repeat(barWidth));
+    const norm = val / scale;
+    const filled = Math.min(barWidth, Math.round(norm * barWidth));
     const empty = Math.max(0, barWidth - filled);
     return theme.fg(color, BAR_FILLED.repeat(filled)) + theme.fg("dim", BAR_EMPTY.repeat(empty));
   }
@@ -3053,6 +3169,35 @@ ${result.error}` : result.message, "error");
       stopConnectSpinner();
       exgReconnectAttempt = 0;
       uiNotify?.(`Connected to NeuroSkill\u2122 on port ${exgWsPort}`, "info");
+      (async () => {
+        try {
+          const hdrs = authHeaders();
+          const baseUrl = await getSkillServerBaseUrl();
+          const r = await fetch(`${baseUrl}/v1/llm/server/status`, {
+            signal: AbortSignal.timeout(3e3),
+            headers: hdrs
+          });
+          if (r.ok) {
+            const status = await r.json();
+            if (status.status === "stopped") {
+              uiNotify?.("LLM server is stopped \u2014 use /llm start to load a model", "warning");
+              try {
+                await fetch(`${baseUrl}/v1/llm/server/start`, {
+                  method: "POST",
+                  headers: { ...hdrs, "Content-Type": "application/json" },
+                  body: "{}",
+                  signal: AbortSignal.timeout(5e3)
+                });
+                uiNotify?.("LLM server starting\u2026", "info");
+              } catch {
+              }
+            } else if (status.status === "running" && status.model_name) {
+              uiNotify?.(`LLM: ${status.model_name}`, "info");
+            }
+          }
+        } catch {
+        }
+      })();
       if (sessionModelRegistry) {
         const reg = sessionModelRegistry;
         (async () => {
@@ -3080,29 +3225,42 @@ ${result.error}` : result.message, "error");
       const eventType = msg.type ?? msg.event;
       const payload = msg.payload ?? msg;
       if (eventType === "EegBands" || eventType === "scores") {
-        const channels = payload.channels;
-        if (channels?.length) {
-          const avg = (key) => {
-            let sum = 0;
-            let n = 0;
-            for (const ch of channels) {
-              const v = ch[key];
-              if (typeof v === "number") {
-                sum += v;
-                n++;
-              }
-            }
-            return n > 0 ? sum / n : void 0;
-          };
-          const flat = { ...payload };
-          flat.rel_delta = avg("rel_delta");
-          flat.rel_theta = avg("rel_theta");
-          flat.rel_alpha = avg("rel_alpha");
-          flat.rel_beta = avg("rel_beta");
-          flat.rel_gamma = avg("rel_gamma");
-          mergeScoresEvent(flat);
-        } else {
+        if (typeof payload.rel_delta === "number") {
           mergeScoresEvent(payload);
+        } else {
+          const channels = payload.channels;
+          if (channels?.length) {
+            const avg = (key) => {
+              let sum = 0;
+              let n = 0;
+              for (const ch of channels) {
+                const v = ch[key];
+                if (typeof v === "number") {
+                  sum += v;
+                  n++;
+                }
+              }
+              return n > 0 ? sum / n : void 0;
+            };
+            const absDelta = avg("delta") ?? 0;
+            const absTheta = avg("theta") ?? 0;
+            const absAlpha = avg("alpha") ?? 0;
+            const absBeta = avg("beta") ?? 0;
+            const absGamma = avg("gamma") ?? 0;
+            const absHighGamma = avg("high_gamma") ?? 0;
+            const total = absDelta + absTheta + absAlpha + absBeta + absGamma + absHighGamma;
+            const flat = { ...payload };
+            if (total > 0) {
+              flat.rel_delta = absDelta / total;
+              flat.rel_theta = absTheta / total;
+              flat.rel_alpha = absAlpha / total;
+              flat.rel_beta = absBeta / total;
+              flat.rel_gamma = absGamma / total;
+            }
+            mergeScoresEvent(flat);
+          } else {
+            mergeScoresEvent(payload);
+          }
         }
         uiTui?.requestRender();
         return;
@@ -3124,7 +3282,12 @@ ${result.error}` : result.message, "error");
         const wasOnline = exgOnline;
         exgOnline = isExgConnected(msg);
         if (exgOnline) {
-          exgMetrics = parseExgMetrics(msg);
+          const parsed = parseExgMetrics(msg);
+          const prevBands = exgMetrics?.bands;
+          if (prevBands && parsed.bands.rel_delta == null) {
+            parsed.bands = prevBands;
+          }
+          exgMetrics = parsed;
           exgUpdatedAt = Date.now();
         }
         const dev = msg.device;
@@ -3287,14 +3450,20 @@ ${result.error}` : result.message, "error");
             lines.push(truncateToWidth(" " + scores + agoStr, width));
             lines.push(truncateToWidth(" " + theme.fg("dim", "\u2502"), width));
             const b = m.bands ?? {};
-            const bar = (label2, val, color) => theme.fg("dim", label2 + " ") + bandBar(theme, val, color);
+            const bandVals = [b.rel_delta, b.rel_theta, b.rel_alpha, b.rel_beta, b.rel_gamma];
+            const bandScale = Math.max(...bandVals.map((v) => v ?? 0), 1e-9);
+            const bar = (label2, val, color) => {
+              const pct = val != null ? Math.round(val * 100) : 0;
+              const pctStr = theme.fg(color, String(pct).padStart(2) + "%");
+              return theme.fg("dim", label2 + " ") + bandBar(theme, val, color, bandScale) + " " + pctStr;
+            };
             const bandParts = [
               bar("\u03B4", b.rel_delta, BAND_COLORS.delta),
               bar("\u03B8", b.rel_theta, BAND_COLORS.theta),
               bar("\u03B1", b.rel_alpha, BAND_COLORS.alpha),
               bar("\u03B2", b.rel_beta, BAND_COLORS.beta),
               bar("\u03B3", b.rel_gamma, BAND_COLORS.gamma)
-            ].join("   ");
+            ].join("  ");
             const labelStr = exgLastLabel ? theme.fg("dim", `\u2B21 "${exgLastLabel.text}"  ${timeAgo(exgLastLabel.createdAt * 1e3)}`) : "";
             const bandW = visibleWidth(" " + bandParts);
             const labelW = visibleWidth(labelStr);
