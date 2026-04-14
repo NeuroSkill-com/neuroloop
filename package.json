@@ -1,6 +1,6 @@
 {
   "name": "neuroloop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "author": "NeuroSkill team (https://neuroskill.com)",
   "contributors": [
     "Nataliya Kosmyna <nkosmyna@mit.edu>",
@@ -30,7 +30,7 @@
     "build": "node build.mjs",
     "build:watch": "node build.mjs --watch",
     "start": "PI_PACKAGE_DIR=$(pwd)/pi-pkg npx tsx src/main.ts",
-    "postinstall": "patch-package",
+    "postinstall": "patch-package || true",
     "prepublishOnly": "node build.mjs"
   },
   "dependencies": {
