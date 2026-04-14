@@ -22,7 +22,7 @@ import { homedir as homedir9 } from "node:os";
 import { dirname as dirname4, join as join9 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 import { Container as Container3, Markdown, Spacer } from "@mariozechner/pi-tui";
-import { truncateToWidth as truncateToWidth2, visibleWidth as visibleWidth2 } from "@mariozechner/pi-tui";
+import { truncateToWidth as truncateToWidth3, visibleWidth as visibleWidth3 } from "@mariozechner/pi-tui";
 import { matchesKey as matchesKey2, Key as Key2 } from "@mariozechner/pi-tui";
 import { Type as Type4 } from "@sinclair/typebox";
 import { getMarkdownTheme } from "@mariozechner/pi-coding-agent";
@@ -692,6 +692,78 @@ function createOverlayManager() {
     installKeyHandler,
     dispose
   };
+}
+
+// src/tui/logo.ts
+import { truncateToWidth as truncateToWidth2, visibleWidth as visibleWidth2 } from "@mariozechner/pi-tui";
+var LOGO_ART_RAW = [
+  "\u2588\u2588\u2588\u2557   \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557   \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557     \u2588\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557",
+  "\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551    \u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557",
+  "\u2588\u2588\u2554\u2588\u2588\u2557 \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2551    \u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D",
+  "\u2588\u2588\u2551\u255A\u2588\u2588\u2557\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u255D  \u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2551    \u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2550\u255D",
+  "\u2588\u2588\u2551 \u255A\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2551  \u2588\u2588\u2551\u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2551",
+  "\u255A\u2550\u255D  \u255A\u2550\u2550\u2550\u255D\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u255D  \u255A\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u255D  \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u255D"
+];
+var LOGO_COMPACT_RAW = [
+  "\u2588\u2557  \u2588\u2557                    \u2588\u2557              ",
+  "\u2588\u2588\u2557 \u2588\u2551\u250C\u2500\u2510\u252C \u252C\u252C\u2500\u2510\u250C\u2500\u2510      \u2588\u2551  \u250C\u2500\u2510\u250C\u2500\u2510\u250C\u2500\u2510  ",
+  "\u2588\u2554\u2588\u2588\u2551 \u251C\u2524 \u2502 \u2502\u251C\u252C\u2518\u2502 \u2502      \u2588\u2551  \u2502 \u2502\u2502 \u2502\u251C\u2500\u2518  ",
+  "\u2588\u2551\u255A\u2588\u2551 \u2514\u2500\u2518\u2514\u2500\u2518\u2534\u2514\u2500\u2514\u2500\u2518      \u2588\u2588\u2588\u2588\u2588\u2514\u2500\u2518\u2514\u2500\u2518\u2534    ",
+  "\u255A\u255D \u255A\u255D                    \u255A\u2550\u2550\u2550\u2550\u255D           "
+];
+var LOGO_MINI = "\u25C6 NeuroLoop\u2122";
+function padArt(raw) {
+  const maxW = Math.max(...raw.map((l) => [...l].length));
+  const targetW = maxW + 1;
+  const padded = raw.map((l) => l + " ".repeat(Math.max(0, targetW - [...l].length)));
+  padded[0] = padded[0].slice(0, -1) + "\u2122";
+  return padded;
+}
+var LOGO_ART = padArt(LOGO_ART_RAW);
+var LOGO_COMPACT = padArt(LOGO_COMPACT_RAW);
+var pink = (text) => `\x1B[38;2;255;105;180m${text}\x1B[0m`;
+var magenta = (text) => `\x1B[38;2;200;80;200m${text}\x1B[0m`;
+var hotpink = (text) => `\x1B[38;2;255;20;147m${text}\x1B[0m`;
+var dimPink = (text) => `\x1B[38;2;180;80;130m${text}\x1B[0m`;
+var FULL_ART_WIDTH = visibleWidth2(LOGO_ART[0]);
+var COMPACT_ART_WIDTH = visibleWidth2(LOGO_COMPACT[0]);
+function renderLogo(width, theme) {
+  const lines = [];
+  if (width >= FULL_ART_WIDTH + 4) {
+    for (let i = 0; i < LOGO_ART.length; i++) {
+      const row = LOGO_ART[i];
+      const pad = Math.max(0, Math.floor((width - FULL_ART_WIDTH) / 2));
+      if (i === 0) {
+        const tmIdx = row.lastIndexOf("\u2122");
+        const body = row.slice(0, tmIdx);
+        lines.push(truncateToWidth2(" ".repeat(pad) + hotpink(body) + dimPink("\u2122"), width));
+      } else {
+        lines.push(truncateToWidth2(" ".repeat(pad) + hotpink(row), width));
+      }
+    }
+  } else if (width >= COMPACT_ART_WIDTH + 4) {
+    for (let i = 0; i < LOGO_COMPACT.length; i++) {
+      const row = LOGO_COMPACT[i];
+      const pad = Math.max(0, Math.floor((width - COMPACT_ART_WIDTH) / 2));
+      if (i === 0) {
+        const body = row.slice(0, -1);
+        lines.push(truncateToWidth2(" ".repeat(pad) + pink(body) + dimPink("\u2122"), width));
+      } else {
+        lines.push(truncateToWidth2(" ".repeat(pad) + pink(row), width));
+      }
+    }
+  } else {
+    const pad = Math.max(0, Math.floor((width - visibleWidth2(LOGO_MINI)) / 2));
+    lines.push(truncateToWidth2(" ".repeat(pad) + hotpink("\u25C6 NeuroLoop") + dimPink("\u2122"), width));
+  }
+  return lines;
+}
+function renderTagline(width, theme, version) {
+  const tag = `v${version}`;
+  const text = magenta("brain-aware coding") + theme.fg("dim", `  ${tag}`);
+  const textWidth = visibleWidth2("brain-aware coding") + visibleWidth2(`  ${tag}`);
+  const pad = Math.max(0, Math.floor((width - textWidth) / 2));
+  return truncateToWidth2(" ".repeat(pad) + text, width);
 }
 
 // src/neuroloop.ts
@@ -3550,6 +3622,7 @@ Available commands and typical args:
   let overlayKeyCleanup = null;
   let inputListenerCleanup = null;
   initTheme();
+  let logoShown = false;
   let llmDownloads = [];
   let llmDownloadSpin = 0;
   let llmDownloadPollTimer = null;
@@ -3771,10 +3844,24 @@ ${result.error}` : result.message, "error");
           const lastSeen = exgUpdatedAt ? theme.fg("dim", ` \xB7 last seen ${timeAgo(exgUpdatedAt)}`) : "";
           connDot = theme.fg("dim", " \u25CB Offline") + lastSeen;
         }
-        const website = theme.fg("accent", "\u{1F310}") + " " + theme.fg("dim", "https://www.neuroskill.com");
-        lines.push(truncateToWidth2(website, width));
-        const logo = theme.fg("accent", s.logo) + " " + theme.bold("NeuroLoop\u2122") + theme.fg("dim", ` v${_pkgVersion}`) + connDot;
-        lines.push(truncateToWidth2(logo, width));
+        if (!logoShown) {
+          lines.push("");
+          lines.push(...renderLogo(width, theme));
+          lines.push(renderTagline(width, theme, _pkgVersion));
+          lines.push("");
+          const connLine = theme.fg("accent", s.logo) + " " + theme.bold("NeuroLoop\u2122") + connDot;
+          const connWidth = visibleWidth3(s.logo + " NeuroLoop\u2122") + visibleWidth3(connDot);
+          const connPad = Math.max(0, Math.floor((width - connWidth) / 2));
+          lines.push(truncateToWidth3(" ".repeat(connPad) + connLine, width));
+          setTimeout(() => {
+            logoShown = true;
+          }, 8e3);
+        } else {
+          const website = theme.fg("accent", "\u{1F310}") + " " + theme.fg("dim", "https://www.neuroskill.com");
+          lines.push(truncateToWidth3(website, width));
+          const logo = theme.fg("accent", s.logo) + " " + theme.bold("NeuroLoop\u2122") + theme.fg("dim", ` v${_pkgVersion}`) + connDot;
+          lines.push(truncateToWidth3(logo, width));
+        }
         if (exgOnline && exgDeviceName) {
           const kindMap = {
             muse: "BLE",
@@ -3789,7 +3876,7 @@ ${result.error}` : result.message, "error");
           const chInfo = exgDeviceChannels > 0 ? theme.fg("dim", ` ${exgDeviceChannels}ch`) : "";
           const rateInfo = exgDeviceRate > 0 ? theme.fg("dim", ` @ ${Math.round(exgDeviceRate)}Hz`) : "";
           const transportTag = transport ? theme.fg("muted", ` [${transport}]`) : "";
-          lines.push(truncateToWidth2(
+          lines.push(truncateToWidth3(
             " " + theme.fg("dim", "\u2388 ") + theme.fg("accent", exgDeviceName) + transportTag + chInfo + rateInfo,
             width
           ));
@@ -3797,12 +3884,12 @@ ${result.error}` : result.message, "error");
         if (skillsSyncLastAt) {
           const ago = timeAgo(skillsSyncLastAt.getTime()) || "just now";
           const syncLine = " " + theme.bold("NeuroSkill\u2122") + theme.fg("dim", ` skills synced ${ago}`);
-          lines.push(truncateToWidth2(syncLine, width));
+          lines.push(truncateToWidth3(syncLine, width));
         }
         const hintStr = hints.map(([k, a]) => theme.fg("muted", k) + theme.fg("dim", " " + a)).join(theme.fg("dim", " \xB7 "));
-        lines.push(truncateToWidth2(" " + hintStr, width));
+        lines.push(truncateToWidth3(" " + hintStr, width));
         const overlayHints = theme.fg("muted", "ctrl+k") + theme.fg("dim", " commands") + theme.fg("dim", " \xB7 ") + theme.fg("muted", "ctrl+e") + theme.fg("dim", " EXG panel");
-        lines.push(truncateToWidth2(" " + overlayHints, width));
+        lines.push(truncateToWidth3(" " + overlayHints, width));
         lines.push(sep(theme, width));
         return lines;
       }
@@ -4208,8 +4295,8 @@ ${result.error}` : result.message, "error");
             ].filter(Boolean).join(theme.fg("dim", "   "));
             const agoRaw = exgUpdatedAt ? timeAgo(exgUpdatedAt) : "";
             const agoStr = agoRaw ? theme.fg("muted", ` ${agoRaw}`) : "";
-            lines.push(truncateToWidth2(" " + scores + agoStr, width));
-            lines.push(truncateToWidth2(" " + theme.fg("dim", "\u2502"), width));
+            lines.push(truncateToWidth3(" " + scores + agoStr, width));
+            lines.push(truncateToWidth3(" " + theme.fg("dim", "\u2502"), width));
             const b = m.bands ?? {};
             const bandVals = [b.rel_delta, b.rel_theta, b.rel_alpha, b.rel_beta, b.rel_gamma];
             const bandScale = Math.max(...bandVals.map((v) => v ?? 0), 1e-9);
@@ -4226,19 +4313,19 @@ ${result.error}` : result.message, "error");
               bar("\u03B3", b.rel_gamma, BAND_COLORS.gamma)
             ].join("  ");
             const labelStr = exgLastLabel ? theme.fg("dim", `\u2B21 "${exgLastLabel.text}"  ${timeAgo(exgLastLabel.createdAt * 1e3)}`) : "";
-            const bandW = visibleWidth2(" " + bandParts);
-            const labelW = visibleWidth2(labelStr);
+            const bandW = visibleWidth3(" " + bandParts);
+            const labelW = visibleWidth3(labelStr);
             const spacer = Math.max(1, width - bandW - labelW);
-            lines.push(truncateToWidth2(" " + bandParts + " ".repeat(spacer) + labelStr, width));
+            lines.push(truncateToWidth3(" " + bandParts + " ".repeat(spacer) + labelStr, width));
           } else if (exgEnabled && !exgOnline) {
             lines.push(sep(theme, width));
             const agoText = exgUpdatedAt != null && exgUpdatedAt > 0 ? timeAgo(exgUpdatedAt) : "";
             const lastSeen = agoText ? ` \xB7 last seen ${agoText}` : "";
-            lines.push(truncateToWidth2(" " + theme.fg("dim", `\u25CC EXG offline${lastSeen} \u2014 /connect to reconnect`), width));
+            lines.push(truncateToWidth3(" " + theme.fg("dim", `\u25CC EXG offline${lastSeen} \u2014 /connect to reconnect`), width));
           }
           for (const dl of llmDownloads) {
             const icon = dl.state === "paused" ? theme.fg("warning", "\u23F8") : theme.fg("accent", SYNC_SPINNER[llmDownloadSpin % SYNC_SPINNER.length]);
-            lines.push(truncateToWidth2(
+            lines.push(truncateToWidth3(
               " " + icon + " " + theme.fg("dim", dl.filename + " ") + theme.fg("muted", progressBar(dl.progress)),
               width
             ));
@@ -4253,8 +4340,8 @@ ${result.error}` : result.message, "error");
           const ctxPart = usage?.percent != null ? theme.fg("dim", `${usage.percent.toFixed(1)}%/${Math.round(usage.contextWindow / 1e3)}k`) : "";
           const modelPart = ctx.model?.id ? theme.fg("dim", ctx.model.id) : "";
           const right = [exgPart, ctxPart, modelPart].filter(Boolean).join(theme.fg("dim", "  "));
-          const gap = Math.max(1, width - visibleWidth2(left) - visibleWidth2(right));
-          lines.push(truncateToWidth2(left + " ".repeat(gap) + right, width));
+          const gap = Math.max(1, width - visibleWidth3(left) - visibleWidth3(right));
+          lines.push(truncateToWidth3(left + " ".repeat(gap) + right, width));
           return lines;
         }
       };

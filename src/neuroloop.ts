@@ -37,6 +37,7 @@ import {
 	createRenderScheduler, type RenderScheduler,
 	createExgPanel, pushHistory, clearHistory, type ExgPanel,
 	createOverlayManager, type OverlayManager,
+	renderLogo, renderTagline,
 } from "./tui/index.ts";
 
 const _pkgVersion: string =
@@ -781,6 +782,9 @@ Available commands and typical args:
 	// Initialize theme from persisted preference
 	initTheme();
 
+	// Show ASCII art logo only on first render, then collapse to compact
+	let logoShown = false;
+
 	// LLM download progress (rendered in footer)
 	interface LlmDownloadEntry { filename: string; progress: number; state: string }
 	let llmDownloads: LlmDownloadEntry[] = [];
@@ -1048,7 +1052,7 @@ Available commands and typical args:
 			render(width: number): string[] {
 				const lines: string[] = [];
 
-				// ── row 1: ◆ brand + connection status ─────────────────────
+				// ── ASCII art logo (first render only) or compact logo ────
 				const authSt = getAuthStatus();
 				let connDot: string;
 				if (exgOnline) {
@@ -1063,12 +1067,31 @@ Available commands and typical args:
 					const lastSeen = exgUpdatedAt ? theme.fg("dim", ` · last seen ${timeAgo(exgUpdatedAt)}`) : "";
 					connDot = theme.fg("dim", " ○ Offline") + lastSeen;
 				}
-				const website = theme.fg("accent", "🌐") + " " + theme.fg("dim", "https://www.neuroskill.com");
-				lines.push(truncateToWidth(website, width));
 
-				const logo = theme.fg("accent", s.logo) + " " + theme.bold("NeuroLoop™")
-					+ theme.fg("dim", ` v${_pkgVersion}`) + connDot;
-				lines.push(truncateToWidth(logo, width));
+				if (!logoShown) {
+					// Show full ASCII art logo in pink
+					lines.push(""); // top padding
+					lines.push(...renderLogo(width, theme));
+					lines.push(renderTagline(width, theme, _pkgVersion));
+					lines.push(""); // spacing
+
+					// Connection status centered beneath
+					const connLine = theme.fg("accent", s.logo) + " " + theme.bold("NeuroLoop™") + connDot;
+					const connWidth = visibleWidth(s.logo + " NeuroLoop™") + visibleWidth(connDot);
+					const connPad = Math.max(0, Math.floor((width - connWidth) / 2));
+					lines.push(truncateToWidth(" ".repeat(connPad) + connLine, width));
+
+					// Collapse after first render (use a short delay so the logo is visible)
+					setTimeout(() => { logoShown = true; }, 8_000);
+				} else {
+					// Compact header: website + brand line
+					const website = theme.fg("accent", "🌐") + " " + theme.fg("dim", "https://www.neuroskill.com");
+					lines.push(truncateToWidth(website, width));
+
+					const logo = theme.fg("accent", s.logo) + " " + theme.bold("NeuroLoop™")
+						+ theme.fg("dim", ` v${_pkgVersion}`) + connDot;
+					lines.push(truncateToWidth(logo, width));
+				}
 
 				// ── row 2b: device info ──────────────────────────────────
 				if (exgOnline && exgDeviceName) {

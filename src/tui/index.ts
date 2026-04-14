@@ -47,3 +47,8 @@ export {
 	type OverlayManager,
 	type ManagedOverlay,
 } from "./overlay-manager.ts";
+
+export {
+	renderLogo,
+	renderTagline,
+} from "./logo.ts";
