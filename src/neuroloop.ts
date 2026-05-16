@@ -1271,6 +1271,10 @@ Available commands and typical args:
 					}
 				})();
 			}
+			// Subscribe to high-rate events neuroloop actually consumes (band power
+			// for the score history). The daemon filters these by default; without
+			// this subscribe, neuroloop's score widgets render zeros forever.
+			ws.send(JSON.stringify({ command: "subscribe", events: ["EegBands"] }));
 			// Immediate full snapshot for initial metrics + device state + last label.
 			ws.send(JSON.stringify({ command: "status" }));
 			// Then poll every exgPollMs for live updates.
