@@ -7,7 +7,7 @@
     "Eugene Hauptmann <eugenehp@mit.edu>"
   ],
   "repository": "https://github.com/NeuroSkill-com/neuroloop",
-  "homepage": "https://neurloop.io",
+  "homepage": "https://neuroloop.io",
   "license": "GPL-3.0-only",
   "description": "NeuroLoop™ – EXG-aware coding agent — run `npx neuroloop` to start",
   "type": "module",
