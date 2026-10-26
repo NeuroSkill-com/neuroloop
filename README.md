@@ -233,7 +233,7 @@ NeuroLoop exposes 40+ neuroscientific metrics derived from the Muse headset, inc
 - Consciousness metrics: LZC, Wakefulness, Information Integration
 - PPG / HRV: Heart Rate, RMSSD, SDNN, pNN50, LF/HF Ratio, SpO₂, Baevsky Stress Index
 - Sleep staging: Wake / N1 / N2 / N3 / REM
-- Extended indices: Depression, Anxiety, Bipolar, ADHD, Headache, Migraine, Narcolepsy, Insomnia, Epilepsy risk, Mu Suppression
+- Extended indices: Depression, Anxiety, Bipolar, ADHD, Migraine, Narcolepsy, Insomnia, Epilepsy risk, Mu Suppression
 
 > ⚠️ **Research Use Only.** All metrics are experimental outputs from consumer-grade EXG hardware. They are not validated clinical measurements, not FDA/CE-cleared, and must not be used for diagnosis or treatment.
 

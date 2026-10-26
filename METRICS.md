@@ -684,7 +684,7 @@ Alpha power is **inversely related** to cortical activity (alpha decreases when 
 - **FAA < 0** (left alpha > right alpha → right hemisphere more active → withdrawal motivation / negative affect tendency)
 - **FAA ≈ 0** → hemispheric balance
 
-FAA is a relatively stable **trait marker** (individual differences in resting FAA predict dispositional affect), but also shows **state-level** fluctuations in response to emotional stimuli, stress, and mindfulness practice. It is stored in the `eeg.sqlite` database alongside every 5-second embedding epoch.
+FAA is a relatively stable **trait marker** (individual differences in resting FAA predict dispositional affect), but also shows **state-level** fluctuations in response to emotional stimuli, stress, and mindfulness practice. It is stored in the `eeg.duckdb` database alongside every 5-second embedding epoch.
 
 **Electrode sites:** AF7 (left frontal) ↔ AF8 (right frontal).
 
@@ -1124,7 +1124,7 @@ Weights are downloaded on demand from HuggingFace ([PulpBio/LUNA](https://huggin
 
 ### 12.3 Model Provenance & Per-Model HNSW Indices
 
-Each embedding row in the daily `eeg.sqlite` database records which model backend (`zuna` or `luna`) produced it via the `model_backend` TEXT column. Historical rows without the column are auto-migrated on open.
+Each embedding row in the daily `eeg.duckdb` database records which model backend (`zuna` or `luna`) produced it via the `model_backend` TEXT column. Historical rows without the column are auto-migrated on open.
 
 Each model backend gets its own HNSW index file:
 - **ZUNA:** `eeg_embeddings.hnsw` (daily), `eeg_global.hnsw` (global)
@@ -1134,11 +1134,11 @@ This prevents dimension mismatches when switching backends and allows side-by-si
 
 ### 12.4 Re-Embedding
 
-Existing sessions can be re-embedded with a different model via the `estimate_reembed` and `trigger_reembed` commands. The re-embed worker reads raw EXG samples from session CSV files, chunks data into 5-second epochs with 50 % overlap, resamples to the model's input size, runs the selected encoder on the GPU, and writes new embedding rows to SQLite. Per-model HNSW indices are rebuilt per day and globally. Progress is streamed to the frontend via the `reembed-progress` event.
+Existing sessions can be re-embedded with a different model via the `estimate_reembed` and `trigger_reembed` commands. The re-embed worker reads raw EXG samples from session CSV files, chunks data into 5-second epochs with 50 % overlap, resamples to the model's input size, runs the selected encoder on the GPU, and writes new embedding rows to the per-day DuckDB store. Per-model HNSW indices are rebuilt per day and globally. Progress is streamed to the frontend via the `reembed-progress` event.
 
 ### 12.5 HNSW Similarity Search
 
-Embeddings are indexed in a **Hierarchical Navigable Small World (HNSW)** graph (fast-hnsw library) for approximate nearest-neighbor search. HNSW enables sub-millisecond search over millions of embeddings with high recall. Each daily `eeg.sqlite` database stores the raw embeddings; the HNSW index is rebuilt from them.
+Embeddings are indexed in a **Hierarchical Navigable Small World (HNSW)** graph (fast-hnsw library) for approximate nearest-neighbor search. HNSW enables sub-millisecond search over millions of embeddings with high recall. Each daily `eeg.duckdb` database stores the raw embeddings; the HNSW index is rebuilt from them.
 
 Distances are computed as **cosine distances** (1 − cosine similarity): 0 = identical, 1 = orthogonal, 2 = antipodal. Nearby points in the HNSW graph represent similar brain states.
 

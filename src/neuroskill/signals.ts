@@ -280,13 +280,13 @@ export function detectSignals(lp: string): Signals {
 			/hydrat|dehydrat|energy.?drink|nootropic|supplement\b/,
 		),
 
-		/** Chronic pain, headaches, physical discomfort, body tension. */
+		/** Chronic pain, physical discomfort, body tension. */
 		pain: any(
 			lp,
 			/\bpain\b|\bhurt(ing)?\b|\bdiscomfort\b|\bache\b|\bsore\b/,
 			/chronic.?pain|\binflammation\b|body.?tension|muscle.?tension/,
 			/back.?pain|neck.?pain|shoulder.?pain|jaw.?tension/,
-			/tension.?headache|cluster.?headache|sinus.?pain/,
+			/sinus.?pain/,
 		),
 
 		/** Travel, jet lag, circadian rhythm disruption. */

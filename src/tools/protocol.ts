@@ -122,7 +122,7 @@ Emotional Regulation & Mood
 Relaxation & Alpha Promotion
   • Alpha Induction (open focus) — high bar, post-stress, low relaxation
   • Open Monitoring — low lzc (<40) / low integration / mental narrowing
-  • Relaxation Scan — high cortical arousal, headache_index > 30
+  • Relaxation Scan — high cortical arousal, migraine_index > 20
 
 Sleep & Circadian
   • Sleep Onset Wind-Down — insomnia_index > 50, drowsy end-of-day
@@ -144,9 +144,9 @@ Energy & Alertness
   • Kapalabhati Energiser — low engagement / sluggish cognition / low wakefulness
   • 4-Count Energising Breath — post-lunch dip / low engagement
 
-Headache & Migraine
-  • Cortical Quieting — headache_index > 30 / migraine_index > 20
-  • Alpha-Reset for Headache — headache_index rising / cortical hyperexcitability
+Migraine
+  • Cortical Quieting — migraine_index > 20
+  • Alpha-Reset — high bar / cortical hyperexcitability
 
 Energy & Alertness (extended)
   • Wim Hof Breathwork — near-zero engagement / full system reset (⚠ not for epilepsy_risk > 30)
@@ -190,7 +190,7 @@ Motor & Embodiment
   • Desk Yoga Sequence — stillness > 0.9 sustained / low engagement / low mood
 
 Neck & Cervical Relief
-  • Neck Release Sequence — headache_index elevated / stillness > 0.85 / neck tension
+  • Neck Release Sequence — stillness > 0.85 / neck tension
   • Cervical Decompression — forward-head posture / chronic neck compression
   • Upper Trap & Shoulder Release — high stress_index + reported shoulder/neck tightness
 
@@ -282,7 +282,7 @@ Dietary Protocols
   Mood & Mental Health Nutrition
   • Mood-Food Connection — depression_index > 35 / persistently low mood / gut-brain axis
   • Stress Eating Awareness — high stress_index + food craving spike / emotional eating
-  • Anti-Inflammatory Eating Guide — headache_index > 25 / chronic stress / cognitive fog
+  • Anti-Inflammatory Eating Guide — migraine_index > 20 / chronic stress / cognitive fog
   • Gut-Brain Axis Reset — anxiety_index > 40 persisting / low mood / high lf_hf_ratio
 
   Sleep & Evening Nutrition

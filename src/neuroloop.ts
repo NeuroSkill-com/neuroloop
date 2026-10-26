@@ -127,13 +127,12 @@ function formatStatusText(d: Record<string, any>): string {
 			lines.push(`**Channels** ${chSummary}`);
 		}
 
-		// Consciousness / headache / migraine
+		// Consciousness / migraine
 		const extra: string[] = [];
 		const addE = (label: string, key: string, dec = 1) => { if (s[key] != null) extra.push(`${label} ${r(s[key], dec)}`); };
 		addE("consciousness", "consciousness_integration");
 		addE("wakefulness", "consciousness_wakefulness");
 		addE("LZC", "consciousness_lzc");
-		addE("headache", "headache_index");
 		addE("migraine", "migraine_index");
 		if (extra.length) lines.push(`**Neuro** ${extra.join(" · ")}`);
 	}
